@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Docker data — machine specific, too large
+data/
+
+# Personal files
+watched_folders/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Obsidian
+.obsidian/
+
+# OS
+.DS_Store
+Thumbs.db
