@@ -289,7 +289,7 @@ def _classify_file(file: Path) -> str:
 ### `agent/tools/rag_tool.py`
 
 ```python
-from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
+from langchain_community.document_loaders import PyMuPDFLoader, DirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
 from langchain_qdrant import QdrantVectorStore
@@ -324,7 +324,7 @@ def ingest_university_folder(folder_path: str = "/watched_folders/university") -
     Run this after adding new lecture notes or assignments.
     """
     loader = DirectoryLoader(folder_path, glob="**/*.pdf",
-                             loader_cls=PyPDFLoader, show_progress=True)
+                             loader_cls=PyMuPDFLoader, show_progress=True)
     docs = loader.load()
 
     splitter = RecursiveCharacterTextSplitter(

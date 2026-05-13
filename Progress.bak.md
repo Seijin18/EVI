@@ -99,28 +99,28 @@
 
 ### Phase 2 — RAG System for University Notes (Day 6–10)
 
-- [X] **Vector Database Setup**
+- [ ] **Vector Database Setup**
 
-  - [X] Confirm Qdrant running in docker compose
-  - [X] Create "university_notes" collection (768-dim, COSINE distance)
-- [X] **Tool: PDF Ingestion & RAG**
+  - [ ] Confirm Qdrant running in docker compose
+  - [ ] Create "university_notes" collection (768-dim, COSINE distance)
+- [ ] **Tool: PDF Ingestion & RAG**
 
-  - [X] Create `agent/tools/rag_tool.py`
-  - [X] Implement `ingest_university_folder()` tool
-  - [X] Use PyMuPDFLoader with recursive chunking (512 chunk size, 64 overlap)
-  - [X] Batch ingest to Qdrant (50 docs per batch)
-  - [X] Implement `query_university_notes()` tool (similarity search + scoring)
-- [X] **Auto-Watch Script**
+  - [ ] Create `agent/tools/rag_tool.py`
+  - [ ] Implement `ingest_university_folder()` tool
+  - [ ] Use PyPDFLoader with recursive chunking (512 chunk size, 64 overlap)
+  - [ ] Batch ingest to Qdrant (50 docs per batch)
+  - [ ] Implement `query_university_notes()` tool (similarity search + scoring)
+- [ ] **Auto-Watch Script**
 
-  - [X] Create `scripts/watch_and_ingest.sh` using inotifywait
-  - [X] Auto-ingest new PDFs to Qdrant when dropped in watched_folders/university
-  - [X] Create systemd user service: agent-watcher
-  - [X] Install dependency: `sudo apt install inotify-tools`
-- [X] **Integration Test**
+  - [ ] Create `scripts/watch_and_ingest.sh` using inotifywait
+  - [ ] Auto-ingest new PDFs to Qdrant when dropped in watched_folders/university
+  - [ ] Create systemd user service: agent-watcher
+  - [ ] Install dependency: `sudo apt install inotify-tools`
+- [ ] **Integration Test**
 
-  - [X] Drop sample lecture PDF into watched_folders/university/
-  - [X] Test query: "Summarize the key concepts from Operating Systems notes"
-  - [X] Verify retrieval accuracy and response quality
+  - [ ] Drop sample lecture PDF into watched_folders/university/
+  - [ ] Test query: "Summarize the key concepts from Operating Systems notes"
+  - [ ] Verify retrieval accuracy and response quality
 
 ---
 
@@ -179,10 +179,10 @@
 
 | Phase                | Days   | Status          | Priority |
 | -------------------- | ------ | --------------- | -------- |
-| Phase 0 (Foundation) | 1–2   | �🟢 100% Complete | CRITICAL |
-| Phase 1 (ReAct Core) | 3–5   | 🟢 100% Complete  | HIGH     |
-| Phase 2 (RAG System) | 6–10  | 🟢 100% Complete | HIGH     |
-| Phase 3 (Calendar)   | 11–14 | 🟡 Ready to Start| MEDIUM   |
+| Phase 0 (Foundation) | 1–2   | � 98% Complete | CRITICAL |
+| Phase 1 (ReAct Core) | 3–5   | 🟡 In Progress  | HIGH     |
+| Phase 2 (RAG System) | 6–10  | 🔵 Blocked      | HIGH     |
+| Phase 3 (Calendar)   | 11–14 | 🔵 Blocked      | MEDIUM   |
 | Phase 4 (Polish)     | 15+    | 🔵 Blocked      | LOW      |
 
 ---
@@ -237,19 +237,27 @@
 - ✅ Infrastructure: Docker Compose with all 4 microservices
 - ✅ Configuration: Environment variables ready
 - ✅ Project Layout: All directories and volumes prepared
-- ✅ FastAPI Server: Endpoint /chat fully wired and returning ReAct loop strings
-- ✅ LangGraph Core: Agent graph fully working loop
-- ✅ First Tool: `file_organizer.py` running successfully over `watched_folders/inbox`
+- ✅ FastAPI Server: Main app initialized
+- ✅ Docker Image: Ready to build
 
 ### What's Pending
 
-- ⏳ Tools: rag_tool, calendar_tool not built
+- ✅ Secrets: .env populated and services running
+- ✅ Docker Startup: All 4 services running successfully
+- ⏳ LangGraph Core: graph.py not implemented
+- ⏳ Tools: file_organizer, rag_tool, calendar_tool not built
+- ⏳ Memory: BoundedMemory class not implemented
 - ⏳ Watchers: inotifywait script not created
 
 ---
 
 ## 🚀 Next Immediate Actions (Priority Order)
 
-1. **[CRITICAL]** Define Qdrant RAG Tool (`agent/tools/rag_tool.py`) for PDF ingestion and querying.
-2. **[HIGH]** Create Auto-Watch Script (`scripts/watch_and_ingest.sh`) and wire it to systemd.
-3. **[MEDIUM]** Drop a sample lecture PDF into `watched_folders/university/` to run integration tests against standard AI note querying.
+1. **[CRITICAL]** Verify RAM usage: `free -h && docker stats` (target <5.5GB)
+2. **[CRITICAL]** Implement `agent/graph.py` — core ReAct loop with Qwen 7B
+3. **[CRITICAL]** Create `agent/tools/__init__.py` and `agent/tools/file_organizer.py`
+4. **[HIGH]** Wire `/chat` endpoint in main.py to use graph.py + tools
+5. **[HIGH]** Rebuild agent-api: `docker compose up -d --build agent-api`
+6. **[HIGH]** Test Phase 1: Send chat query via curl and verify LangGraph execution
+7. **[MEDIUM]** Add `agent/memory.py` — BoundedMemory for context management
+8. **[MEDIUM]** Create `agent/tools/rag_tool.py` — PDF ingestion for Phase 2
