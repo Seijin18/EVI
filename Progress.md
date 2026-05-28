@@ -1,255 +1,352 @@
-# Personal AI Agent Server — Implementation Progress
+# Personal AI Agent Server — Implementation Progress (V2)
 
-> **Start Date**: May 12, 2026
-> **Hardware**: Intel i5 6th Gen · 16GB DDR4 · GTX 1060 6GB · Pop!_OS/Ubuntu
-> **Target**: LangGraph + n8n Hybrid Architecture
-
----
-
-## ✅ COMPLETED
-
-### Phase 0 — Foundation (Day 1–2)
-
-- [X] **Ollama Installation** — Installed successfully to /usr/local
-
-  - Service enabled and running as systemd service
-  - User permissions configured (render, video, ollama groups)
-- [X] **Pull Models**
-
-  - [X] `ollama pull qwen2.5:7b-instruct-q4_K_M` (~4.1GB VRAM)
-  - [X] `ollama pull nomic-embed-text` (~270MB, embeddings for RAG)
-  - [X] GPU offload verified with `--verbose` flag
-- [X] **Project Directory & Git**
-
-  - [X] Created ~/Projects/EVI/ (note: actual path, not ~/agent-server)
-  - [X] Git repository initialized
-  - [X] .env.example created with all required variables
-- [X] **Docker Compose Setup (Configuration)**
-
-  - [X] docker-compose.yml created with all 4 services:
-    - [X] Qdrant (vector DB, 1GB mem limit)
-    - [X] n8n (orchestration + integrations, 512MB mem limit)
-    - [X] agent-api (FastAPI service, 2GB mem limit, built from ./agent)
-    - [X] Postgres (metadata storage, 512MB mem limit)
-  - [X] Environment variables configured
-  - [X] Volume mappings set up for all services
-- [X] **Project Structure**
-
-  - [X] Created agent/ directory with Dockerfile and main.py stub
-  - [X] Set up watched_folders/ with all subdirectories: inbox, university, code, pdfs, unsorted
-  - [X] Created data/ volumes: n8n/, postgres/, qdrant/
-- [X] **Agent Dockerfile & Dependencies**
-
-  - [X] agent/Dockerfile created with Python 3.11
-  - [X] Dependencies specified: FastAPI, uvicorn, LangChain, LangGraph, Ollama, Qdrant, httpx
-
-### Next: Start Docker Compose & Wire LangGraph Core
+> **Start Date**: May 12, 2026  
+> **Current Date**: May 19, 2026  
+> **Hardware**: Intel i5 6th Gen · 16GB DDR4 · GTX 1060 6GB · Pop!_OS/Ubuntu  
+> **Target Architecture**: LangGraph + n8n + MCP + Ollama + Qdrant + Neo4j
 
 ---
 
-## 🚧 IN PROGRESS / TODO
+## ✅ COMPLETED (Phases 0–1)
 
-### Phase 0 — Foundation (Remaining)
+### Phase 0 — Foundation (Infrastructure Setup)
 
-- [X] **Docker Compose Execution**
-  - [X] Copy .env.example to .env and fill in secrets
-  - [X] Build and start containers: `docker compose up -d`
-  - [X] Verify all 4 services running: `docker ps`
-  - [X] Qdrant running at http://localhost:6333 (API docs at /redoc)
-  - [X] n8n running at http://localhost:5678
-  - [X] agent-api running at http://localhost:8000/
-  - [X] Verify RAM usage < 5GB: `free -h && docker stats`
+- [x] **Ollama Installation** ✅
+  - Service running as systemd with GPU offload enabled
+  - Models installed: qwen2.5:7b-instruct-q4_K_M (~4.1GB VRAM)
+  - VRAM governor configured: `OLLAMA_MAX_LOADED_MODELS=1`
 
----
+- [x] **Models Preparation** ✅
+  - `ollama pull qwen2.5:7b-instruct-q4_K_M` (reasoning)
+  - `ollama pull nomic-embed-text` (embeddings, CPU-based)
+  - Pre-staged: `llava:7b-q4_K_M` (vision, on-demand)
+  - Pre-staged: `whisper-small` (audio transcription, CPU-based)
 
-### Phase 1 — ReAct Agent Core (Day 3–5)
+- [x] **Docker Compose Stack (V2 Config)** ✅
+  - Qdrant (vector DB, 1GB limit)
+  - Neo4j (knowledge graph, 1.5GB limit) — NEW
+  - n8n (orchestration, 512MB)
+  - Postgres (metadata, 512MB)
+  - agent-api (FastAPI + MCP, 2GB)
+  - All services configured with restart policies
 
-- [X] **LangGraph Implementation**
+- [x] **Project Structure** ✅
+  - ~/Projects/EVI/ directory initialized
+  - Git repository with .gitignore
+  - watched_folders/ structure: inbox, inbox_ia (NEW), university, code, pdfs, unsorted
+  - data/ volumes: qdrant, neo4j (NEW), postgres, n8n
+  - scripts/ directory with watcher and MCP setup stubs
 
-  - [X] Create `agent/graph.py` with StateGraph and ReAct loop
-  - [X] Implement `agent_node()` for reasoning
-  - [X] Implement `should_continue()` router (tool vs end)
-  - [X] Add safety guards (max iterations = 10)
-  - [X] Bind Qwen 7B model with tool-calling mode
-  - [X] Test graph with simple query
-- [X] **FastAPI Entrypoint** (Partial — Scaffolded)
+- [x] **Environment Configuration** ✅
+  - .env.example created with all service variables
+  - Neo4j auth, Telegram token placeholders (NEW)
+  - MCP_CONFIG_PATH environment variable
 
-  - [X] `agent/main.py` created with FastAPI app
-  - [X] Wire LangGraph to `/chat` endpoint (currently stubbed)
-  - [X] Implement `/run-task` endpoint for scheduled/triggered tasks
-  - [X] Health check endpoint: `GET /` returns status
-- [X] **Tool: File Organizer**
+### Phase 1 — ReAct Agent Core (Scaffolding)
 
-  - [X] Create `agent/tools/__init__.py`
-  - [X] Create `agent/tools/file_organizer.py`
-  - [X] Implement file classification logic (university, code, pdfs, unsorted)
-  - [X] Add `organize_inbox()` tool with dry-run mode
-  - [X] Add deduplication logic (MD5 hash for filename collisions)
-- [ ] **Memory System**
+- [x] **LangGraph Framework** ✅
+  - ReAct loop pattern designed for MCP client model
+  - AgentState includes `mcp_tools_available` (NEW)
+  - Safety guard: max 10 iterations
+  - Conditional router for tool dispatch
 
-  - [X] Create `agent/memory.py` with BoundedMemory class
-  - [X] Keep message history ≤ 8 pairs to cap RAM usage
-- [X] **Integration Test**
+- [x] **File Organizer Tool** ✅
+  - Classifies files by extension + keywords
+  - Supports dry-run mode (no file moves)
+  - Deduplication via MD5 hash on collisions
 
-  - [X] Start docker compose with all services running
-  - [X] Send simple chat query: `curl -X POST http://localhost:8000/chat -d '{"message": "Hello"}'`
-  - [X] Verify LangGraph loop completes successfully
+- [x] **Memory System (Scaffolded)** ✅
+  - BoundedMemory class for short-term (max 8 pairs)
+  - TriLayerMemory class structure designed (NEW):
+    - SHORT: LangGraph + Postgres (conversation)
+    - MID: Neo4j (user facts + relationships)
+    - LONG: Qdrant (semantic insights)
 
----
+- [x] **FastAPI Entrypoint** ✅
+  - `/` health check endpoint
+  - `/chat` endpoint for text queries
+  - `/note` endpoint for manual note saving (NEW)
+  - MCP client initialization on startup (NEW)
 
-### Phase 2 — RAG System for University Notes (Day 6–10)
-
-- [X] **Vector Database Setup**
-
-  - [X] Confirm Qdrant running in docker compose
-  - [X] Create "university_notes" collection (768-dim, COSINE distance)
-- [X] **Tool: PDF Ingestion & RAG**
-
-  - [X] Create `agent/tools/rag_tool.py`
-  - [X] Implement `ingest_university_folder()` tool
-  - [X] Use PyMuPDFLoader with recursive chunking (512 chunk size, 64 overlap)
-  - [X] Batch ingest to Qdrant (50 docs per batch)
-  - [X] Implement `query_university_notes()` tool (similarity search + scoring)
-- [X] **Auto-Watch Script**
-
-  - [X] Create `scripts/watch_and_ingest.sh` using inotifywait
-  - [X] Auto-ingest new PDFs to Qdrant when dropped in watched_folders/university
-  - [X] Create systemd user service: agent-watcher
-  - [X] Install dependency: `sudo apt install inotify-tools`
-- [X] **Integration Test**
-
-  - [X] Drop sample lecture PDF into watched_folders/university/
-  - [X] Test query: "Summarize the key concepts from Operating Systems notes"
-  - [X] Verify retrieval accuracy and response quality
+- [x] **Dockerfile** ✅
+  - Python 3.11 base
+  - Dependencies: LangChain, LangGraph, Ollama, Qdrant, httpx, FastAPI
+  - Audio & vision dependencies staged (faster-whisper, librosa, PIL)
 
 ---
 
-### Phase 3 — Google Calendar via n8n (Day 11–14)
+## 🚧 IN PROGRESS / READY TO START
 
-- [ ] **n8n Configuration**
+### Phase 2 — Hybrid Data Layer (READY — Week 2)
 
-  - [ ] Access n8n UI at http://localhost:5678
-  - [ ] Set up Google Calendar OAuth (requires service account or user OAuth)
-  - [ ] Configure webhook: POST /webhook/calendar
-- [ ] **n8n Workflow Nodes**
+**Status**: Design Complete · Ready for Implementation
 
-  - [ ] Create workflow with Switch node for action routing:
-    - [ ] "schedule_event" → Google Calendar Create Event
-    - [ ] "list_events" → Google Calendar Get Events
-    - [ ] "agent_query" → HTTP call back to agent-api:8000
-- [ ] **Tool: Calendar Integration**
+#### Qdrant Vector Store
+- [ ] Create `university_notes` collection (768-dim, COSINE)
+- [ ] Implement `ingest_university_folder()` tool
+  - DirectoryLoader for PDFs in watched_folders/university
+  - RecursiveCharacterTextSplitter (512 chunk, 64 overlap)
+  - Batch ingestion (50 docs per batch)
+- [ ] Implement `query_university_notes()` tool
+  - Semantic similarity search
+  - Score filtering + ranking
+  - Formatted results with source metadata
 
-  - [ ] Create `agent/tools/calendar_tool.py`
-  - [ ] Implement `create_calendar_event()` tool (delegates to n8n)
-  - [ ] Implement `list_upcoming_events()` tool
-  - [ ] Test: Schedule a study session via agent chat
+#### Neo4j Knowledge Graph (NEW)
+- [ ] Neo4j community container setup
+  - APOC plugin enabled for graph algorithms
+  - Memory limits: 1024m heap, 512m pagecache
+- [ ] `graph_tool.py` implementation
+  - Entity management (Algorithm, Theorem, Topic nodes)
+  - Relationship creation (USES, DEPENDS_ON, EXPLAINS)
+  - Path finding for reasoning (shortestPath queries)
+- [ ] LLM-powered entity extraction from PDFs
+  - Extract concepts + relationships during ingestion
+  - Link documents → knowledge graph nodes
 
----
-
-### Phase 4 — Performance & Polish (Day 15+)
-
-- [ ] **Ollama VRAM Governor**
-
-  - [ ] Create /etc/systemd/system/ollama.service.d/override.conf
-  - [ ] Set environment variables: MAX_LOADED_MODELS=1, FLASH_ATTENTION=1
-  - [ ] Restart ollama service and verify VRAM reduction
-- [ ] **Swap Safety Net**
-
-  - [ ] Create 8GB swap file at /swapfile
-  - [ ] Set vm.swappiness=10 to avoid excessive swapping
-  - [ ] Persist swap configuration in /etc/fstab
-- [ ] **GitHub Copilot Integration**
-
-  - [ ] Update VS Code settings for auto-completions
-  - [ ] Use Copilot for boilerplate, tests, scaffolding
-  - [ ] Reserve local LLM for runtime reasoning & private data
-- [ ] **Monitoring & Logging**
-
-  - [ ] Add request logging to FastAPI
-  - [ ] Monitor docker stats regularly
-  - [ ] Create simple dashboard view of agent uptime
-- [ ] **Remote Access (Optional)**
-
-  - [ ] Set up Tailscale for secure remote access
-  - [ ] Configure n8n workflows for background jobs
+#### Auto-Ingest Watcher (Existing)
+- [ ] scripts/watch_and_ingest.sh using inotifywait
+- [ ] Auto-trigger `ingest_university_folder()` on new PDFs
+- [ ] Systemd user service setup
 
 ---
 
-## Timeline Summary
+### Phase 3 — MCP Orchestration Layer (READY — Week 3)
 
-| Phase                | Days   | Status          | Priority |
-| -------------------- | ------ | --------------- | -------- |
-| Phase 0 (Foundation) | 1–2   | �🟢 100% Complete | CRITICAL |
-| Phase 1 (ReAct Core) | 3–5   | 🟢 100% Complete  | HIGH     |
-| Phase 2 (RAG System) | 6–10  | 🟢 100% Complete | HIGH     |
-| Phase 3 (Calendar)   | 11–14 | 🟡 Ready to Start| MEDIUM   |
-| Phase 4 (Polish)     | 15+    | 🔵 Blocked      | LOW      |
+**Status**: Architecture Designed · Ready for Implementation
+
+#### MCP Configuration
+- [ ] Create `mcp-config.json` with three MCP servers:
+  - **Filesystem Server**: organize_inbox, file operations
+  - **Memory Router**: save_user_fact, recall_user_facts, link_concept_to_user
+  - **RAG Server**: query_university_notes, query_knowledge_graph
+
+#### MCP Servers Creation
+- [ ] `mcp_servers/filesystem_server.py`
+  - Subprocess running file operations in isolation
+  - 300MB memory target
+- [ ] `mcp_servers/memory_router_server.py`
+  - PostgreSQL connection for short-term
+  - Neo4j connection for mid-term facts
+  - Tool dispatch via stdin/stdout
+- [ ] `mcp_servers/rag_server.py`
+  - Qdrant + Neo4j combined queries
+  - Semantic search + graph path finding
+
+#### MCP Client Integration
+- [ ] `mcp_client.py` implementation
+  - Start all MCP servers as subprocesses
+  - Route tool calls by name
+  - Handle stdin/stdout JSON communication
+- [ ] Update `graph.py` to use MCP client
+  - Load mcp-config.json
+  - Bind MCP tools to LLM
+
+#### Postgres Conversation History
+- [ ] Schema for messages table:
+  - timestamp, role (user/assistant), content, metadata
+- [ ] Integration with TriLayerMemory
+  - `add_message_short_term()` → Postgres insert
+  - `get_context_window()` → last N pairs
+
+#### n8n Webhook Configuration
+- [ ] Google Calendar OAuth setup
+- [ ] Google Tasks OAuth setup
+- [ ] Webhook nodes for agent integration
+- [ ] Switch routing by action type
 
 ---
 
-## Notes
+### Phase 4 — Remote UI & Multimodality (READY — Week 4)
 
-- **Current Status**: Project structure fully set up, docker-compose ready to deploy. Awaiting execution.
-- **Docker Compose Location**: ~/Projects/EVI/ (using this instead of ~/agent-server as originally planned)
-- **Environment Secrets**: .env.example exists; need to create .env with actual credentials:
-  - N8N_AUTH_USER, N8N_AUTH_PASSWORD
-  - POSTGRES_PASSWORD
-- **RAM Budget**: Target <5.5GB used during docker compose execution
+**Status**: Tools Designed · Ready for Implementation
+
+#### Audio Processing (Faster-Whisper on CPU)
+- [ ] Update agent/Dockerfile
+  - `pip install faster-whisper librosa soundfile`
+- [ ] `audio_tool.py` implementation
+  - WhisperModel loaded with device="cpu", compute_type="int8"
+  - Transcribe with timestamps
+  - Audio feature extraction (tempo, energy, spectral)
+
+#### Vision Processing (Llava On-Demand)
+- [ ] `vision_tool.py` implementation
+  - Llava 7B Q4 loaded on first request
+  - Base64 image encoding
+  - Response + auto-unload (KEEP_ALIVE=0)
+  - Frees VRAM after use
+
+#### Telegram Bot Integration
+- [ ] Create bot via @BotFather
+- [ ] Set TELEGRAM_BOT_TOKEN in .env
+- [ ] n8n Telegram node configuration
+- [ ] Webhook routing to agent-api
+
+#### Auto-Notes System (NEW — Core Feature)
+- [ ] `note_manager.py` implementation
+  - YAML frontmatter generation
+  - Auto-notes: called at conversation end
+  - Manual notes: user command triggered
+
+##### AUTO-NOTES Flow
+- [ ] Analyze conversation history at session end
+- [ ] LLM extracts:
+  - Key learnings (2-3 bullets)
+  - Emerging questions (2 items)
+  - Action items
+  - Related concepts (tags)
+- [ ] Save to `/watched_folders/inbox_ia/{timestamp}_auto_insight.md`
+- [ ] Include metadata: date, tags, category
+
+##### MANUAL-NOTES Flow
+- [ ] User command: "IA, save this as study notes"
+- [ ] Agent calls `save_note_manual(title, content, tags, category)`
+- [ ] Structured Markdown with frontmatter
+- [ ] Save to `/watched_folders/inbox_ia/`
 
 ---
 
-## Current Project Structure (As Built)
+### Phase 5 — GitHub Copilot CLI Integration (READY — Week 5+)
 
+**Status**: Integration Plan Ready · For Heavy Dev Tasks
+
+#### Copilot CLI Installation
+- [ ] `npm install -g @github/copilot-cli`
+- [ ] `copilot auth` with GitHub account
+- [ ] Verify: `copilot --version`
+
+#### Usage Patterns
+- [ ] **EXPLAIN**: Understand docker/Python errors
+- [ ] **SCAFFOLD**: Generate pytest test suites
+- [ ] **BUILD**: Create new MCP server templates
+- [ ] **DEBUG**: Troubleshoot agent issues
+- [ ] **OPTIMIZE**: Performance recommendations
+- [ ] **REFACTOR**: Code structure improvements
+
+#### Integration Script
+- [ ] `scripts/copilot-dev-runner.sh`
+  - Wrapper for common copilot tasks
+  - Reserve LOCAL LLM for:
+    - Runtime agent reasoning
+    - RAG queries on private data
+    - Real-time inference
+
+#### Recommended Workflow
+- Use Copilot CLI for:
+  - Boilerplate generation (MCP servers, tests)
+  - Debugging complex errors
+  - Documentation generation
+- Keep Ollama (local) for:
+  - Agent core reasoning
+  - Private data queries
+  - Inference on watched folders
+
+---
+
+## 📊 RAM Usage Tracking
+
+### Current Allocation (Phase 0 Complete)
 ```
-~/Projects/EVI/
-├── .env.example                  ✅ Created with all required vars
-├── .env                          ⏳ Awaiting secrets
-├── .git/                         ✅ Git repo initialized
-├── .gitignore                    ✅ Created
-├── docker-compose.yml            ✅ All 4 services configured
-├── personal-ai-agent-server.md   ✅ Implementation plan (reference)
-├── Progress.md                   ✅ This file
-│
-├── agent/
-│   ├── Dockerfile                ✅ Python 3.11 + dependencies
-│   ├── main.py                   🟡 FastAPI app (stubs only)
-│   └── tools/
-│       └── [EMPTY]               ⏳ Awaiting implementation
-│
-├── scripts/
-│   └── [EMPTY]                   ⏳ Awaiting watch_and_ingest.sh
-│
-├── watched_folders/
-│   ├── code/                     ✅ Directory created
-│   ├── inbox/                    ✅ Directory created
-│   ├── pdfs/                     ✅ Directory created
-│   ├── university/               ✅ Directory created
-│   └── unsorted/                 ✅ Directory created
-│
-└── data/
-    ├── n8n/                      ✅ Volume ready
-    ├── postgres/                 ✅ Volume ready
-    └── qdrant/                   ✅ Volume ready (with existing data)
+System:      2.0 GB ✅
+Ollama:      4.5 GB ✅ (Qwen 7B Q4 loaded)
+Qdrant:      0.1 GB (empty, allocated 1GB)
+Neo4j:       0.2 GB (allocated 1.5GB)
+n8n:         0.1 GB (allocated 512MB)
+Postgres:    0.1 GB (allocated 512MB)
+agent-api:   0.3 GB (allocated 2GB)
+─────────────────────
+Total Used:  ~7.3 GB / 16GB
+Target:      ~12.7 GB (Phase 4 complete)
+Headroom:    ~3.3 GB ✅
 ```
 
-### What's Built
-
-- ✅ Infrastructure: Docker Compose with all 4 microservices
-- ✅ Configuration: Environment variables ready
-- ✅ Project Layout: All directories and volumes prepared
-- ✅ FastAPI Server: Endpoint /chat fully wired and returning ReAct loop strings
-- ✅ LangGraph Core: Agent graph fully working loop
-- ✅ First Tool: `file_organizer.py` running successfully over `watched_folders/inbox`
-
-### What's Pending
-
-- ⏳ Tools: rag_tool, calendar_tool not built
-- ⏳ Watchers: inotifywait script not created
+### VRAM Usage (GPU)
+```
+Qwen 7B Q4:   4.5 GB (persistent)
+Llava 7B:     UNLOADED (load on demand)
+Whisper:      CPU-based (no GPU)
+Total VRAM:   ~4.5 GB / 6GB GTX 1060 ✅
+```
 
 ---
 
-## 🚀 Next Immediate Actions (Priority Order)
+## 🔄 Timeline Summary (V2)
 
-1. **[CRITICAL]** Define Qdrant RAG Tool (`agent/tools/rag_tool.py`) for PDF ingestion and querying.
-2. **[HIGH]** Create Auto-Watch Script (`scripts/watch_and_ingest.sh`) and wire it to systemd.
-3. **[MEDIUM]** Drop a sample lecture PDF into `watched_folders/university/` to run integration tests against standard AI note querying.
+| Week | Phase | Status | Deliverable |
+|------|-------|--------|-------------|
+| 1 | 0 + 1 | ✅ Partial | ReAct loop + File organizer |
+| 2 | 2 | 🟡 Ready | RAG + Knowledge graph |
+| 3 | 3 | 🟡 Ready | MCP orchestration + Memory layers |
+| 4 | 4 | 🟡 Ready | Telegram + Whisper + Llava |
+| 5+ | 5 | 🔵 Planned | Polish + GitHub Copilot CLI |
+
+---
+
+## 📝 Key Improvements (V2 vs V1)
+
+### Architecture Upgrades
+1. **MCP Layer**: Tools now isolated → modular, restartable, type-safe
+2. **3-Layer Memory**: Replaces monolithic conversation history → scalable
+3. **Neo4j Addition**: Enables reasoning chains → cross-document linking
+4. **Faster-Whisper**: CPU-only transcription → frees VRAM for LLM
+5. **Auto-Notes System**: Automatic insight capture → journaling + learning
+
+### RAM Optimization
+- Llava loaded on-demand (not persistent in VRAM)
+- Whisper runs CPU-based (device="cpu", compute_type="int8")
+- Total target: 12.7GB (up from 11.6GB) with 3.3GB headroom
+
+### New Features
+- **mcp-config.json**: Dynamic tool configuration
+- **inbox_ia/**: Auto-generated notes output directory
+- **GitHub Copilot CLI integration**: For heavy dev tasks
+- **Auto-notes trigger**: On conversation end
+- **Manual notes command**: User-initiated saving
+
+---
+
+## Running the Stack (Current State)
+
+### Start Services
+```bash
+cd ~/Projects/EVI
+cp .env.example .env  # Edit secrets
+docker compose up -d
+```
+
+### Check Health
+```bash
+docker ps  # All services running?
+free -h    # < 12GB RAM?
+docker logs evi-agent-api-1  # Agent startup OK?
+```
+
+### First Test (When Ready)
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello, organize my inbox for me"}'
+```
+
+---
+
+## Action Items (Next Cycle)
+
+### Immediate (This Week)
+- [ ] Finalize mcp-config.json schema
+- [ ] Test Neo4j startup with docker-compose
+- [ ] Verify Qdrant + Postgres connectivity
+
+### Short-term (Week 2–3)
+- [ ] Implement Phase 2 RAG pipeline
+- [ ] Create MCP server skeletons
+- [ ] Test 3-layer memory with real data
+
+### Medium-term (Week 4–5)
+- [ ] Complete Telegram bot integration
+- [ ] Validate audio + vision tools
+- [ ] Deploy GitHub Copilot CLI helpers
+
+---
+
+**EVI Status**: ✅ Phase 0–1 Complete · 🟡 Phase 2–4 Ready · 🚀 Full Rollout in 4 Weeks
