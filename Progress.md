@@ -1,9 +1,10 @@
 # Personal AI Agent Server — Implementation Progress (V2)
 
 > **Start Date**: May 12, 2026  
-> **Current Date**: May 19, 2026  
+> **Current Date**: June 3, 2026  
 > **Hardware**: Intel i5 6th Gen · 16GB DDR4 · GTX 1060 6GB · Pop!_OS/Ubuntu  
-> **Target Architecture**: LangGraph + n8n + MCP + Ollama + Qdrant + Neo4j
+> **Target Architecture**: LangGraph + n8n + Ollama + Qdrant + Postgres (Neo4j/MCP deferred)  
+> **Source of truth**: `openspec/specs/` · Verify: `pytest tests/unit -q && ./scripts/evi-test smoke`
 
 ---
 
@@ -22,51 +23,42 @@
   - Pre-staged: `llava:7b-q4_K_M` (vision, on-demand)
   - Pre-staged: `whisper-small` (audio transcription, CPU-based)
 
-- [x] **Docker Compose Stack (V2 Config)** ✅
+- [x] **Docker Compose Stack** ✅
   - Qdrant (vector DB, 1GB limit)
-  - Neo4j (knowledge graph, 1.5GB limit) — NEW
   - n8n (orchestration, 512MB)
-  - Postgres (metadata, 512MB)
-  - agent-api (FastAPI + MCP, 2GB)
-  - All services configured with restart policies
+  - Postgres (sessions, 512MB)
+  - agent-api (FastAPI + LangGraph tools, 2GB)
+  - Neo4j: **not in compose** (planned — see `openspec/specs/roadmap.md`)
 
 - [x] **Project Structure** ✅
   - ~/Projects/EVI/ directory initialized
   - Git repository with .gitignore
   - watched_folders/ structure: inbox, inbox_ia (NEW), university, code, pdfs, unsorted
-  - data/ volumes: qdrant, neo4j (NEW), postgres, n8n
-  - scripts/ directory with watcher and MCP setup stubs
+  - data/ volumes: qdrant, postgres, n8n
+  - scripts/: `evi-test`, `watch_and_ingest.sh`, `copilot-dev-runner.sh`
 
 - [x] **Environment Configuration** ✅
   - .env.example created with all service variables
-  - Neo4j auth, Telegram token placeholders (NEW)
-  - MCP_CONFIG_PATH environment variable
+  - n8n webhooks, DATABASE_URL, EVI_API_KEY, notes dir
 
 ### Phase 1 — ReAct Agent Core (Scaffolding)
 
 - [x] **LangGraph Framework** ✅
-  - ReAct loop pattern designed for MCP client model
-  - AgentState includes `mcp_tools_available` (NEW)
+  - ReAct loop with native LangChain tools (MCP subprocess layer deferred)
   - Safety guard: max 10 iterations
-  - Conditional router for tool dispatch
+  - Tool registry: `agent/tools/registry.py`
 
 - [x] **File Organizer Tool** ✅
   - Classifies files by extension + keywords
   - Supports dry-run mode (no file moves)
   - Deduplication via MD5 hash on collisions
 
-- [x] **Memory System (Scaffolded)** ✅
-  - BoundedMemory class for short-term (max 8 pairs)
-  - TriLayerMemory class structure designed (NEW):
-    - SHORT: LangGraph + Postgres (conversation)
-    - MID: Neo4j (user facts + relationships)
-    - LONG: Qdrant (semantic insights)
+- [x] **Memory** ✅
+  - BoundedMemory (max 8 pairs) + optional Postgres `messages` table
 
 - [x] **FastAPI Entrypoint** ✅
-  - `/` health check endpoint
-  - `/chat` endpoint for text queries
-  - `/note` endpoint for manual note saving (NEW)
-  - MCP client initialization on startup (NEW)
+  - `/`, `/tools`, `/chat`, `/reset`, `/run-task`, `/note`, `/insight`
+  - `/webhooks/telegram` (with optional `EVI_API_KEY`)
 
 - [x] **Dockerfile** ✅
   - Python 3.11 base
@@ -75,22 +67,29 @@
 
 ---
 
+## ✅ RECENT (June 2026 — OpenSpec + productivity)
+
+- [x] **OpenSpec** — `openspec/specs/`, `openspec/config.yaml`, changes documented
+- [x] **Test harness** — `./scripts/evi-test`, `docs/testing.md`, WhatsApp fixture pipeline
+- [x] **Productivity tools** — `save_note_manual`, `create_task`, `summarize_inbox`
+- [x] **WhatsApp processor** — fixture mode + golden commitments (`evi-test whatsapp`)
+- [x] **Postgres sessions** — `agent/db.py` when `DATABASE_URL` set
+- [ ] **n8n workflow exports** — add JSON under `n8n/workflows/`
+- [ ] **WhatsApp live channel** — pending adapter choice
+
+---
+
 ## 🚧 IN PROGRESS / READY TO START
 
-### Phase 2 — Hybrid Data Layer (READY — Week 2)
+### Phase 2 — Hybrid Data Layer (partial)
 
-**Status**: Design Complete · Ready for Implementation
+**Status**: RAG tools implemented · Neo4j not started
 
 #### Qdrant Vector Store
-- [ ] Create `university_notes` collection (768-dim, COSINE)
-- [ ] Implement `ingest_university_folder()` tool
-  - DirectoryLoader for PDFs in watched_folders/university
-  - RecursiveCharacterTextSplitter (512 chunk, 64 overlap)
-  - Batch ingestion (50 docs per batch)
-- [ ] Implement `query_university_notes()` tool
-  - Semantic similarity search
-  - Score filtering + ranking
-  - Formatted results with source metadata
+- [x] `university_notes` collection (768-dim, COSINE) — auto-created on startup
+- [x] `ingest_university_pdf` + `query_university_notes` tools
+- [ ] Batch `ingest_university_folder()` tool
+- [ ] Auto-watcher production systemd service
 
 #### Neo4j Knowledge Graph (NEW)
 - [ ] Neo4j community container setup

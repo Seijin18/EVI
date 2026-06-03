@@ -1,0 +1,1 @@
+Sample university note text for RAG smoke tests.

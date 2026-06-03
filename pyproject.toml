@@ -1,0 +1,8 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["agent"]
+markers = [
+    "requires_ollama: needs Ollama for inference",
+    "requires_n8n: needs live n8n webhook",
+    "requires_qdrant: needs Qdrant running",
+]

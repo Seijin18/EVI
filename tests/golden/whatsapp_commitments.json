@@ -1,0 +1,4 @@
+[
+  {"source_id": "w001", "type": "event", "title": "Reunião com o cliente", "date": "2026-06-04", "time": "14:00"},
+  {"source_id": "w002", "type": "task", "title": "Enviar relatório", "due": "2026-06-05"}
+]

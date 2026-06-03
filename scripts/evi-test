@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# EVI test harness dispatcher (Tier 2/3)
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export PYTHONPATH="${ROOT}/agent:${PYTHONPATH:-}"
+exec python3 "${ROOT}/agent/testing/cli.py" "$@"

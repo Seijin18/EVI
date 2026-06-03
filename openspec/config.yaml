@@ -1,0 +1,28 @@
+# OpenSpec project context — EVI (Evolving Virtual Intelligence)
+schema: spec-driven
+
+context: |
+  EVI is a local personal AI agent: FastAPI + LangGraph ReAct + Ollama (qwen2.5:7b)
+  + Qdrant (university RAG) + n8n webhooks + Postgres (sessions). No Neo4j/MCP subprocess yet.
+
+  Hardware: 16GB RAM, GTX 1060 6GB — OLLAMA_MAX_LOADED_MODELS=1, single model in VRAM.
+
+  Product priority: productivity (files, notes, email/tasks via n8n, WhatsApp message tracking)
+  > remote access (Telegram) > dev bridge (Cursor/Copilot CLI docs) > university RAG (secondary).
+
+  Conventions: LangChain @tool in agent/tools/; register in AVAILABLE_TOOLS (main.py);
+  bounded memory (max 8 pairs); secrets in .env only.
+
+  Cursor MCP in this repo: codebase-memory only. Do not use Graphiti here.
+
+  Long-term vision: personal-ai-agent-server.md. Source of truth for current behavior: openspec/specs/.
+
+  Every new feature MUST have Tier 1 (pytest) + Tier 2 (./scripts/evi-test <feature>) before archive.
+
+rules:
+  proposal:
+    - State product priority alignment (productivity vs RAG vs infra).
+  tasks:
+    - Link each task to SCN-* scenario IDs and evi-test command when applicable.
+  design:
+    - Note RAM impact for new containers or models.

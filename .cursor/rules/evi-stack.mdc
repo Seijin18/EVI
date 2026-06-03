@@ -1,0 +1,29 @@
+---
+description: Stack e convenções do projeto EVI (agente local, sem APIs pagas)
+alwaysApply: true
+---
+
+# Stack EVI
+
+- **Agente**: FastAPI + LangGraph em `agent/`; memória curta em `BoundedMemory` (`agent/memory.py`).
+- **LLM**: Ollama local (`OLLAMA_BASE_URL`); priorize modelos já carregados; não assuma OpenAI/Anthropic.
+- **Dados**: Qdrant (RAG de notas), Postgres/n8n no compose; Neo4j planejado na Phase 2 — ainda não no `docker-compose.yml` atual.
+- **MCP no projeto**: apenas `codebase-memory`. Não usar Graphiti nem memória episódica externa neste repo.
+
+## Mapa rápido
+
+| Área | Caminho |
+|------|---------|
+| API e rotas | `agent/main.py` |
+| Grafo ReAct | `agent/graph.py` |
+| Tools | `agent/tools/` |
+| Compose | `docker-compose.yml` |
+| Spec | `personal-ai-agent-server.md`, `Progress.md` |
+
+## Ao implementar
+
+- Siga padrões existentes (imports, nomes, estrutura de tools LangChain).
+- Registre tools em `agent/tools/registry.py`; specs em `openspec/specs/`.
+- Nova feature: Tier 1 (`tests/unit`) + Tier 2 (`./scripts/evi-test <feature>`).
+- Variáveis sensíveis em `.env`; nunca commitar segredos.
+- Hardware alvo: 16 GB RAM — evite sugerir vários modelos Ollama grandes simultâneos.

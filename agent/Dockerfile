@@ -6,7 +6,7 @@ RUN pip install --no-cache-dir \
     fastapi uvicorn \
     langchain langgraph langchain-community \
     langchain-ollama langchain-qdrant \
-    qdrant-client httpx pymupdf
+    qdrant-client httpx pymupdf requests psycopg2-binary
 
 COPY . .
 

@@ -12,6 +12,12 @@ __pycache__/
 *.pyc
 .venv/
 
+# Test logs
+logs/
+
+# pytest
+.pytest_cache/
+
 # Obsidian
 .obsidian/
 

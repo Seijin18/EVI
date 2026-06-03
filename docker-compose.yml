@@ -26,14 +26,23 @@ services:
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - QDRANT_URL=${QDRANT_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - N8N_TASKS_WEBHOOK_URL=${N8N_TASKS_WEBHOOK_URL:-http://n8n:5678/webhook/tasks}
+      - N8N_EMAIL_WEBHOOK_URL=${N8N_EMAIL_WEBHOOK_URL:-http://n8n:5678/webhook/email}
+      - EVI_API_KEY=${EVI_API_KEY:-}
     volumes:
       - ./watched_folders:/watched_folders
     mem_limit: 2g
+    depends_on:
+      - postgres
+      - qdrant
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   postgres:
     image: postgres:15-alpine
+    ports: ["5432:5432"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}

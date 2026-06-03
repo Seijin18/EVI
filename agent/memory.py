@@ -1,6 +1,6 @@
 # /home/marshibs/Projects/EVI/agent/memory.py
 from collections import deque
-from langchain_core.messages import BaseMessage
+from typing import Any
 
 
 class BoundedMemory:
@@ -10,7 +10,7 @@ class BoundedMemory:
         # 8 pairs = 16 messages max
         self.buffer: deque = deque(maxlen=max_pairs * 2)
 
-    def add(self, message: BaseMessage):
+    def add(self, message: Any):
         self.buffer.append(message)
 
     def get_messages(self) -> list:
