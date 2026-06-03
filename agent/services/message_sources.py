@@ -44,20 +44,33 @@ class FixtureMessageSource(MessageSource):
                 )
 
 
-class LiveMessageSource(MessageSource):
-    """Placeholder for future webhook/API integration."""
+class EvolutionMessageSource(MessageSource):
+    """In-memory messages from a parsed Evolution API webhook body."""
+
+    def __init__(self, messages: List[IncomingMessage]):
+        self._messages = messages
 
     def iter_messages(self) -> Iterator[IncomingMessage]:
-        raise NotImplementedError(
-            "Live WhatsApp adapter not configured. Use fixture source for development."
-        )
+        yield from self._messages
 
 
-def load_messages(source: str, fixture_path: Path | None = None) -> List[IncomingMessage]:
+def load_messages(
+    source: str,
+    fixture_path: Path | None = None,
+    evolution_body: dict | None = None,
+) -> List[IncomingMessage]:
     if source == "fixture":
         if not fixture_path or not fixture_path.exists():
             raise FileNotFoundError(f"Fixture not found: {fixture_path}")
         return list(FixtureMessageSource(fixture_path).iter_messages())
+    if source == "evolution":
+        from services.evolution_parser import parse_evolution_webhook
+
+        if not evolution_body:
+            raise ValueError("evolution_body required for source=evolution")
+        return parse_evolution_webhook(evolution_body)
     if source == "live":
-        return list(LiveMessageSource().iter_messages())
+        raise NotImplementedError(
+            "Use source=evolution with webhook payload or source=fixture for dev."
+        )
     raise ValueError(f"Unknown message source: {source}")

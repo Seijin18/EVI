@@ -195,10 +195,30 @@ def run_telegram() -> bool:
 
 
 def run_watcher() -> bool:
-    host = "/home/marshibs/Projects/EVI/watched_folders/university/note.pdf"
-    docker = host.replace("/home/marshibs/Projects/EVI/watched_folders", "/watched_folders")
-    ok = docker.startswith("/watched_folders/")
+    root = os.getenv("EVI_PROJECT_ROOT", str(REPO_ROOT))
+    host_prefix = os.getenv("EVI_HOST_WATCH_PREFIX", f"{root}/watched_folders")
+    container_prefix = os.getenv("EVI_CONTAINER_WATCH_PREFIX", "/watched_folders")
+    host = f"{host_prefix}/university/note.pdf"
+    docker = host.replace(host_prefix, container_prefix)
+    ok = docker == "/watched_folders/university/note.pdf"
     return _result("watcher", ok, f"mapped={docker}")
+
+
+def run_evolution() -> bool:
+    import json
+
+    from services.evolution_parser import parse_evolution_webhook
+    from services.whatsapp_processor import extract_commitment
+
+    fix = FIXTURES / "evolution" / "messages_upsert.json"
+    if not fix.exists():
+        return _result("evolution", False, "fixture missing")
+    body = json.loads(fix.read_text())
+    msgs = parse_evolution_webhook(body)
+    ok = len(msgs) >= 1 and "Reunião" in msgs[0].text
+    if ok:
+        ok = extract_commitment(msgs[0]) is not None
+    return _result("evolution", ok, f"parsed={len(msgs)}")
 
 
 def run_dev_bridge(dry: bool) -> bool:
@@ -230,7 +250,7 @@ def run_rag() -> bool:
 
 
 def run_chat() -> bool:
-    base = os.getenv("EVI_API_URL", "http://localhost:8000")
+    base = os.getenv("EVI_API_URL", "http://localhost:8002")
     try:
         import httpx
 
@@ -244,17 +264,18 @@ def run_chat() -> bool:
         return _result("chat", True, f"skipped ({e})")
 
 
-def run_smoke(full: bool, live_n8n: bool, verbose: bool) -> int:
+def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
     tests = [
         run_memory,
         run_file_organizer,
-        lambda: run_calendar(live_n8n),
+        lambda: run_calendar(live_windmill),
         lambda: run_whatsapp(verbose, None),
         run_notes,
         run_session,
         run_email,
-        lambda: run_tasks(live_n8n),
+        lambda: run_tasks(live_windmill),
         run_telegram,
+        run_evolution,
         run_watcher,
         lambda: run_dev_bridge(True),
         run_rag,
@@ -275,10 +296,12 @@ def main() -> int:
     parser.add_argument("feature", nargs="?", default="smoke")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--full", action="store_true", help="Include Tier 3 (chat)")
-    parser.add_argument("--live-n8n", action="store_true")
+    parser.add_argument("--live-windmill", action="store_true")
+    parser.add_argument("--live-n8n", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--log", dest="log_path", default=None)
     parser.add_argument("--dry", action="store_true", help="dev-bridge dry run")
     args = parser.parse_args()
+    live_wm = args.live_windmill or args.live_n8n
 
     os.chdir(AGENT_DIR)
     feature = args.feature.replace("_", "-")
@@ -286,8 +309,9 @@ def main() -> int:
     runners = {
         "memory": run_memory,
         "file-organizer": run_file_organizer,
-        "calendar": lambda: run_calendar(args.live_n8n),
-        "tasks": lambda: run_tasks(args.live_n8n),
+        "calendar": lambda: run_calendar(live_wm),
+        "tasks": lambda: run_tasks(live_wm),
+        "evolution": run_evolution,
         "email": run_email,
         "whatsapp": lambda: run_whatsapp(args.verbose, Path(args.log_path) if args.log_path else None),
         "notes": run_notes,
@@ -297,7 +321,7 @@ def main() -> int:
         "dev-bridge": lambda: run_dev_bridge(args.dry),
         "rag": run_rag,
         "chat": run_chat,
-        "smoke": lambda: run_smoke(args.full, args.live_n8n, args.verbose),
+        "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
 
     if feature not in runners:

@@ -1,6 +1,10 @@
 # Agent API
 
-## ADDED Requirements
+## Purpose
+
+HTTP surface for EVI: health, chat, tool dispatch, notes, insights, and webhooks.
+
+## Requirements
 
 ### Requirement: Health
 The system SHALL expose `GET /` returning status and service list.
@@ -26,11 +30,27 @@ The system SHALL expose `POST /run-task` with `task` name and `params` object.
 ### Requirement: Memory reset
 The system SHALL expose `POST /reset` clearing bounded in-memory history.
 
+#### Scenario: SCN-RESET-01
+- **WHEN** client calls `POST /reset`
+- **THEN** bounded memory for the session is cleared
+
 ### Requirement: Notes
 The system SHALL expose `POST /note` saving Markdown notes to inbox_ia.
+
+#### Scenario: SCN-NOTE-01
+- **WHEN** valid note payload is posted
+- **THEN** a Markdown file is written under inbox_ia
 
 ### Requirement: Session insight
 The system SHALL expose `POST /insight` generating auto-insight Markdown.
 
+#### Scenario: SCN-INSIGHT-01
+- **WHEN** insight is requested for an active session
+- **THEN** response includes generated insight content or a documented stub
+
 ### Requirement: Telegram webhook
 The system SHALL expose `POST /webhooks/telegram` when `EVI_API_KEY` is set, requiring matching `X-Api-Key` header.
+
+#### Scenario: SCN-TG-02
+- **WHEN** request lacks valid `X-Api-Key` while key is configured
+- **THEN** HTTP 401 is returned

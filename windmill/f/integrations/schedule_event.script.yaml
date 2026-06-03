@@ -1,0 +1,32 @@
+summary: ''
+description: ''
+lock: '!inline f/integrations/schedule_event.script.lock'
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    description:
+      type: string
+      description: ''
+      default: ''
+      originalType: string
+    end_time:
+      type: string
+      description: ''
+      default: null
+      originalType: string
+    start_time:
+      type: string
+      description: ''
+      default: null
+      originalType: string
+    title:
+      type: string
+      description: ''
+      default: null
+      originalType: string
+  required:
+    - title
+    - start_time
+    - end_time

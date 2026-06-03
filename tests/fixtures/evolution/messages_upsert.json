@@ -1,0 +1,15 @@
+{
+  "event": "messages.upsert",
+  "data": {
+    "messages": [
+      {
+        "key": {"id": "evo001", "remoteJid": "5511999999999@s.whatsapp.net"},
+        "messageTimestamp": 1717410900,
+        "message": {
+          "conversation": "Reunião com o cliente amanhã às 14h na sala 3"
+        },
+        "pushName": "Maria"
+      }
+    ]
+  }
+}

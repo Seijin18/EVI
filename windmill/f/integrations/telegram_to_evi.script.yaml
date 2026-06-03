@@ -1,0 +1,15 @@
+summary: ''
+description: ''
+lock: '!inline f/integrations/telegram_to_evi.script.lock'
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    update:
+      type: object
+      description: ''
+      default: null
+      properties: {}
+  required:
+    - update

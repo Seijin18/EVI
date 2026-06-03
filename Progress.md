@@ -3,7 +3,7 @@
 > **Start Date**: May 12, 2026  
 > **Current Date**: June 3, 2026  
 > **Hardware**: Intel i5 6th Gen · 16GB DDR4 · GTX 1060 6GB · Pop!_OS/Ubuntu  
-> **Target Architecture**: LangGraph + n8n + Ollama + Qdrant + Postgres (Neo4j/MCP deferred)  
+> **Target Architecture**: LangGraph + Windmill + Evolution API + Ollama + Qdrant + Postgres (Neo4j/MCP deferred)  
 > **Source of truth**: `openspec/specs/` · Verify: `pytest tests/unit -q && ./scripts/evi-test smoke`
 
 ---
@@ -74,8 +74,10 @@
 - [x] **Productivity tools** — `save_note_manual`, `create_task`, `summarize_inbox`
 - [x] **WhatsApp processor** — fixture mode + golden commitments (`evi-test whatsapp`)
 - [x] **Postgres sessions** — `agent/db.py` when `DATABASE_URL` set
-- [ ] **n8n workflow exports** — add JSON under `n8n/workflows/`
-- [ ] **WhatsApp live channel** — pending adapter choice
+- [x] **Windmill orchestration** — compose + `windmill/f/integrations/` (replaces n8n)
+- [x] **Evolution API** — compose + `/webhooks/evolution` + `evi-test evolution`
+- [x] **Telegram bridge** — Windmill script `telegram_to_evi` + existing webhook
+- [x] **Batch ingest** — `ingest_university_folder` + parametrized watcher
 
 ---
 
@@ -322,7 +324,7 @@ docker logs evi-agent-api-1  # Agent startup OK?
 
 ### First Test (When Ready)
 ```bash
-curl -X POST http://localhost:8000/chat \
+curl -X POST http://localhost:8002/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello, organize my inbox for me"}'
 ```

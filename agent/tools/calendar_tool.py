@@ -1,6 +1,6 @@
 from langchain_core.tools import tool
-import requests
-import os
+
+from tools.windmill_client import post_windmill
 
 
 @tool
@@ -8,17 +8,14 @@ def schedule_event(
     title: str, start_time: str, end_time: str, description: str = ""
 ) -> str:
     """
-    Schedules an event in the user's Google Calendar via n8n webhook.
+    Schedule a Google Calendar event via Windmill script/webhook.
 
     Args:
-        title (str): Title of the event.
-        start_time (str): Start time in ISO 8601 format (e.g. '2026-05-12T14:00:00Z').
-        end_time (str): End time in ISO 8601 format (e.g. '2026-05-12T15:00:00Z').
-        description (str, optional): Description of the event.
+        title: Event title.
+        start_time: ISO 8601 start (e.g. 2026-06-10T14:00:00Z).
+        end_time: ISO 8601 end.
+        description: Optional description.
     """
-    # Grab the URL from .env, default to the local docker network name
-    webhook_url = os.getenv("N8N_WEBHOOK_URL", "http://n8n:5678/webhook/calendar")
-
     payload = {
         "action": "schedule_event",
         "title": title,
@@ -26,17 +23,11 @@ def schedule_event(
         "end_time": end_time,
         "description": description,
     }
-
-    try:
-        # To help capture it in the n8n UI right now, we first try the test webhook
-        webhook_test_url = webhook_url.replace("webhook", "webhook-test")
-        response = requests.post(webhook_test_url, json=payload, timeout=10)
-
-        # If test URL is not active (404), fallback to the production webhook URL
-        if response.status_code == 404:
-            response = requests.post(webhook_url, json=payload, timeout=10)
-
-        response.raise_for_status()
-        return f"Successfully passed the event '{title}' to n8n to be scheduled!"
-    except Exception as e:
-        return f"Failed to schedule event. Error: {str(e)}"
+    result = post_windmill(
+        "WINDMILL_WEBHOOK_CALENDAR",
+        payload,
+        "http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/schedule_event",
+    )
+    if "failed" in result.lower():
+        return f"Failed to schedule event. {result}"
+    return f"Successfully passed the event '{title}' to Windmill. {result}"

@@ -202,7 +202,7 @@ def telegram_webhook(
     update: TelegramUpdate,
     _: None = Depends(verify_api_key),
 ):
-    """Telegram → n8n → EVI: handle text messages via chat graph."""
+    """Telegram → Windmill or direct → EVI chat graph."""
     if not update.message or "text" not in update.message:
         return {"ok": True, "skipped": "no text"}
     text = update.message["text"]
@@ -210,6 +210,31 @@ def telegram_webhook(
     session_id = f"telegram-{chat_id}"
     result = chat(ChatRequest(message=text, session_id=session_id))
     return {"ok": True, "response": result.get("response"), "session_id": session_id}
+
+
+@app.post("/webhooks/evolution")
+def evolution_webhook(
+    body: Dict[str, Any],
+    _: None = Depends(verify_api_key),
+):
+    """Evolution API MESSAGES_UPSERT → commitment extraction."""
+    from pathlib import Path
+
+    from services.evolution_parser import parse_evolution_webhook
+    from services.whatsapp_processor import WhatsAppProcessor
+
+    messages = parse_evolution_webhook(body)
+    log_dir = Path(os.getenv("EVI_LOG_DIR", "/tmp/evi-logs"))
+    log_dir.mkdir(parents=True, exist_ok=True)
+    proc = WhatsAppProcessor(log_path=log_dir / "evolution_webhook.jsonl")
+    commitments = proc.process_messages(messages)
+    proc.flush_log()
+    rows = [c.to_golden_row() for c in commitments]
+    return {
+        "ok": True,
+        "ingested": len(messages),
+        "commitments": rows,
+    }
 
 
 @app.post("/run-task")

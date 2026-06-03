@@ -8,35 +8,75 @@ services:
       - ./data/qdrant:/qdrant/storage
     mem_limit: 1g
 
-  n8n:
-    image: n8nio/n8n:latest
-    ports: ["5678:5678"]
+  windmill-server:
+    image: ghcr.io/windmill-labs/windmill:main
+    ports: ["8001:8000"]
     environment:
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=${N8N_AUTH_USER}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_AUTH_PASSWORD}
-      - WEBHOOK_URL=http://localhost:5678
-    volumes:
-      - ./data/n8n:/home/node/.n8n
+      - DATABASE_URL=postgresql://${WINDMILL_DB_USER:-windmill}:${WINDMILL_DB_PASSWORD:-windmill}@postgres:5432/windmill?sslmode=disable
+      - MODE=server
+      - BASE_URL=http://localhost:8001
+    depends_on:
+      - postgres
     mem_limit: 512m
+    restart: unless-stopped
+
+  windmill-worker:
+    image: ghcr.io/windmill-labs/windmill:main
+    environment:
+      - DATABASE_URL=postgresql://${WINDMILL_DB_USER:-windmill}:${WINDMILL_DB_PASSWORD:-windmill}@postgres:5432/windmill?sslmode=disable
+      - MODE=worker
+      - WORKER_GROUP=default
+    depends_on:
+      - windmill-server
+    mem_limit: 512m
+    restart: unless-stopped
+
+  evolution-api:
+    image: atendai/evolution-api:v2.1.1
+    ports: ["8082:8080"]
+    environment:
+      - SERVER_URL=${EVOLUTION_SERVER_URL:-http://localhost:8082}
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-evi-dev-key}
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379
+      - WEBHOOK_GLOBAL_ENABLED=true
+      - WEBHOOK_GLOBAL_URL=http://agent-api:8000/webhooks/evolution
+      - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+    depends_on:
+      - postgres
+      - redis
+    mem_limit: 768m
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    mem_limit: 128m
+    restart: unless-stopped
 
   agent-api:
     build: ./agent
-    ports: ["8000:8000"]
+    ports: ["8002:8000"]
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - QDRANT_URL=${QDRANT_URL}
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
-      - N8N_TASKS_WEBHOOK_URL=${N8N_TASKS_WEBHOOK_URL:-http://n8n:5678/webhook/tasks}
-      - N8N_EMAIL_WEBHOOK_URL=${N8N_EMAIL_WEBHOOK_URL:-http://n8n:5678/webhook/email}
+      - WINDMILL_WEBHOOK_CALENDAR=${WINDMILL_WEBHOOK_CALENDAR}
+      - WINDMILL_WEBHOOK_TASKS=${WINDMILL_WEBHOOK_TASKS}
+      - WINDMILL_WEBHOOK_EMAIL=${WINDMILL_WEBHOOK_EMAIL}
+      - WINDMILL_WEBHOOK_TELEGRAM=${WINDMILL_WEBHOOK_TELEGRAM}
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-}
       - EVI_API_KEY=${EVI_API_KEY:-}
+      - EVI_PROJECT_ROOT=${EVI_PROJECT_ROOT:-/home/marshibs/Projects/EVI}
     volumes:
       - ./watched_folders:/watched_folders
     mem_limit: 2g
     depends_on:
       - postgres
       - qdrant
+      - windmill-server
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -49,4 +89,5 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+      - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
     mem_limit: 512m

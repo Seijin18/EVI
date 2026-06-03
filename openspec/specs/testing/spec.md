@@ -1,6 +1,10 @@
 # Testing requirements
 
-## ADDED Requirements
+## Purpose
+
+Define how EVI features are verified with minimal context (evi-test + SCN IDs).
+
+## Requirements
 
 ### Requirement: Tiered verification
 Every feature domain MUST have Tier 1 (pytest) and Tier 2 (`./scripts/evi-test <feature>`) coverage before OpenSpec archive.
@@ -14,14 +18,23 @@ Every feature domain MUST have Tier 1 (pytest) and Tier 2 (`./scripts/evi-test <
 - **THEN** memory, file-organizer, whatsapp, calendar (mock), notes, telegram parse pass
 
 ### Requirement: Scenario traceability
-Domain specs reference scenario IDs mapped to tests:
+Domain specs MUST map scenario IDs to tests; maintainers SHALL keep the mapping in docs/testing.md.
 
-| ID | Feature | Test |
-|----|---------|------|
-| SCN-FO-01 | File classify university PDF | `tests/unit/test_file_organizer.py` |
-| SCN-WA-01 | WhatsApp meeting tomorrow | `tests/unit/test_whatsapp_processor.py` |
-| SCN-WA-02 | WhatsApp task by Friday | same |
-| SCN-WA-03 | Skip acknowledgement | same |
-| SCN-WA-04 | Golden pipeline | `evi-test whatsapp` |
-| SCN-API-01 | Health endpoint | `evi-test smoke` (with `--full`) |
-| SCN-NOTE-01 | Manual note file | `evi-test notes` |
+#### Scenario: SCN-FO-01 trace
+- **WHEN** file organizer unit test runs
+- **THEN** it covers SCN-FO-01 per docs/testing.md
+
+#### Scenario: SCN-WA golden trace
+- **WHEN** `./scripts/evi-test whatsapp` runs
+- **THEN** results match golden file for SCN-WA-04
+
+#### Scenario: SCN-API trace
+- **WHEN** `./scripts/evi-test smoke --full` runs with stack up
+- **THEN** SCN-API-01 health check is included
+
+### Requirement: E2E checklist
+The project SHALL document Docker+Ollama validation steps in docs/testing.md.
+
+#### Scenario: SCN-E2E-02
+- **WHEN** offline smoke runs after a change
+- **THEN** result is 13/13 PASS or skips documented

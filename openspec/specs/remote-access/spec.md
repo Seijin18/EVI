@@ -1,6 +1,10 @@
 # Remote access
 
-## ADDED Requirements
+## Purpose
+
+Telegram and API-key gated access to EVI chat from outside the LAN.
+
+## Requirements
 
 ### Requirement: Telegram webhook
 The system SHALL accept Telegram updates at `POST /webhooks/telegram` and route text to `/chat` with session `telegram-{chat_id}`.
@@ -13,7 +17,13 @@ The system SHALL accept Telegram updates at `POST /webhooks/telegram` and route 
 ### Requirement: API key
 When `EVI_API_KEY` is set, protected routes SHALL require `X-Api-Key` header.
 
-## REMOVED Requirements
+#### Scenario: SCN-AUTH-01
+- **WHEN** protected route is called without matching key
+- **THEN** HTTP 401 is returned
 
-### Requirement: Live WhatsApp API
-Deferred until channel selection (Meta Cloud API, Twilio, export ingest).
+### Requirement: Live WhatsApp API deferred
+The system SHALL NOT require Meta Cloud or Twilio for current verification; Evolution + fixtures cover WhatsApp.
+
+#### Scenario: SCN-WA-DEF-01
+- **WHEN** OpenSpec archive for messaging is validated
+- **THEN** fixture and Evolution paths are sufficient without live carrier API

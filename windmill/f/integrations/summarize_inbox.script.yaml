@@ -1,0 +1,13 @@
+summary: ''
+description: ''
+lock: '!inline f/integrations/summarize_inbox.script.lock'
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    max_messages:
+      type: integer
+      description: ''
+      default: 10
+  required: []

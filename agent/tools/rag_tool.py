@@ -1,5 +1,5 @@
 import os
-import uuid
+from pathlib import Path
 from typing import List, Dict, Any
 from langchain_core.tools import tool
 from langchain_ollama import OllamaEmbeddings
@@ -64,6 +64,27 @@ def ingest_university_pdf(file_path: str) -> str:
         return f"Successfully ingested {len(chunks)} chunks from {os.path.basename(file_path)}."
     except Exception as e:
         return f"Failed to ingest {file_path}: {str(e)}"
+
+
+@tool
+def ingest_university_folder(
+    folder_path: str = "/watched_folders/university",
+) -> str:
+    """
+    Ingest all PDF files in a folder into the university notes knowledge base.
+    """
+    folder = Path(folder_path)
+    if not folder.is_dir():
+        return f"Error: Folder not found: {folder_path}"
+
+    pdfs = sorted(folder.glob("*.pdf"))
+    if not pdfs:
+        return "No PDF files found in folder."
+
+    results = []
+    for pdf in pdfs:
+        results.append(ingest_university_pdf.invoke({"file_path": str(pdf)}))
+    return "\n".join(results)
 
 
 @tool

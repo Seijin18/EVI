@@ -1,0 +1,25 @@
+summary: ''
+description: ''
+lock: '!inline f/integrations/create_task.script.lock'
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    due_date:
+      type: string
+      description: ''
+      default: ''
+      originalType: string
+    notes:
+      type: string
+      description: ''
+      default: ''
+      originalType: string
+    title:
+      type: string
+      description: ''
+      default: null
+      originalType: string
+  required:
+    - title

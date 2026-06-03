@@ -1,6 +1,10 @@
 # WhatsApp message processing (fixture mode)
 
-## ADDED Requirements
+## Purpose
+
+Extract calendar tasks and events from WhatsApp text via fixtures and Evolution API webhooks.
+
+## Requirements
 
 ### Requirement: Fixture pipeline
 The processor SHALL read `tests/fixtures/whatsapp/messages.jsonl` and extract commitments without live WhatsApp API.
@@ -24,5 +28,9 @@ The processor SHALL read `tests/fixtures/whatsapp/messages.jsonl` and extract co
 - **WHEN** `./scripts/evi-test whatsapp` runs
 - **THEN** results match `tests/golden/whatsapp_commitments.json` and JSONL log is written
 
-### Requirement: Live adapter (planned)
-Live WhatsApp adapter is REMOVED from v1; options documented in `remote-access` change design.
+### Requirement: Evolution API live adapter
+The system SHALL accept Evolution API webhooks at `POST /webhooks/evolution` and extract commitments.
+
+#### Scenario: SCN-WA-05
+- **WHEN** `evi-test evolution` runs with fixture payload
+- **THEN** at least one message is parsed and commitment extracted

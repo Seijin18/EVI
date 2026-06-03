@@ -2,27 +2,36 @@
 schema: spec-driven
 
 context: |
-  EVI is a local personal AI agent: FastAPI + LangGraph ReAct + Ollama (qwen2.5:7b)
-  + Qdrant (university RAG) + n8n webhooks + Postgres (sessions). No Neo4j/MCP subprocess yet.
+  EVI: FastAPI + LangGraph ReAct + Ollama (qwen2.5:7b) + Qdrant + Postgres sessions.
+  Orchestration target: Windmill (scripts in repo, wmill sync). WhatsApp: Evolution API webhooks.
+  Legacy n8n is being removed — do not add n8n workflows.
 
-  Hardware: 16GB RAM, GTX 1060 6GB — OLLAMA_MAX_LOADED_MODELS=1, single model in VRAM.
+  Hardware: 16GB RAM, GTX 1060 6GB — OLLAMA_MAX_LOADED_MODELS=1.
 
-  Product priority: productivity (files, notes, email/tasks via n8n, WhatsApp message tracking)
-  > remote access (Telegram) > dev bridge (Cursor/Copilot CLI docs) > university RAG (secondary).
+  Product priority: productivity (files, notes, email/tasks, WhatsApp commitments)
+  > remote (Telegram) > dev bridge > university RAG (secondary).
 
-  Conventions: LangChain @tool in agent/tools/; register in AVAILABLE_TOOLS (main.py);
-  bounded memory (max 8 pairs); secrets in .env only.
+  Conventions: tools in agent/tools/; register in agent/tools/registry.py;
+  bounded memory (8 pairs); secrets in .env only.
 
-  Cursor MCP in this repo: codebase-memory only. Do not use Graphiti here.
+  Source of truth: openspec/specs/ (not Progress.md nor personal-ai-agent-server.md).
+  Active work: exactly one folder under openspec/changes/ — read openspec/AGENTS.md first.
 
-  Long-term vision: personal-ai-agent-server.md. Source of truth for current behavior: openspec/specs/.
-
-  Every new feature MUST have Tier 1 (pytest) + Tier 2 (./scripts/evi-test <feature>) before archive.
+  Verification: Tier 1 unit tests + Tier 2 ./scripts/evi-test <feature> before archive.
+  Apply: use `openspec instructions apply --change <name> --json` for contextFiles only.
 
 rules:
   proposal:
-    - State product priority alignment (productivity vs RAG vs infra).
+    - Max 15 lines of intent; link product priority.
+    - List explicit Out of scope.
   tasks:
-    - Link each task to SCN-* scenario IDs and evi-test command when applicable.
+    - Each task MUST include SCN-* (if applicable), Files: (max 5 paths), Verify: (evi-test command).
+    - One logical deliverable per task; 5-12 tasks per change.
   design:
-    - Note RAM impact for new containers or models.
+    - RAM impact for new containers; Windmill/Evolution ports.
+    - Out of scope section required.
+  apply:
+    - Do NOT read personal-ai-agent-server.md or Progress.md unless the user asks.
+    - Do NOT read files outside the current task Files: list and contextFiles from CLI.
+    - Mark tasks [x] immediately after Verify passes.
+    - Prefer get_code_snippet / offset+limit over full file reads.

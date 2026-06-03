@@ -7,7 +7,7 @@ alwaysApply: true
 
 - **Agente**: FastAPI + LangGraph em `agent/`; memória curta em `BoundedMemory` (`agent/memory.py`).
 - **LLM**: Ollama local (`OLLAMA_BASE_URL`); priorize modelos já carregados; não assuma OpenAI/Anthropic.
-- **Dados**: Qdrant (RAG de notas), Postgres/n8n no compose; Neo4j planejado na Phase 2 — ainda não no `docker-compose.yml` atual.
+- **Dados**: Qdrant, Postgres, Windmill, Evolution API + Redis no compose; Neo4j adiado.
 - **MCP no projeto**: apenas `codebase-memory`. Não usar Graphiti nem memória episódica externa neste repo.
 
 ## Mapa rápido

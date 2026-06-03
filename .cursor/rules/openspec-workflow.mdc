@@ -1,0 +1,21 @@
+---
+description: OpenSpec-first implementation — minimize context reads
+globs:
+alwaysApply: true
+---
+
+# OpenSpec workflow (EVI)
+
+Before coding a feature:
+
+1. `openspec list` — confirm **one** active change.
+2. `openspec instructions apply --change <name> --json` — read only `contextFiles`.
+3. Implement the **next unchecked** task; respect `Files:` and `Verify:` in `tasks.md`.
+
+Do **not** read `personal-ai-agent-server.md`, full `Progress.md`, or plan files unless the user asks.
+
+After each task: run `Verify:` command, then mark `- [x]` in `tasks.md`.
+
+When all tasks done: `openspec validate <change>` then `/opsx:archive`.
+
+See [openspec/AGENTS.md](../../openspec/AGENTS.md).

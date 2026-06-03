@@ -1,0 +1,13 @@
+[Unit]
+Description=EVI university PDF watcher
+After=network.target docker.service
+
+[Service]
+Type=simple
+Environment=EVI_PROJECT_ROOT=%h/Projects/EVI
+Environment=EVI_API_URL=http://localhost:8002/run-task
+ExecStart=%h/Projects/EVI/scripts/watch_and_ingest.sh
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
