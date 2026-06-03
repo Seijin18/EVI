@@ -1,0 +1,23 @@
+---
+description: Padrões Python do agente EVI (LangGraph / FastAPI)
+globs: agent/**/*.py
+alwaysApply: false
+---
+
+# Agente Python (EVI)
+
+## Estrutura
+
+- Novas tools: módulo em `agent/tools/`, exportar função decorada, registrar em `AVAILABLE_TOOLS` em `main.py`.
+- Estado global: `AgentApplicationState` + `BoundedMemory`; não expandir memória sem limite (RAM limitada).
+- Rotas HTTP em `main.py`; lógica de raciocínio em `graph.py`.
+
+## Estilo
+
+- Tipagem e Pydantic onde já usado; mensagens LangChain (`HumanMessage`, etc.).
+- Erros HTTP claros (`HTTPException`); sem wrappers genéricos desnecessários.
+- Comentários só para regras de negócio não óbvias.
+
+## Ao debugar
+
+- Comece por `main.py` → `graph.py` → tool específica; use `search_graph` com `file_pattern: "agent/**"` antes de abrir todos os tools.

@@ -1,0 +1,36 @@
+---
+description: Desempenho do agente no Cursor — menos tokens, menos I/O, respostas proporcionais
+alwaysApply: true
+---
+
+# Desempenho no Cursor (EVI)
+
+## Antes de explorar o código
+
+1. Use **Codebase Memory** (`search_graph`, `get_architecture`, `get_code_snippet`) antes de `grep` amplo ou leitura em massa.
+2. Projeto indexado: `home-marshibs-Projects-EVI`. Reindexe só se o usuário pedir ou após mudanças estruturais grandes.
+3. `index_repository` em modo `fast` por padrão; `full` só para busca semântica (`semantic_query`).
+
+## Leitura de arquivos
+
+- Leia **só o necessário**: `offset` + `limit` em arquivos grandes; prefira `get_code_snippet` quando o grafo tiver o trecho.
+- Não releia arquivos já lidos nesta sessão, salvo se o usuário alterou o arquivo ou pediu diff.
+- Evite listar diretórios inteiros repetidamente; uma passagem estrutural via `get_architecture` costuma bastar.
+
+## Ferramentas e paralelismo
+
+- Não use subagentes (`Task`) para perguntas pontuais ou repositório pequeno.
+- Não crie listas de TODO para tarefas de 1–2 passos.
+- Agrupe leituras independentes em paralelo; evite dezenas de chamadas sequenciais para o mesmo fim.
+- Não invoque MCPs que não estejam em `.cursor/mcp.json` do projeto.
+
+## Respostas
+
+- Respostas **proporcionais** à tarefa: correções pequenas = poucas linhas; evite repetir contexto que o usuário já viu.
+- Citações de código só no trecho relevante; não despeje arquivos inteiros no chat.
+- Perguntas de revisão ou explicação: responda sem editar arquivos, salvo pedido explícito.
+
+## Escopo de mudanças
+
+- Diff mínimo; não refatore código não relacionado à solicitação.
+- Não adicione testes, docs ou commits sem o usuário pedir.

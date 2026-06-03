@@ -1,0 +1,27 @@
+---
+description: Grafo de código (codebase-memory MCP) para o projeto EVI
+alwaysApply: true
+---
+
+# Codebase Memory (EVI)
+
+**Projeto no grafo:** `home-marshibs-Projects-EVI`  
+**Repo:** `/home/marshibs/Projects/EVI`
+
+## Ordem de uso (performance)
+
+1. `get_architecture` — visão geral (rotas, pacotes, hotspots).
+2. `search_graph` — achar símbolos por nome ou linguagem natural (`query`).
+3. `get_code_snippet` ou `trace_path` — trecho ou cadeia de chamadas.
+4. `detect_changes` — após commits ou antes de PR, em vez de reler tudo.
+5. `Read` / `grep` — só para diff fino, configs ou arquivos fora do índice (`.md`, `.env.example`, scripts).
+
+## Indexação
+
+- Se `list_projects` estiver vazio: `index_repository(repo_path="/home/marshibs/Projects/EVI", mode="fast")`.
+- Não reindexar a cada mensagem; só após refactors grandes ou pedido do usuário.
+
+## Evitar
+
+- `grep` recursivo no repo inteiro quando `search_graph` resolver.
+- Ler `personal-ai-agent-server.md` ou `Progress.md` inteiros sem necessidade (são longos).
