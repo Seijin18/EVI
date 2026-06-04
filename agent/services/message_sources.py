@@ -15,6 +15,8 @@ class IncomingMessage:
     sender: str
     text: str
     ts: str  # ISO-8601
+    from_me: bool = False
+    is_group: bool = False
 
 
 class MessageSource(ABC):

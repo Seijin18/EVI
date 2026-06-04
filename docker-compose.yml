@@ -79,8 +79,16 @@ services:
       - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-}
       - EVI_API_KEY=${EVI_API_KEY:-}
       - EVI_PROJECT_ROOT=${EVI_PROJECT_ROOT:-/home/marshibs/Projects/EVI}
+      # Host path in .env is for local scripts; container always uses mounted /logs
+      - EVI_LOG_DIR=/logs
+      - EVI_WHATSAPP_MAX_PER_WEBHOOK=${EVI_WHATSAPP_MAX_PER_WEBHOOK:-10}
+      - EVI_WHATSAPP_MAX_AGE_HOURS=${EVI_WHATSAPP_MAX_AGE_HOURS:-24}
+      - EVI_WHATSAPP_INCOMING_ONLY=${EVI_WHATSAPP_INCOMING_ONLY:-true}
+      - EVI_WHATSAPP_SKIP_GROUPS=${EVI_WHATSAPP_SKIP_GROUPS:-true}
+      - EVI_WHATSAPP_DEDUPE_IDS=${EVI_WHATSAPP_DEDUPE_IDS:-true}
     volumes:
       - ./watched_folders:/watched_folders
+      - ./logs:/logs
     mem_limit: 2g
     depends_on:
       - postgres

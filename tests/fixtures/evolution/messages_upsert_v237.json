@@ -1,0 +1,12 @@
+{
+  "event": "messages.upsert",
+  "instance": "evi",
+  "data": [
+    {
+      "key": {"id": "evo237", "remoteJid": "5511888777666@s.whatsapp.net"},
+      "messageTimestamp": 1717410900,
+      "message": {"conversation": "Reunião amanhã às 15h"},
+      "pushName": "Test"
+    }
+  ]
+}

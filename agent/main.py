@@ -220,19 +220,24 @@ def evolution_webhook(
     """Evolution API MESSAGES_UPSERT → commitment extraction."""
     from pathlib import Path
 
+    from services.evolution_filter import filter_for_processing
     from services.evolution_parser import parse_evolution_webhook
     from services.whatsapp_processor import WhatsAppProcessor
 
-    messages = parse_evolution_webhook(body)
     log_dir = Path(os.getenv("EVI_LOG_DIR", "/tmp/evi-logs"))
     log_dir.mkdir(parents=True, exist_ok=True)
+    raw = parse_evolution_webhook(body)
+    messages, filter_stats = filter_for_processing(raw, log_dir=log_dir)
     proc = WhatsAppProcessor(log_path=log_dir / "evolution_webhook.jsonl")
+    proc.log({"step": "filter", **filter_stats})
     commitments = proc.process_messages(messages)
     proc.flush_log()
     rows = [c.to_golden_row() for c in commitments]
     return {
         "ok": True,
+        "received": filter_stats["received"],
         "ingested": len(messages),
+        "filter": filter_stats,
         "commitments": rows,
     }
 

@@ -63,7 +63,7 @@ webhook = {
   "url": "${WEBHOOK_URL}",
   "webhookByEvents": False,
   "webhookBase64": False,
-  "events": ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
+  "events": ["MESSAGES_UPSERT"],
 }
 headers = json.loads('''${headers_json}''')
 if headers:
@@ -72,6 +72,9 @@ print(json.dumps({
   "instanceName": "${INSTANCE}",
   "qrcode": True,
   "integration": "WHATSAPP-BAILEYS",
+  "syncFullHistory": False,
+  "groupsIgnore": True,
+  "readMessages": False,
   "webhook": webhook,
 }))
 PY
@@ -87,12 +90,22 @@ webhook = {
   "url": "${WEBHOOK_URL}",
   "webhookByEvents": False,
   "webhookBase64": False,
-  "events": ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
+  "events": ["MESSAGES_UPSERT"],
 }
 print(json.dumps({"webhook": webhook}))
 PY
 )
 api -X POST "${BASE}/webhook/set/${INSTANCE}" -d "$wh_payload" | python3 -m json.tool || true
+
+echo "==> Instance settings (no full history sync, ignore groups)"
+api -X POST "${BASE}/settings/set/${INSTANCE}" -d '{
+  "syncFullHistory": false,
+  "groupsIgnore": true,
+  "readMessages": false,
+  "readStatus": false,
+  "rejectCall": false,
+  "alwaysOnline": false
+}' | python3 -m json.tool || true
 
 echo ""
 echo "==> Connection / QR code"

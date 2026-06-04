@@ -19,18 +19,23 @@ def _text_from_message(data: Dict[str, Any]) -> str:
 
 
 def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
-    """Handle MESSAGES_UPSERT style payloads (v2 flexible)."""
+    """Handle MESSAGES_UPSERT style payloads (Evolution v2.1–v2.3)."""
     results: List[IncomingMessage] = []
 
-    event = body.get("event") or body.get("type") or ""
-    if event and "message" not in event.lower() and "upsert" not in event.lower():
-        if body.get("data") is None and not body.get("messages"):
-            return results
+    event = (body.get("event") or body.get("type") or "").lower()
+    if event and "message" not in event and "upsert" not in event:
+        return results
 
     data = body.get("data") or body
-    messages = data.get("messages") or data.get("message")
+    messages: Any = None
+    if isinstance(data, list):
+        messages = data
+    elif isinstance(data, dict):
+        messages = data.get("messages") or data.get("message")
+        if messages is None and (data.get("key") or data.get("message")):
+            messages = [data]
     if messages is None:
-        messages = [data] if data.get("key") or data.get("message") else []
+        messages = []
     if isinstance(messages, dict):
         messages = [messages]
 
@@ -39,12 +44,12 @@ def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
             continue
         key = item.get("key") or {}
         msg_id = key.get("id") or item.get("id") or f"evo_{idx}"
-        sender = (
-            key.get("remoteJid")
-            or item.get("from")
-            or item.get("pushName")
-            or "unknown"
+        remote = str(
+            key.get("remoteJid") or item.get("from") or item.get("pushName") or "unknown"
         )
+        sender = remote
+        from_me = bool(key.get("fromMe") or item.get("fromMe"))
+        is_group = "@g.us" in remote
         text = _text_from_message(item)
         if not text.strip():
             continue
@@ -59,6 +64,13 @@ def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
 
             ts = datetime.utcfromtimestamp(int(ts)).isoformat()
         results.append(
-            IncomingMessage(id=str(msg_id), sender=str(sender), text=text, ts=ts or "")
+            IncomingMessage(
+                id=str(msg_id),
+                sender=str(sender),
+                text=text,
+                ts=ts or "",
+                from_me=from_me,
+                is_group=is_group,
+            )
         )
     return results

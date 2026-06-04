@@ -210,15 +210,24 @@ def run_evolution() -> bool:
     from services.evolution_parser import parse_evolution_webhook
     from services.whatsapp_processor import extract_commitment
 
-    fix = FIXTURES / "evolution" / "messages_upsert.json"
-    if not fix.exists():
-        return _result("evolution", False, "fixture missing")
-    body = json.loads(fix.read_text())
-    msgs = parse_evolution_webhook(body)
-    ok = len(msgs) >= 1 and "Reunião" in msgs[0].text
-    if ok:
-        ok = extract_commitment(msgs[0]) is not None
-    return _result("evolution", ok, f"parsed={len(msgs)}")
+    fixtures = [
+        FIXTURES / "evolution" / "messages_upsert.json",
+        FIXTURES / "evolution" / "messages_upsert_v237.json",
+    ]
+    ok = True
+    parsed = 0
+    for fix in fixtures:
+        if not fix.exists():
+            ok = False
+            continue
+        body = json.loads(fix.read_text())
+        msgs = parse_evolution_webhook(body)
+        parsed += len(msgs)
+        if not msgs:
+            ok = False
+        elif "Reunião" in msgs[0].text:
+            ok = ok and extract_commitment(msgs[0]) is not None
+    return _result("evolution", ok, f"parsed={parsed}")
 
 
 def run_dev_bridge(dry: bool) -> bool:
