@@ -32,7 +32,8 @@ services:
     restart: unless-stopped
 
   evolution-api:
-    image: atendai/evolution-api:v2.1.1
+    # atendai/* v2.1.1 often fails QR (statusReason 405 loop); use maintained image
+    image: evoapicloud/evolution-api:v2.3.7
     ports: ["8082:8080"]
     environment:
       - SERVER_URL=${EVOLUTION_SERVER_URL:-http://localhost:8082}
@@ -40,11 +41,19 @@ services:
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_CONNECTION_CLIENT_NAME=evolution_evi
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
       - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_URI=redis://redis:6379
+      - CACHE_REDIS_URI=redis://redis:6379/0
       - WEBHOOK_GLOBAL_ENABLED=true
-      - WEBHOOK_GLOBAL_URL=http://agent-api:8000/webhooks/evolution
+      - WEBHOOK_GLOBAL_URL=${EVOLUTION_WEBHOOK_URL:-http://agent-api:8000/webhooks/evolution}
       - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+      - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
+      - QRCODE_LIMIT=30
+      - CONFIG_SESSION_PHONE_CLIENT=Chrome
+      - CONFIG_SESSION_PHONE_NAME=Chrome
+      - NODE_OPTIONS=--dns-result-order=ipv4first
     depends_on:
       - postgres
       - redis
