@@ -2,6 +2,7 @@
 
 | Item | Type | Notes |
 |------|------|-------|
+| n8n spec removed | Done | Use `integrations-windmill` only; SCN-DEP-02 |
 | Neo4j + graph_tool.py | Architecture | When study/reasoning priority rises |
 | MCP isolated servers | Architecture | After 3+ stable tools need isolated restart |
 | Llava + Whisper | Feature | Multimodal remote |

@@ -9,6 +9,11 @@ from tools.rag_tool import (
     ingest_university_pdf,
     query_university_notes,
 )
+from tools.commitment_tools import (
+    confirm_commitments,
+    dismiss_commitments,
+    list_pending_commitments,
+)
 from tools.task_tool import create_task
 
 
@@ -22,4 +27,7 @@ def get_all_tools():
         save_note_manual,
         create_task,
         summarize_inbox,
+        list_pending_commitments,
+        confirm_commitments,
+        dismiss_commitments,
     ]

@@ -106,10 +106,18 @@ def run_calendar(live_n8n: bool) -> bool:
                     "end_time": data["end_time"],
                 }
             )
-            ok = "Successfully" in str(r)
+            text = str(r)
+            ok = '"status":"created"' in text or '"status": "created"' in text
+            if not ok and "created in Google Calendar" in text:
+                ok = True
+            if not ok and "failed" not in text.lower():
+                ok = "Successfully" in text
         except ImportError as e:
             return _result("calendar", False, str(e))
-    return _result("calendar", ok, "payload ok" if not live_n8n else "live")
+        except Exception as e:
+            return _result("calendar", False, str(e))
+        return _result("calendar", ok, text[:200] if live_n8n else "live")
+    return _result("calendar", ok, "payload ok")
 
 
 def run_tasks(live_n8n: bool) -> bool:

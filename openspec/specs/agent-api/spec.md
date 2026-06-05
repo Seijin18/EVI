@@ -54,3 +54,14 @@ The system SHALL expose `POST /webhooks/telegram` when `EVI_API_KEY` is set, req
 #### Scenario: SCN-TG-02
 - **WHEN** request lacks valid `X-Api-Key` while key is configured
 - **THEN** HTTP 401 is returned
+
+### Requirement: Pending commitment review tools
+The agent SHALL expose tools to list, confirm, and dismiss pending commitments from the Postgres queue.
+
+#### Scenario: SCN-CHAT-02
+- **WHEN** user asks to see pending WhatsApp commitments via `/chat`
+- **THEN** agent can call `list_pending_commitments` and return structured results
+
+#### Scenario: SCN-CHAT-03
+- **WHEN** user confirms commitment ids
+- **THEN** agent calls `confirm_commitments` which schedules events via Windmill calendar

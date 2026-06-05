@@ -1,5 +1,15 @@
 # EVI — OpenSpec agent index (read this first)
 
+## Cursor rules (persistent)
+
+| Rule | When |
+|------|------|
+| `.cursor/rules/openspec-planning.mdc` | Propose, plan mode, roadmap |
+| `.cursor/rules/openspec-workflow.mdc` | Apply, verify, archive |
+| `.cursor/rules/openspec-changes.mdc` | Editing `openspec/**` |
+| `.cursor/rules/codebase-memory.mdc` | Code search before grep |
+| `.cursor/rules/cursor-performance.mdc` | Token/I/O limits |
+
 ## Active change
 
 ```bash

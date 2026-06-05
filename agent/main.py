@@ -233,12 +233,47 @@ def evolution_webhook(
     commitments = proc.process_messages(messages)
     proc.flush_log()
     rows = [c.to_golden_row() for c in commitments]
+    queued_ids: list[int] = []
+    try:
+        from db import init_db, insert_pending_commitment
+
+        init_db()
+        msg_by_id = {m.id: m for m in messages}
+        for c in commitments:
+            raw = msg_by_id.get(c.source_id)
+            raw_text = raw.text if raw else ""
+            row_id = insert_pending_commitment(
+                source="evolution",
+                source_id=c.source_id,
+                ctype=c.type,
+                title=c.title,
+                event_date=c.date,
+                event_time=c.time,
+                due_date=c.due,
+                priority=c.priority,
+                raw_text=raw_text,
+            )
+            if row_id:
+                queued_ids.append(row_id)
+        try:
+            from services.commitment_notify import maybe_notify_new_pending
+
+            maybe_notify_new_pending(
+                queued_ids, [c.priority for c in commitments]
+            )
+        except Exception as notify_exc:
+            proc.log({"step": "notify_error", "error": str(notify_exc)[:200]})
+    except Exception as exc:
+        proc.log({"step": "queue_error", "error": str(exc)[:200]})
+
     return {
         "ok": True,
         "received": filter_stats["received"],
         "ingested": len(messages),
         "filter": filter_stats,
         "commitments": rows,
+        "queued": len(queued_ids),
+        "queued_ids": queued_ids,
     }
 
 

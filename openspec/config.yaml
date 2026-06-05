@@ -25,13 +25,13 @@ rules:
     - Max 15 lines of intent; link product priority.
     - List explicit Out of scope.
   tasks:
-    - Each task MUST include SCN-* (if applicable), Files: (max 5 paths), Verify: (evi-test command).
+    - "Each task MUST include SCN-* (if applicable), Files (max 5 paths), Verify (evi-test command)."
     - One logical deliverable per task; 5-12 tasks per change.
   design:
     - RAM impact for new containers; Windmill/Evolution ports.
     - Out of scope section required.
   apply:
     - Do NOT read personal-ai-agent-server.md or Progress.md unless the user asks.
-    - Do NOT read files outside the current task Files: list and contextFiles from CLI.
+    - Do NOT read files outside the current task Files list and contextFiles from CLI.
     - Mark tasks [x] immediately after Verify passes.
     - Prefer get_code_snippet / offset+limit over full file reads.

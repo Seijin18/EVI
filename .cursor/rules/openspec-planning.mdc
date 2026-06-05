@@ -1,0 +1,54 @@
+---
+description: OpenSpec planning and propose — one change per feature, token-light
+alwaysApply: true
+---
+
+# OpenSpec planning (EVI)
+
+## Before proposing or planning
+
+1. `openspec list` — prefer **zero** active changes; archive or finish the current one first.
+2. **One feature = one change** (kebab-case), e.g. `evi-commitment-inbox`.
+3. Product priority (from `openspec/config.yaml`): WhatsApp commitments / productivity > Telegram > dev bridge > university RAG.
+
+## Propose a change
+
+- Skill: `.cursor/skills/openspec-propose/SKILL.md` or command `/opsx-propose`.
+- Steps: `openspec new change <name>` → `openspec status --change <name> --json` → artifacts in order until apply-ready.
+- Artifacts: `proposal.md` (≤15 lines intent + **Out of scope**), `design.md` (RAM/ports if infra), `tasks.md` (5–12 tasks).
+- Each task: optional `SCN-*`, **`Files:`** (max 5 paths), **`Verify:`** (`./scripts/evi-test <feature>` or unit test path).
+- Rules source: `openspec/config.yaml` (`rules.proposal`, `rules.tasks`, `rules.design`).
+
+## Plan mode vs implement
+
+- **Plan mode:** update the plan document; do **not** edit product code unless the user explicitly asks to execute.
+- **Implement:** user says e.g. “execute the plan”, “implementar change X”, “/opsx:apply”.
+
+## New chat (low context)
+
+First message should name the target change, e.g. *Implement `evi-commitment-inbox` via `openspec instructions apply --json`.*
+
+## Roadmap order (reference)
+
+| P | Change | Notes |
+|---|--------|-------|
+| P0 | `evi-cursor-openspec-rules` | Cursor rules (DX) |
+| P0 | `evi-calendar-windmill-as-built` | Spec = live Calendar |
+| P0 | `evi-commitment-inbox` | Postgres queue |
+| P1 | `evi-commitment-review-chat` | List/confirm in chat |
+| P1 | `evi-commitment-notifications` | Telegram digest |
+| P2 | `evi-windmill-google-tasks` / `evi-windmill-gmail-summary` | Windmill scripts |
+| P3 | `evi-whatsapp-group-whitelist-spec`, `evi-deprecate-n8n-spec` | Spec cleanup |
+
+Dependencies: inbox → review & notify; calendar-as-built → review (schedule_event).
+
+## Do not read by default
+
+- `personal-ai-agent-server.md`, `Progress.md`
+- `openspec/changes/archive/**`
+- Old `.cursor/plans/` unless the user points to the current plan
+
+## Index
+
+- [openspec/AGENTS.md](../../openspec/AGENTS.md) — domain map + verify commands
+- [openspec/specs/roadmap.md](../../openspec/specs/roadmap.md) — deferred items only

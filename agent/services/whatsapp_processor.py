@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from services.commitment_priority import classify_priority
 from services.message_sources import IncomingMessage, load_messages
 
 
@@ -21,6 +22,7 @@ class Commitment:
     time: Optional[str] = None
     due: Optional[str] = None
     confidence: float = 0.75
+    priority: str = "normal"
 
     def to_golden_row(self) -> Dict[str, Any]:
         row: Dict[str, Any] = {
@@ -34,6 +36,8 @@ class Commitment:
             row["time"] = self.time
         if self.due:
             row["due"] = self.due
+        if self.priority != "normal":
+            row["priority"] = self.priority
         return row
 
 
@@ -118,6 +122,7 @@ def extract_commitment(msg: IncomingMessage) -> Optional[Commitment]:
         time=time_str,
         due=due_str or (date_str if ctype == "task" and date_str else None),
         confidence=0.8 if ctype == "event" else 0.7,
+        priority=classify_priority(text),
     )
 
 

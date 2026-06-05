@@ -28,6 +28,13 @@ Domain specs MUST map scenario IDs to tests; maintainers SHALL keep the mapping 
 - **WHEN** `./scripts/evi-test whatsapp` runs
 - **THEN** results match golden file for SCN-WA-04
 
+### Requirement: Evolution filter unit tests
+The project SHALL include unit tests for `evolution_filter` covering whitelist and dedupe behavior.
+
+#### Scenario: SCN-WA-09
+- **WHEN** `pytest tests/unit/test_evolution_filter.py` runs
+- **THEN** all tests pass without network
+
 #### Scenario: SCN-API trace
 - **WHEN** `./scripts/evi-test smoke --full` runs with stack up
 - **THEN** SCN-API-01 health check is included

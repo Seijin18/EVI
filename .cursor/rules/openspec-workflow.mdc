@@ -1,21 +1,54 @@
 ---
-description: OpenSpec-first implementation — minimize context reads
-globs:
+description: OpenSpec apply and archive — minimize context reads
 alwaysApply: true
 ---
 
 # OpenSpec workflow (EVI)
 
-Before coding a feature:
+## Before coding
 
-1. `openspec list` — confirm **one** active change.
-2. `openspec instructions apply --change <name> --json` — read only `contextFiles`.
-3. Implement the **next unchecked** task; respect `Files:` and `Verify:` in `tasks.md`.
+1. `openspec list` — exactly **one** active change (or finish/archive the other first).
+2. `openspec status --change <name> --json` — optional progress check.
+3. `openspec instructions apply --change <name> --json` — read **only** `contextFiles` from JSON.
+4. Open current task in `tasks.md`; read **only** paths listed in **`Files:`** for that task.
 
-Do **not** read `personal-ai-agent-server.md`, full `Progress.md`, or plan files unless the user asks.
+Do **not** read `personal-ai-agent-server.md`, full `Progress.md`, or unrelated plan files unless the user asks.
 
-After each task: run `Verify:` command, then mark `- [x]` in `tasks.md`.
+## While implementing
 
-When all tasks done: `openspec validate <change>` then `/opsx:archive`.
+- Implement the **next unchecked** task only.
+- Prefer **codebase-memory** (`search_graph`, `get_code_snippet`, `project=home-marshibs-Projects-EVI`) over repo-wide `grep`.
+- Use `Read` with `offset`/`limit` on large files; do not re-read files already covered in the task.
+- Do not read `agent/graph.py` when changing a single tool — use `agent/tools/registry.py`.
 
-See [openspec/AGENTS.md](../../openspec/AGENTS.md).
+## After each task
+
+1. Run the task **`Verify:`** command (e.g. `./scripts/evi-test <feature>`).
+2. Mark `- [x]` in `tasks.md` immediately after verify passes.
+
+## When the change is done
+
+```bash
+openspec validate <change-name>
+```
+
+Then archive: skill `.cursor/skills/openspec-archive-change/SKILL.md` or `/opsx:archive`.
+
+## Skills (Cursor)
+
+| Action | Skill / command |
+|--------|------------------|
+| New change | `openspec-propose` / `/opsx-propose` |
+| Implement | `openspec-apply-change` / `/opsx:apply` |
+| Sync specs | `openspec-sync-specs` / `/opsx:sync` |
+| Archive | `openspec-archive-change` / `/opsx:archive` |
+| Explore ideas | `openspec-explore` / `/opsx:explore` |
+
+## Planning vs apply
+
+- Planning rules: [openspec-planning.mdc](./openspec-planning.mdc)
+- Artifact format: [openspec-changes.mdc](./openspec-changes.mdc) (when under `openspec/`)
+
+## Index
+
+[openspec/AGENTS.md](../../openspec/AGENTS.md)

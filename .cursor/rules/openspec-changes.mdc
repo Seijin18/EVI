@@ -1,0 +1,42 @@
+---
+description: Editing OpenSpec changes and delta specs — format and sync
+globs: openspec/**
+alwaysApply: false
+---
+
+# OpenSpec artifacts (EVI)
+
+Applies when editing `openspec/changes/**` or `openspec/specs/**`.
+
+## Spec format
+
+- Main specs: `## Purpose`, `## Requirements`, requirements use **SHALL** / **MUST**.
+- Scenarios: `#### Scenario: SCN-XXX` with **GIVEN** / **WHEN** / **THEN** bullets.
+
+## Change folder layout
+
+- `openspec/changes/<change-name>/`: `proposal.md`, `design.md`, `tasks.md`, optional `specs/<domain>/spec.md` (delta).
+- On archive: sync deltas to `openspec/specs/` (skill `openspec-sync-specs` if needed before archive).
+
+## tasks.md
+
+- Checkbox per task: `- [ ]` / `- [x]`.
+- **Files:** max 5 paths per task (enforced by project config).
+- **Verify:** concrete command; run it before marking `[x]`.
+
+## proposal.md
+
+- Short intent; link product priority from `openspec/config.yaml` context.
+- Explicit **Out of scope** section.
+
+## design.md
+
+- Note RAM/docker impact for new services; Windmill `8001`, agent `8002`, Evolution `8082` on host.
+- Out of scope required.
+
+## Validation
+
+```bash
+openspec validate <change-name>
+openspec validate --specs
+```

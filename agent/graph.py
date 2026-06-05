@@ -25,6 +25,7 @@ CRITICAL RULES:
 1. When the user asks to schedule an event for a relative day ("tomorrow", "next week"), you MUST find the exact date in the CALENDAR LOOKUP TABLE above and use it.
 2. If asked what the current date or time is, answer EXACTLY with the "Today is..." line above. DO NOT hallucinate dates.
 3. You have native access to tools. Call the appropriate tool when needed.
+4. WhatsApp commitments are queued in Postgres. Use list_pending_commitments, then confirm_commitments (ids) or dismiss_commitments when the user asks to review or schedule them.
 
 Available tools: {tool_names}"""
 

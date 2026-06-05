@@ -34,3 +34,41 @@ The system SHALL accept Evolution API webhooks at `POST /webhooks/evolution` and
 #### Scenario: SCN-WA-05
 - **WHEN** `evi-test evolution` runs with fixture payload
 - **THEN** at least one message is parsed and commitment extracted
+
+### Requirement: WhatsApp group whitelist
+When `EVI_WHATSAPP_SKIP_GROUPS` is true, the Evolution filter SHALL allow messages from group JIDs listed in `EVI_WHATSAPP_GROUP_WHITELIST` (comma-separated `@g.us` ids) and SHALL ignore other groups.
+
+#### Scenario: SCN-WA-06
+- **GIVEN** whitelist contains `120363012345678901@g.us`
+- **WHEN** filter runs on a group message with that JID
+- **THEN** message is retained for processing
+
+#### Scenario: SCN-WA-07
+- **GIVEN** whitelist contains `120363012345678901@g.us`
+- **WHEN** filter runs on a different `@g.us` JID
+- **THEN** message is skipped as a group
+
+### Requirement: Evolution groupsIgnore coordination
+When `EVI_WHATSAPP_GROUP_WHITELIST` is non-empty, `setup-evolution.sh` SHALL set `groupsIgnore=false` so whitelisted groups reach the webhook.
+
+#### Scenario: SCN-WA-08
+- **WHEN** setup script runs with non-empty whitelist in environment
+- **THEN** Evolution instance config disables `groupsIgnore`
+
+### Requirement: Pending commitment queue
+Extracted commitments from Evolution webhooks SHALL be persisted to Postgres `pending_commitments` with status `pending` and priority classification.
+
+#### Scenario: SCN-WA-10
+- **WHEN** Evolution webhook extracts a commitment
+- **THEN** a row is inserted (or deduped by source_id) and response includes `queued` count
+
+#### Scenario: SCN-WA-11
+- **WHEN** commitment text contains urgency keywords
+- **THEN** priority is classified as `urgent`, `work`, or `university` when matched
+
+### Requirement: Pending commitment notifications
+The system SHALL notify via Telegram when configured and either 5+ unnotified pending items exist or a new item has high priority.
+
+#### Scenario: SCN-WA-12
+- **WHEN** `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set and notification threshold is met
+- **THEN** a digest message is sent via Telegram Bot API
