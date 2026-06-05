@@ -34,8 +34,8 @@ The tool `create_task` SHALL POST to `WINDMILL_WEBHOOK_TASKS` with `wait_result`
 - **THEN** job result includes `"status":"created"` and a `task_id`
 
 #### Scenario: SCN-TASK-05
-- **WHEN** `./scripts/evi-test tasks` runs offline
-- **THEN** fixture payload validates
+- **WHEN** `./scripts/evi-test tasks --live-windmill` runs with configured `WINDMILL_GTASKS_RESOURCE`
+- **THEN** response contains `"status":"created"`
 
 ### Requirement: Email via Windmill
 The tool `summarize_inbox` SHALL POST to `WINDMILL_WEBHOOK_EMAIL` with `wait_result` and `$res:` gmail resource.

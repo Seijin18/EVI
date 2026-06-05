@@ -1,8 +1,36 @@
 # Personal AI Agent Server — Implementation Guide V2
 
 > **Hardware**: Intel i5 6th Gen · 16GB DDR4 · GTX 1060 6GB · Pop!_OS/Ubuntu
-> **Budget**: $0/month · **Stack**: LangGraph + n8n + Ollama + Qdrant + Neo4j + MCP
-> **Version**: 2.0 — Phased Rollout with MCP Layer & Multimodal Support
+> **Budget**: $0/month · **Stack**: LangGraph + **Windmill** + Evolution API + Ollama + Qdrant + Postgres  
+> **Version**: 2.1 — Windmill orchestration; OpenSpec-driven (`openspec/specs/`)  
+> **Legacy note**: n8n removed from compose; this guide retains historical MCP/n8n sections below.
+
+---
+
+## Current architecture (June 2026 — as-built)
+
+| Layer | Component | Role |
+|-------|-----------|------|
+| Agent | FastAPI + LangGraph ReAct (`agent/`) | `/chat`, tools, bounded memory |
+| Orchestration | **Windmill** (`windmill/f/integrations/`) | Calendar, Tasks, Gmail, Telegram bridge |
+| Messaging | Evolution API | WhatsApp webhooks → commitment queue |
+| Data | Postgres | Sessions + `pending_commitments` |
+| Vector | Qdrant | `university_notes` RAG (secondary priority) |
+| LLM | Ollama `qwen2.5:7b` | Local reasoning |
+
+**WhatsApp commitment flow (no auto-schedule on webhook):**
+
+```
+Evolution webhook → extract + priority → Postgres pending_commitments
+       → optional Telegram digest → user reviews in /chat
+       → confirm_commitments → schedule_event (events) | create_task (tasks)
+```
+
+**Windmill OAuth resources:** `gcal` (Calendar), `gcloud` (Google Tasks API scope), `gmail`.  
+**Env:** `WINDMILL_*_RESOURCE`, `WINDMILL_CALENDAR_ID`, `WINDMILL_TOKEN`. See `windmill/README.md`.
+
+**OpenSpec:** archived `evi-commitment-close-loop` (June 2026); verify `python3 tests/unit/test_commitment_tools.py && ./scripts/evi-test smoke`.  
+**Next:** `evi-windmill-live-verify`, `evi-telegram-digest-e2e` — see `Progress.md`.
 
 ---
 
@@ -602,18 +630,16 @@ mkdir -p ~/Projects/EVI/agent/mcp_servers
 bash scripts/setup-mcp-servers.sh
 ```
 
-### n8n Webhook Configuration
+### Windmill integration scripts (replaces n8n webhooks)
 
-```yaml
-Workflow: Agent-n8n Bridge
-├─ Trigger: Webhook POST /webhook/agent-task
-├─ Parse JSON
-└─ Route:
-    ├─ "create_calendar" → Google Calendar
-    ├─ "list_events" → Google Calendar Get
-    ├─ "chat_query" → HTTP → agent-api:8000/chat
-    └─ "save_note" → HTTP → agent-api:8000/note
-```
+| Script | Agent tool / webhook | Env |
+|--------|----------------------|-----|
+| `f/integrations/schedule_event` | `schedule_event` | `WINDMILL_WEBHOOK_CALENDAR` |
+| `f/integrations/create_task` | `create_task` | `WINDMILL_WEBHOOK_TASKS` |
+| `f/integrations/summarize_inbox` | `summarize_inbox` | `WINDMILL_WEBHOOK_EMAIL` |
+| `f/integrations/telegram_to_evi` | `POST /webhooks/telegram` | `WINDMILL_WEBHOOK_TELEGRAM` |
+
+Sync: `cd windmill && wmill sync push`. HTTP triggers need `?token=` or `WINDMILL_TOKEN` Bearer.
 
 ---
 

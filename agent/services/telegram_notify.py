@@ -9,11 +9,12 @@ import urllib.request
 from typing import List
 
 
-def send_telegram_message(text: str) -> bool:
+def send_telegram_message(text: str, chat_id: str | int | None = None) -> bool:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-    if not token or not chat_id:
+    target = chat_id if chat_id is not None else os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not target:
         return False
+    chat_id = str(target)
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     body = json.dumps(
         {"chat_id": chat_id, "text": text[:4000], "disable_web_page_preview": True}

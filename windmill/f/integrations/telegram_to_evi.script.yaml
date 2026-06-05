@@ -11,5 +11,4 @@ schema:
       description: ''
       default: null
       properties: {}
-  required:
-    - update
+  required: []

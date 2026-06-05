@@ -63,5 +63,9 @@ The agent SHALL expose tools to list, confirm, and dismiss pending commitments f
 - **THEN** agent can call `list_pending_commitments` and return structured results
 
 #### Scenario: SCN-CHAT-03
-- **WHEN** user confirms commitment ids
+- **WHEN** user confirms commitment ids for `type=event`
 - **THEN** agent calls `confirm_commitments` which schedules events via Windmill calendar
+
+#### Scenario: SCN-CHAT-04
+- **WHEN** user confirms commitment ids for `type=task`
+- **THEN** agent calls `confirm_commitments` which creates Google Tasks via Windmill `create_task`

@@ -14,6 +14,10 @@ The system SHALL accept Telegram updates at `POST /webhooks/telegram` and route 
 - **WHEN** `evi-test telegram` runs
 - **THEN** parse validates message.text exists
 
+#### Scenario: SCN-TG-02
+- **WHEN** `POST /webhooks/telegram` processes a text message with `TELEGRAM_BOT_TOKEN` set
+- **THEN** agent replies via Telegram `sendMessage` to the update `chat.id` (`telegram_sent: true`)
+
 ### Requirement: API key
 When `EVI_API_KEY` is set, protected routes SHALL require `X-Api-Key` header.
 

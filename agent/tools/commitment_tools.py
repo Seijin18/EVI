@@ -9,6 +9,7 @@ from typing import List
 from langchain_core.tools import tool
 
 from tools.calendar_tool import schedule_event
+from tools.task_tool import create_task
 
 
 def _iso_range(event_date: str | None, event_time: str | None) -> tuple[str, str]:
@@ -42,7 +43,7 @@ def list_pending_commitments(limit: int = 20) -> str:
 @tool
 def confirm_commitments(commitment_ids: List[int]) -> str:
     """
-    Schedule selected pending commitments on Google Calendar (events only).
+    Confirm selected pending commitments: events → Google Calendar, tasks → Google Tasks.
     Marks rows as scheduled on success.
     """
     from db import init_db, list_pending_commitments, update_commitment_status
@@ -55,9 +56,22 @@ def confirm_commitments(commitment_ids: List[int]) -> str:
         if not row:
             results.append(f"#{cid}: not found or not pending")
             continue
+        if row["type"] == "task":
+            out = create_task.invoke(
+                {
+                    "title": row["title"],
+                    "due_date": row.get("due_date") or row.get("event_date") or "",
+                    "notes": (row.get("raw_text") or "")[:500],
+                }
+            )
+            if "created" in out.lower():
+                update_commitment_status(int(cid), "scheduled")
+                results.append(f"#{cid}: {out[:120]}")
+            else:
+                results.append(f"#{cid}: failed — {out[:200]}")
+            continue
         if row["type"] != "event":
-            update_commitment_status(int(cid), "scheduled")
-            results.append(f"#{cid}: task marked scheduled (no calendar event)")
+            results.append(f"#{cid}: unsupported type {row['type']}")
             continue
         start, end = _iso_range(row.get("event_date"), row.get("event_time"))
         out = schedule_event.invoke(

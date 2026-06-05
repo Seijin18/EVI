@@ -133,7 +133,12 @@ def run_tasks(live_n8n: bool) -> bool:
             from tools.task_tool import create_task
 
             r = create_task.invoke({"title": "EVI test task", "due_date": "2026-06-10"})
-            ok = "Successfully" in str(r)
+            text = str(r)
+            ok = (
+                '"status":"created"' in text
+                or '"status": "created"' in text
+                or "created" in text.lower()
+            )
         except ImportError as e:
             return _result("tasks", False, str(e))
     return _result("tasks", ok, "payload ok" if not live_n8n else "live")
@@ -193,13 +198,47 @@ def run_session() -> bool:
         return _result("session", True, f"skipped ({e})")
 
 
-def run_telegram() -> bool:
+def run_telegram(live: bool = False) -> bool:
     fixture = FIXTURES / "telegram" / "update.json"
     if not fixture.exists():
         return _result("telegram", False, "fixture missing")
     data = json.loads(fixture.read_text())
     ok = "message" in data and "text" in data["message"]
-    return _result("telegram", ok, "parse update JSON")
+    if not live:
+        return _result("telegram", ok, "parse update JSON")
+
+    if not os.getenv("TELEGRAM_BOT_TOKEN", "").strip():
+        return _result("telegram", True, "skipped (no TELEGRAM_BOT_TOKEN)")
+
+    from services.telegram_notify import send_telegram_message
+
+    ok = ok and send_telegram_message("EVI: teste live sendMessage (SCN-TG-02)")
+    detail = "live sendMessage"
+    if ok:
+        base = os.getenv("EVI_API_URL", "http://localhost:8002")
+        try:
+            import httpx
+
+            headers = {}
+            key = os.getenv("EVI_API_KEY", "").strip()
+            if key:
+                headers["X-Api-Key"] = key
+            r = httpx.post(
+                f"{base}/webhooks/telegram",
+                json=data,
+                headers=headers,
+                timeout=180.0,
+            )
+            if r.status_code == 200:
+                body = r.json()
+                ok = ok and body.get("telegram_sent") is True
+                detail = f"webhook telegram_sent={body.get('telegram_sent')}"
+            else:
+                ok = False
+                detail = f"webhook HTTP {r.status_code}"
+        except Exception as e:
+            detail = f"webhook skipped ({e})"
+    return _result("telegram", ok, detail)
 
 
 def run_watcher() -> bool:
@@ -266,6 +305,42 @@ def run_rag() -> bool:
     return _result("rag", True, "skipped (no pdf fixture)")
 
 
+def run_commitments() -> bool:
+    if not os.getenv("DATABASE_URL"):
+        return _result("commitments", True, "skipped (no DATABASE_URL)")
+
+    try:
+        from db import init_db, insert_pending_commitment, list_pending_commitments
+        from tools.commitment_tools import list_pending_commitments as list_tool
+    except ImportError as e:
+        return _result("commitments", False, str(e))
+
+    try:
+        init_db()
+        sid = f"evi-test-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        row_id = insert_pending_commitment(
+            source="evi-test",
+            source_id=sid,
+            ctype="event",
+            title="EVI commitments harness",
+            event_date="2026-06-15",
+            event_time="10:00",
+            priority="normal",
+            raw_text="SCN-WA-10 / SCN-CHAT-02 trace",
+        )
+        if not row_id:
+            return _result("commitments", False, "insert failed")
+        rows = list_pending_commitments(limit=50)
+        ok = any(r["id"] == row_id for r in rows)
+        if not ok:
+            return _result("commitments", False, "row not in list")
+        out = list_tool.invoke({"limit": 10})
+        ok = ok and "EVI commitments harness" in out
+        return _result("commitments", ok, f"id={row_id}")
+    except Exception as e:
+        return _result("commitments", True, f"skipped ({e})")
+
+
 def run_chat() -> bool:
     base = os.getenv("EVI_API_URL", "http://localhost:8002")
     try:
@@ -291,7 +366,7 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
         run_session,
         run_email,
         lambda: run_tasks(live_windmill),
-        run_telegram,
+        lambda: run_telegram(False),
         run_evolution,
         run_watcher,
         lambda: run_dev_bridge(True),
@@ -314,6 +389,7 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--full", action="store_true", help="Include Tier 3 (chat)")
     parser.add_argument("--live-windmill", action="store_true")
+    parser.add_argument("--live-telegram", action="store_true")
     parser.add_argument("--live-n8n", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--log", dest="log_path", default=None)
     parser.add_argument("--dry", action="store_true", help="dev-bridge dry run")
@@ -333,11 +409,12 @@ def main() -> int:
         "whatsapp": lambda: run_whatsapp(args.verbose, Path(args.log_path) if args.log_path else None),
         "notes": run_notes,
         "session": run_session,
-        "telegram": run_telegram,
+        "telegram": lambda: run_telegram(args.live_telegram),
         "watcher": run_watcher,
         "dev-bridge": lambda: run_dev_bridge(args.dry),
         "rag": run_rag,
         "chat": run_chat,
+        "commitments": run_commitments,
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
 

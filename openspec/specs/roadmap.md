@@ -2,7 +2,10 @@
 
 | Item | Type | Notes |
 |------|------|-------|
+| Commitment close-loop | Done | SCN-CHAT-04 task confirm; `evi-test commitments` |
 | n8n spec removed | Done | Use `integrations-windmill` only; SCN-DEP-02 |
+| Windmill live verify (Gmail/tasks) | P1 | Change `evi-windmill-live-verify` |
+| Telegram digest E2E | Done | SCN-WA-12 + SCN-TG-02 reply loop |
 | Neo4j + graph_tool.py | Architecture | When study/reasoning priority rises |
 | MCP isolated servers | Architecture | After 3+ stable tools need isolated restart |
 | Llava + Whisper | Feature | Multimodal remote |

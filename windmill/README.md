@@ -72,7 +72,7 @@ wmill workspace add evi evi http://localhost:8001 --token 'SEU_TOKEN'
 wmill workspace switch evi
 wmill folder add-missing -y
 wmill generate-metadata
-wmill sync push
+../scripts/wmill-sync.sh
 ```
 
 `wmill.yaml` already maps workspace `evi` → `http://localhost:8001`.
@@ -88,7 +88,7 @@ The URL **must** include auth: append `?token=…` (webhook-specific token from 
 1. Instance **Settings → OAuth** → add **gcal** (redirect `http://localhost:8001/oauth/callback/gcal`).
 2. Workspace **Resources** → connect resource named **gcal** (path often `u/<user>/gcal`).
 3. In the script editor, set parameter **gcal** default to that resource path if not literally `gcal`.
-4. `wmill sync push`, then run once in the UI with test times — confirm event in Google Calendar.
+4. `../scripts/wmill-sync.sh`, then run once in the UI with test times — confirm event in Google Calendar.
 
 ### Calendário dedicado "EVI"
 
@@ -102,6 +102,29 @@ WINDMILL_CALENDAR_ID=SEU_CALENDAR_ID_AQUI
 ```
 
 Resource OAuth atual após reconectar: confira com `wmill resource list`.
+
+## Telegram (`telegram_to_evi` + digest)
+
+1. **@BotFather** → token; `getUpdates` ou @userinfobot → `TELEGRAM_CHAT_ID` no `.env`.
+2. **Salve** `.env` e `docker compose up -d --force-recreate agent-api`.
+3. Script `f/integrations/telegram_to_evi` → **Triggers** → **+ Add trigger → HTTP** (path: `f/integrations/telegram_to_evi`).
+4. URL do trigger (formato `/api/r/`):
+
+   `http://localhost:8001/api/r/f/integrations/telegram_to_evi?token=WEBHOOK_TOKEN`
+
+   No `.env`: `WINDMILL_TELEGRAM_WEBHOOK_TOKEN`, `WINDMILL_WEBHOOK_TELEGRAM` com path `/api/r/...`.
+
+5. Workspace **evi** → **Variables**: `EVI_AGENT_URL=http://agent-api:8000/webhooks/telegram`, `EVI_API_KEY` (opcional).
+6. `cd windmill && echo y | ../scripts/wmill.sh sync push --workspace evi`
+7. **Chat remoto:** `./scripts/telegram-tunnel-setup.sh` (cloudflared → `setWebhook` na URL pública).
+
+O script aceita body **cru** do Telegram (`update_id` + `message` na raiz). O agent responde via `sendMessage` (`telegram_sent: true`).
+
+Verificação local (sem webhook público):
+
+```bash
+./scripts/evi-telegram-verify.sh
+```
 
 ## RAM note
 

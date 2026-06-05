@@ -209,7 +209,21 @@ def telegram_webhook(
     chat_id = update.message.get("chat", {}).get("id", "telegram")
     session_id = f"telegram-{chat_id}"
     result = chat(ChatRequest(message=text, session_id=session_id))
-    return {"ok": True, "response": result.get("response"), "session_id": session_id}
+    ai_content = result.get("response") or ""
+    sent = False
+    if ai_content:
+        try:
+            from services.telegram_notify import send_telegram_message
+
+            sent = send_telegram_message(ai_content, chat_id=chat_id)
+        except Exception:
+            pass
+    return {
+        "ok": True,
+        "response": ai_content,
+        "session_id": session_id,
+        "telegram_sent": sent,
+    }
 
 
 @app.post("/webhooks/evolution")

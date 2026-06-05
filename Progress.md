@@ -1,7 +1,7 @@
 # Personal AI Agent Server — Implementation Progress (V2)
 
 > **Start Date**: May 12, 2026  
-> **Current Date**: June 3, 2026  
+> **Current Date**: June 5, 2026  
 > **Hardware**: Intel i5 6th Gen · 16GB DDR4 · GTX 1060 6GB · Pop!_OS/Ubuntu  
 > **Target Architecture**: LangGraph + Windmill + Evolution API + Ollama + Qdrant + Postgres (Neo4j/MCP deferred)  
 > **Source of truth**: `openspec/specs/` · Verify: `pytest tests/unit -q && ./scripts/evi-test smoke`
@@ -69,15 +69,26 @@
 
 ## ✅ RECENT (June 2026 — OpenSpec + productivity)
 
-- [x] **OpenSpec** — `openspec/specs/`, `openspec/config.yaml`, changes documented
-- [x] **Test harness** — `./scripts/evi-test`, `docs/testing.md`, WhatsApp fixture pipeline
-- [x] **Productivity tools** — `save_note_manual`, `create_task`, `summarize_inbox`
-- [x] **WhatsApp processor** — fixture mode + golden commitments (`evi-test whatsapp`)
-- [x] **Postgres sessions** — `agent/db.py` when `DATABASE_URL` set
-- [x] **Windmill orchestration** — compose + `windmill/f/integrations/` (replaces n8n)
+- [x] **OpenSpec** — 7 domain specs; Cursor rules (`openspec-planning`, `openspec-changes`, `openspec-workflow`); archived P0–P3 changes
+- [x] **Test harness** — `./scripts/evi-test`, `docs/testing.md`, smoke 13/13 offline
+- [x] **Windmill Google Calendar** — `schedule_event` + `WINDMILL_GCAL_RESOURCE` + `WINDMILL_CALENDAR_ID` (calendário EVI)
+- [x] **Windmill Google Tasks + Gmail** — `create_task.py`, `summarize_inbox.py`; OAuth via resource **gcloud** (Tasks) e **gmail**
+- [x] **WhatsApp processor** — fixture + Evolution webhook + group whitelist (`EVI_WHATSAPP_GROUP_WHITELIST`)
+- [x] **Commitment inbox** — Postgres `pending_commitments`, priority heuristics, Evolution INSERT + `queued` response
+- [x] **Commitment review (chat)** — `list_pending_commitments`, `confirm_commitments`, `dismiss_commitments` in registry + graph hint
+- [x] **Commitment notifications** — optional Telegram digest (`commitment_notify.py`) on threshold / high priority
+- [x] **n8n removed** — `integrations-n8n` spec deleted; orchestration = Windmill only
 - [x] **Evolution API** — compose + `/webhooks/evolution` + `evi-test evolution`
-- [x] **Telegram bridge** — Windmill script `telegram_to_evi` + existing webhook
+- [x] **Telegram bridge** — `POST /webhooks/telegram` + Windmill `telegram_to_evi`
 - [x] **Batch ingest** — `ingest_university_folder` + parametrized watcher
+
+- [x] **Commitment close-loop** — `confirm_commitments` → Calendar + Google Tasks; `evi-test commitments`; archived `2026-06-05-evi-commitment-close-loop`
+
+**OpenSpec:** zero active changes · `openspec validate --specs` 7/7 · smoke 13/13
+
+- [x] **Telegram E2E** — reply loop SCN-TG-02, digest SCN-WA-12, `scripts/evi-telegram-verify.sh`; archived `2026-06-05-evi-telegram-digest-e2e`
+
+**Next planned changes:** `evi-windmill-live-verify` (Gmail/tasks live Tier 2) → `evi-compose-healthchecks`
 
 ---
 
@@ -150,11 +161,11 @@
   - `add_message_short_term()` → Postgres insert
   - `get_context_window()` → last N pairs
 
-#### n8n Webhook Configuration
-- [ ] Google Calendar OAuth setup
-- [ ] Google Tasks OAuth setup
-- [ ] Webhook nodes for agent integration
-- [ ] Switch routing by action type
+#### Windmill integrations (replaces n8n)
+- [x] Google Calendar OAuth + `schedule_event` live
+- [x] Google Tasks OAuth (Windmill **gcloud** resource + Tasks API scope)
+- [x] Gmail OAuth + `summarize_inbox` script
+- [ ] Live Tier 2: `evi-test tasks --live-windmill`, `evi-test email --live-windmill` (next change)
 
 ---
 
