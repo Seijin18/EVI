@@ -23,6 +23,13 @@ KEY="${EVOLUTION_API_KEY:-evi-dev-key}"
 INSTANCE="${EVOLUTION_INSTANCE_NAME:-evi}"
 WEBHOOK_URL="${EVOLUTION_WEBHOOK_URL:-http://agent-api:8000/webhooks/evolution}"
 EVI_KEY="${EVI_API_KEY:-}"
+# Whitelist needs group webhooks from Evolution (agent filter drops non-listed groups).
+GROUPS_IGNORE=true
+GROUPS_IGNORE_PY=True
+if [ -n "${EVI_WHATSAPP_GROUP_WHITELIST:-}" ]; then
+  GROUPS_IGNORE=false
+  GROUPS_IGNORE_PY=False
+fi
 
 api() {
   curl -sS -H "apikey: ${KEY}" -H "Content-Type: application/json" "$@"
@@ -73,7 +80,7 @@ print(json.dumps({
   "qrcode": True,
   "integration": "WHATSAPP-BAILEYS",
   "syncFullHistory": False,
-  "groupsIgnore": True,
+  "groupsIgnore": ${GROUPS_IGNORE_PY},
   "readMessages": False,
   "webhook": webhook,
 }))
@@ -97,15 +104,15 @@ PY
 )
 api -X POST "${BASE}/webhook/set/${INSTANCE}" -d "$wh_payload" | python3 -m json.tool || true
 
-echo "==> Instance settings (no full history sync, ignore groups)"
-api -X POST "${BASE}/settings/set/${INSTANCE}" -d '{
-  "syncFullHistory": false,
-  "groupsIgnore": true,
-  "readMessages": false,
-  "readStatus": false,
-  "rejectCall": false,
-  "alwaysOnline": false
-}' | python3 -m json.tool || true
+echo "==> Instance settings (no full history sync, groupsIgnore=${GROUPS_IGNORE})"
+api -X POST "${BASE}/settings/set/${INSTANCE}" -d "{
+  \"syncFullHistory\": false,
+  \"groupsIgnore\": ${GROUPS_IGNORE},
+  \"readMessages\": false,
+  \"readStatus\": false,
+  \"rejectCall\": false,
+  \"alwaysOnline\": false
+}" | python3 -m json.tool || true
 
 echo ""
 echo "==> Connection / QR code"

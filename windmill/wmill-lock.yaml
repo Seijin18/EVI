@@ -1,6 +1,7 @@
 version: v2
 locks:
   f/integrations/create_task: cbdd223469033f70ba8d515479b725f0f0bb41613313c9f7cc9aae2cd2afb94e
-  f/integrations/schedule_event: b85ee6c7fd458486784f162f9d2ee5dfbd480fe39ad90b493cb14cb9ddee51ad
+  f/integrations/list_calendars: 8271761bcb45279061660d70160051dbbc9431037db16eb4b9a3e344762a3194
+  f/integrations/schedule_event: bbb67379c7903357ce4fc089cf99803cc4c488b6dbae9c9e523389cc99af9500
   f/integrations/summarize_inbox: ec198d4d7f6194787adf39b340983d92f9ddab128ef9098a54f11e4b90e3339e
   f/integrations/telegram_to_evi: dbe915b14e4be21e99c4a7030b92c05839096b47172a730442caac0c1b23f92f

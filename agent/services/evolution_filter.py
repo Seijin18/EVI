@@ -42,6 +42,13 @@ def _save_seen_ids(path: Path, seen: Set[str]) -> None:
     path.write_text(json.dumps(trimmed), encoding="utf-8")
 
 
+def _parse_group_whitelist() -> Set[str]:
+    raw = os.getenv("EVI_WHATSAPP_GROUP_WHITELIST", "").strip()
+    if not raw:
+        return set()
+    return {part.strip() for part in raw.split(",") if part.strip()}
+
+
 def filter_for_processing(
     messages: List[IncomingMessage],
     *,
@@ -60,6 +67,7 @@ def filter_for_processing(
         "true",
         "yes",
     )
+    group_whitelist = _parse_group_whitelist()
     dedupe = os.getenv("EVI_WHATSAPP_DEDUPE_IDS", "true").lower() in (
         "1",
         "true",
@@ -86,7 +94,7 @@ def filter_for_processing(
         if incoming_only and msg.from_me:
             stats["skipped_from_me"] += 1
             continue
-        if skip_groups and msg.is_group:
+        if skip_groups and msg.is_group and msg.sender not in group_whitelist:
             stats["skipped_group"] += 1
             continue
         parsed = _parse_ts(msg.ts)

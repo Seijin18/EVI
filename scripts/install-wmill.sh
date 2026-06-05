@@ -10,10 +10,13 @@ use_nvm_22() {
     # shellcheck source=/dev/null
     . "$NVM_DIR/nvm.sh"
     if [ -f "$ROOT/windmill/.nvmrc" ]; then
-      nvm use "$(cat "$ROOT/windmill/.nvmrc")" >/dev/null
+      ver="$(cat "$ROOT/windmill/.nvmrc")"
     else
-      nvm use 22 >/dev/null 2>&1 || nvm install 22
+      ver=22
     fi
+    nvm use --delete-prefix "$ver" --silent 2>/dev/null \
+      || nvm use "$ver" >/dev/null 2>&1 \
+      || nvm install "$ver"
   fi
 }
 

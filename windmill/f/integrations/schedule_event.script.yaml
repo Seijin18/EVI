@@ -11,10 +11,21 @@ schema:
       description: ''
       default: ''
       originalType: string
+    calendar_id:
+      type: string
+      description: Google calendar id (primary = default calendar)
+      default: primary
+      originalType: string
     end_time:
       type: string
       description: ''
       default: null
+      originalType: string
+    gcal:
+      type: string
+      description: Windmill resource path for Google Calendar OAuth (e.g.
+        u/you/well_educated_gcal)
+      default: gcal
       originalType: string
     start_time:
       type: string
