@@ -22,6 +22,7 @@ Three tiers:
 | Email (mock) | `./scripts/evi-test email` | SCN-EMAIL-04 |
 | Email (live Windmill) | `./scripts/evi-test email --live-windmill` | SCN-EMAIL-05 |
 | Evolution parse | `./scripts/evi-test evolution` | SCN-WA-05 |
+| Telegram (polling setup) | `./scripts/evi-telegram-polling-setup.sh` | SCN-TG-03 |
 | Telegram (live E2E) | `./scripts/evi-telegram-verify.sh` | SCN-TG-02, SCN-WA-12 |
 | Telegram (mock) | `./scripts/evi-test telegram` | SCN-TG-01 |
 | Telegram (live webhook) | `./scripts/evi-test telegram --live-telegram` | SCN-TG-02 |

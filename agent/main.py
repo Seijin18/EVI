@@ -54,6 +54,10 @@ def _hydrate_memory(session_id: str) -> None:
         pass
 
 
+def _telegram_invoke_chat(message: str, session_id: str) -> Dict[str, Any]:
+    return chat(ChatRequest(message=message, session_id=session_id))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app_state.graph = build_agent_graph(AVAILABLE_TOOLS)
@@ -64,6 +68,10 @@ async def lifespan(app: FastAPI):
             init_db()
         except Exception:
             pass
+    if os.getenv("TELEGRAM_MODE", "").strip().lower() == "polling":
+        from services.telegram_poller import start_poller
+
+        start_poller(_telegram_invoke_chat)
     yield
 
 
@@ -202,28 +210,11 @@ def telegram_webhook(
     update: TelegramUpdate,
     _: None = Depends(verify_api_key),
 ):
-    """Telegram → Windmill or direct → EVI chat graph."""
-    if not update.message or "text" not in update.message:
-        return {"ok": True, "skipped": "no text"}
-    text = update.message["text"]
-    chat_id = update.message.get("chat", {}).get("id", "telegram")
-    session_id = f"telegram-{chat_id}"
-    result = chat(ChatRequest(message=text, session_id=session_id))
-    ai_content = result.get("response") or ""
-    sent = False
-    if ai_content:
-        try:
-            from services.telegram_notify import send_telegram_message
+    """Telegram webhook → EVI chat (use TELEGRAM_MODE=polling to skip tunnel)."""
+    from services.telegram_handler import process_telegram_update
 
-            sent = send_telegram_message(ai_content, chat_id=chat_id)
-        except Exception:
-            pass
-    return {
-        "ok": True,
-        "response": ai_content,
-        "session_id": session_id,
-        "telegram_sent": sent,
-    }
+    payload = update.model_dump() if hasattr(update, "model_dump") else {"message": update.message}
+    return process_telegram_update(payload, _telegram_invoke_chat)
 
 
 @app.post("/webhooks/evolution")

@@ -136,6 +136,14 @@ Verificação:
 
 ## Telegram (`telegram_to_evi` + digest)
 
+### Modo polling (recomendado em casa — sem domínio nem tunnel)
+
+1. `.env`: `TELEGRAM_MODE=polling`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+2. `./scripts/evi-telegram-polling-setup.sh` — remove webhook e sobe poller no `agent-api`.
+3. Mensagens: `getUpdates` → agent → `sendMessage`. Digest de compromissos continua igual.
+
+### Modo webhook (remoto via tunnel)
+
 1. **@BotFather** → token; `getUpdates` ou @userinfobot → `TELEGRAM_CHAT_ID` no `.env`.
 2. **Salve** `.env` e `docker compose up -d --force-recreate agent-api`.
 3. Script `f/integrations/telegram_to_evi` → **Triggers** → **+ Add trigger → HTTP** (path: `f/integrations/telegram_to_evi`).
