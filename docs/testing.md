@@ -19,6 +19,8 @@ Three tiers:
 | Calendar (live Windmill) | `./scripts/evi-test calendar --live-windmill` | SCN-CAL-04 |
 | Tasks (mock) | `./scripts/evi-test tasks` | SCN-TASK-03 |
 | Tasks (live Windmill) | `./scripts/evi-test tasks --live-windmill` | SCN-TASK-05 |
+| Email (mock) | `./scripts/evi-test email` | SCN-EMAIL-04 |
+| Email (live Windmill) | `./scripts/evi-test email --live-windmill` | SCN-EMAIL-05 |
 | Evolution parse | `./scripts/evi-test evolution` | SCN-WA-05 |
 | Telegram (live E2E) | `./scripts/evi-telegram-verify.sh` | SCN-TG-02, SCN-WA-12 |
 | Telegram (mock) | `./scripts/evi-test telegram` | SCN-TG-01 |
@@ -32,6 +34,7 @@ Three tiers:
 |-----|-----------|
 | SCN-CHAT-03 | `tests/unit/test_commitment_tools.py` — confirm event → `schedule_event` |
 | SCN-CHAT-04 | `tests/unit/test_commitment_tools.py` — confirm task → `create_task` |
+| SCN-EMAIL-03 | `tests/unit/test_email_tool.py` — `summarize_inbox` wiring |
 | SCN-WA-09 | `tests/unit/test_evolution_filter.py` |
 | SCN inbox priority | `tests/unit/test_commitment_priority.py` |
 
@@ -61,10 +64,11 @@ Scenario IDs are defined in `openspec/specs/*/spec.md`.
 
 | Step | Command | Pass criteria |
 |------|---------|---------------|
-| SCN-E2E-01 | `docker compose up -d --build` | qdrant, postgres, agent-api, windmill healthy |
+| SCN-E2E-01 | `docker compose up -d --build` | postgres → qdrant/windmill healthy → agent-api (SCN-OPS-01) |
+| SCN-OPS-01 | `docker compose ps` | postgres, qdrant, windmill-server, agent-api show `healthy` |
 | SCN-E2E-02 | `./scripts/evi-test smoke` | 13/13 offline |
 | SCN-E2E-03 | `export DATABASE_URL=postgresql://evi:PASS@localhost:5432/evidb` | session + commitments connect |
-| SCN-E2E-04 | Ollama running on host | `curl host.docker.internal:11434` from agent |
+| SCN-E2E-04 | Ollama running on host (not in compose) | `curl host.docker.internal:11434` from agent; chat retries until model loads |
 | SCN-E2E-05 | `./scripts/evi-test smoke --full` | chat PASS or documented skip |
 | SCN-E2E-06 | `./scripts/evi-test evolution` | parse fixture PASS |
 | SCN-CHAT-02 | `DATABASE_URL=... ./scripts/evi-test commitments` | list tool returns seeded row |

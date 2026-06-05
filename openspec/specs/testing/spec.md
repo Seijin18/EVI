@@ -64,3 +64,21 @@ The project SHALL document Docker+Ollama validation steps in docs/testing.md.
 #### Scenario: SCN-E2E-02
 - **WHEN** offline smoke runs after a change
 - **THEN** result is 13/13 PASS or skips documented
+
+### Requirement: Windmill live traceability
+docs/testing.md SHALL map Windmill live scenarios to evi-test commands.
+
+#### Scenario: SCN-EMAIL-05 trace
+- **WHEN** maintainer updates docs/testing.md
+- **THEN** SCN-EMAIL-05 maps to `./scripts/evi-test email --live-windmill`
+
+#### Scenario: SCN-TASK-05 trace
+- **WHEN** maintainer updates docs/testing.md
+- **THEN** SCN-TASK-05 maps to `./scripts/evi-test tasks --live-windmill`
+
+### Requirement: Compose boot order
+docker-compose SHALL define healthchecks for core data services and gate agent-api startup on healthy dependencies.
+
+#### Scenario: SCN-OPS-01
+- **WHEN** `docker compose up -d` runs on a clean stack
+- **THEN** agent-api starts only after postgres, qdrant, and windmill-server report healthy

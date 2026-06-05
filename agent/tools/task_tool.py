@@ -14,7 +14,6 @@ def create_task(title: str, due_date: str = "", notes: str = "") -> str:
     if not gtasks.startswith("$res:"):
         gtasks = f"$res:{gtasks}"
     payload = {
-        "action": "create_task",
         "title": title,
         "due_date": due_date,
         "notes": notes,

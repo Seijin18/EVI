@@ -21,5 +21,15 @@ schema:
       description: ''
       default: null
       originalType: string
+    gtasks:
+      type: string
+      description: Windmill resource path for Google Tasks OAuth (gcloud with tasks scope)
+      default: gtasks
+      originalType: string
+    tasklist_id:
+      type: string
+      description: Google Tasks list id
+      default: '@default'
+      originalType: string
   required:
     - title

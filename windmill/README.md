@@ -103,6 +103,37 @@ WINDMILL_CALENDAR_ID=SEU_CALENDAR_ID_AQUI
 
 Resource OAuth atual após reconectar: confira com `wmill resource list`.
 
+## Google Tasks (`create_task`)
+
+Windmill não tem conector nativo Tasks; use resource **gcloud** com escopo OAuth `https://www.googleapis.com/auth/tasks`.
+
+1. Instance **Settings → OAuth** → add **gcloud** (redirect `http://localhost:8001/oauth/callback/gcloud`).
+2. Ao conectar, inclua escopo **Google Tasks API** (ou reconecte resource existente com Tasks habilitado).
+3. Workspace **Resources** → path ex. `u/<user>/gcloud` — copie para `.env` como `WINDMILL_GTASKS_RESOURCE`.
+4. Script `create_task` → parâmetro **gtasks** default = esse path (ou nome `gtasks` se renomear resource).
+5. HTTP trigger → `WINDMILL_WEBHOOK_TASKS` no `.env`; `../scripts/wmill-sync.sh`.
+
+Verificação:
+
+```bash
+./scripts/evi-test tasks              # offline fixture
+./scripts/evi-test tasks --live-windmill   # SCN-TASK-05 — cria task real
+```
+
+## Gmail (`summarize_inbox`)
+
+1. Instance **Settings → OAuth** → add **gmail** (redirect `http://localhost:8001/oauth/callback/gmail`).
+2. Workspace **Resources** → connect **gmail** (path ex. `u/<user>/gmail`).
+3. `.env`: `WINDMILL_GMAIL_RESOURCE=u/<user>/gmail` no agent-api (compose já repassa).
+4. HTTP trigger do script → `WINDMILL_WEBHOOK_EMAIL`.
+
+Verificação:
+
+```bash
+./scripts/evi-test email              # offline fixture
+./scripts/evi-test email --live-windmill   # SCN-EMAIL-05 — summary real
+```
+
 ## Telegram (`telegram_to_evi` + digest)
 
 1. **@BotFather** → token; `getUpdates` ou @userinfobot → `TELEGRAM_CHAT_ID` no `.env`.
@@ -116,7 +147,11 @@ Resource OAuth atual após reconectar: confira com `wmill resource list`.
 
 5. Workspace **evi** → **Variables**: `EVI_AGENT_URL=http://agent-api:8000/webhooks/telegram`, `EVI_API_KEY` (opcional).
 6. `cd windmill && echo y | ../scripts/wmill.sh sync push --workspace evi`
-7. **Chat remoto:** `./scripts/telegram-tunnel-setup.sh` (cloudflared → `setWebhook` na URL pública).
+7. **Chat remoto (dev):** `./scripts/telegram-tunnel-setup.sh` — trycloudflare (URL muda a cada restart).
+8. **Chat remoto (estável, gratuito):** Cloudflare named tunnel — defina no `.env`:
+   `CLOUDFLARE_TUNNEL_NAME=evi-windmill`, `CLOUDFLARE_TUNNEL_HOSTNAME=wm.seudominio.com`
+   (domínio no Cloudflare Free). Uma vez: `cloudflared tunnel login`, `tunnel create`, `tunnel route dns`.
+   Depois: `./scripts/cloudflared-tunnel-setup.sh`
 
 O script aceita body **cru** do Telegram (`update_id` + `message` na raiz). O agent responde via `sendMessage` (`telegram_sent: true`).
 

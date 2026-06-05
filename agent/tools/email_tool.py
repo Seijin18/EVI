@@ -14,7 +14,6 @@ def summarize_inbox(max_messages: int = 10) -> str:
     if not gmail.startswith("$res:"):
         gmail = f"$res:{gmail}"
     payload = {
-        "action": "summarize_inbox",
         "max_messages": max_messages,
         "gmail": gmail,
     }

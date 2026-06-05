@@ -12,9 +12,15 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-# Repo root (parent of agent/)
-REPO_ROOT = Path(__file__).resolve().parents[2]
-AGENT_DIR = REPO_ROOT / "agent"
+# Repo root (parent of agent/) — in Docker WORKDIR is /app
+_here = Path(__file__).resolve()
+_agent_candidate = _here.parents[1]
+if (_agent_candidate / "main.py").is_file():
+    AGENT_DIR = _agent_candidate
+    REPO_ROOT = Path(os.getenv("EVI_REPO_ROOT", _agent_candidate.parent))
+else:
+    REPO_ROOT = _here.parents[2]
+    AGENT_DIR = REPO_ROOT / "agent"
 sys.path.insert(0, str(AGENT_DIR))
 
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
@@ -90,20 +96,15 @@ def run_calendar(live_n8n: bool) -> bool:
         "start_time": "2026-06-10T10:00:00Z",
         "end_time": "2026-06-10T11:00:00Z",
     }
-    fixture = FIXTURES / "n8n" / "calendar_payload.json"
-    if not fixture.exists():
-        fixture.write_text(json.dumps(payload), encoding="utf-8")
-    data = json.loads(fixture.read_text())
-    ok = data["action"] == "schedule_event" and "title" in data
     if live_n8n:
         try:
             from tools.calendar_tool import schedule_event
 
             r = schedule_event.invoke(
                 {
-                    "title": data["title"],
-                    "start_time": data["start_time"],
-                    "end_time": data["end_time"],
+                    "title": payload["title"],
+                    "start_time": payload["start_time"],
+                    "end_time": payload["end_time"],
                 }
             )
             text = str(r)
@@ -116,35 +117,58 @@ def run_calendar(live_n8n: bool) -> bool:
             return _result("calendar", False, str(e))
         except Exception as e:
             return _result("calendar", False, str(e))
-        return _result("calendar", ok, text[:200] if live_n8n else "live")
+        return _result("calendar", ok, text[:200])
+    fixture = FIXTURES / "n8n" / "calendar_payload.json"
+    if not fixture.exists():
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        fixture.write_text(json.dumps(payload), encoding="utf-8")
+    data = json.loads(fixture.read_text())
+    ok = data["action"] == "schedule_event" and "title" in data
     return _result("calendar", ok, "payload ok")
 
 
 def run_tasks(live_n8n: bool) -> bool:
-    fixture = FIXTURES / "n8n" / "task_payload.json"
-    if not fixture.exists():
-        fixture.write_text(
-            '{"action":"create_task","title":"EVI test","due_date":"2026-06-10"}',
-            encoding="utf-8",
-        )
-    ok = "create_task" in fixture.read_text()
+    text = "payload ok"
     if live_n8n:
         try:
             from tools.task_tool import create_task
 
             r = create_task.invoke({"title": "EVI test task", "due_date": "2026-06-10"})
             text = str(r)
-            ok = (
-                '"status":"created"' in text
-                or '"status": "created"' in text
-                or "created" in text.lower()
-            )
+            ok = '"status":"created"' in text or '"status": "created"' in text
         except ImportError as e:
             return _result("tasks", False, str(e))
-    return _result("tasks", ok, "payload ok" if not live_n8n else "live")
+        except Exception as e:
+            return _result("tasks", False, str(e))
+        return _result("tasks", ok, text[:200])
+    fixture = FIXTURES / "n8n" / "task_payload.json"
+    if not fixture.exists():
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        fixture.write_text(
+            '{"action":"create_task","title":"EVI test","due_date":"2026-06-10"}',
+            encoding="utf-8",
+        )
+    ok = "create_task" in fixture.read_text()
+    return _result("tasks", ok, text)
 
 
-def run_email() -> bool:
+def run_email(live_windmill: bool = False) -> bool:
+    if live_windmill:
+        try:
+            from tools.email_tool import summarize_inbox
+
+            r = summarize_inbox.invoke({"max_messages": 5})
+            text = str(r)
+            ok = (
+                '"summary"' in text
+                and "failed" not in text.lower()
+                and ('"status":"ok"' in text or len(text) > 20)
+            )
+        except ImportError as e:
+            return _result("email", False, str(e))
+        except Exception as e:
+            return _result("email", False, str(e))
+        return _result("email", ok, text[:200])
     fixture = FIXTURES / "n8n" / "email_summary.json"
     if not fixture.exists():
         return _result("email", False, "fixture missing")
@@ -364,7 +388,7 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
         lambda: run_whatsapp(verbose, None),
         run_notes,
         run_session,
-        run_email,
+        lambda: run_email(live_windmill),
         lambda: run_tasks(live_windmill),
         lambda: run_telegram(False),
         run_evolution,
@@ -405,7 +429,7 @@ def main() -> int:
         "calendar": lambda: run_calendar(live_wm),
         "tasks": lambda: run_tasks(live_wm),
         "evolution": run_evolution,
-        "email": run_email,
+        "email": lambda: run_email(live_wm),
         "whatsapp": lambda: run_whatsapp(args.verbose, Path(args.log_path) if args.log_path else None),
         "notes": run_notes,
         "session": run_session,

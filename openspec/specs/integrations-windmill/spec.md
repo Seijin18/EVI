@@ -35,7 +35,7 @@ The tool `create_task` SHALL POST to `WINDMILL_WEBHOOK_TASKS` with `wait_result`
 
 #### Scenario: SCN-TASK-05
 - **WHEN** `./scripts/evi-test tasks --live-windmill` runs with configured `WINDMILL_GTASKS_RESOURCE`
-- **THEN** response contains `"status":"created"`
+- **THEN** response text contains `"status":"created"` or `"status": "created"`
 
 ### Requirement: Email via Windmill
 The tool `summarize_inbox` SHALL POST to `WINDMILL_WEBHOOK_EMAIL` with `wait_result` and `$res:` gmail resource.
@@ -47,6 +47,13 @@ The tool `summarize_inbox` SHALL POST to `WINDMILL_WEBHOOK_EMAIL` with `wait_res
 #### Scenario: SCN-EMAIL-04
 - **WHEN** `./scripts/evi-test email` runs offline
 - **THEN** tool returns without Windmill network error
+
+### Requirement: Email live verification
+The test harness SHALL support live Windmill verification for Gmail summary.
+
+#### Scenario: SCN-EMAIL-05
+- **WHEN** `./scripts/evi-test email --live-windmill` runs with valid `WINDMILL_TOKEN` and `gmail` resource
+- **THEN** result text includes non-empty `summary` or `"status":"ok"` from Windmill
 
 ### Requirement: Telegram bridge
 Windmill script `telegram_to_evi` SHALL forward updates to `POST /webhooks/telegram`.

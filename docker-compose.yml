@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -7,6 +5,16 @@ services:
     volumes:
       - ./data/qdrant:/qdrant/storage
     mem_limit: 1g
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'bash -c ''exec 3<>/dev/tcp/127.0.0.1/6333 && printf "GET /readyz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && head -c 300 <&3 | grep -q "all shards are ready"''',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   windmill-server:
     image: ghcr.io/windmill-labs/windmill:main
@@ -16,9 +24,16 @@ services:
       - MODE=server
       - BASE_URL=http://localhost:8001
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     mem_limit: 512m
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8000/api/version >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
 
   windmill-worker:
     image: ghcr.io/windmill-labs/windmill:main
@@ -27,7 +42,10 @@ services:
       - MODE=worker
       - WORKER_GROUP=default
     depends_on:
-      - windmill-server
+      windmill-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     mem_limit: 512m
     restart: unless-stopped
 
@@ -55,8 +73,10 @@ services:
       - CONFIG_SESSION_PHONE_NAME=Chrome
       - NODE_OPTIONS=--dns-result-order=ipv4first
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     mem_limit: 768m
     restart: unless-stopped
 
@@ -64,6 +84,12 @@ services:
     image: redis:7-alpine
     mem_limit: 128m
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   agent-api:
     build: ./agent
@@ -99,11 +125,24 @@ services:
       - ./logs:/logs
     mem_limit: 2g
     depends_on:
-      - postgres
-      - qdrant
-      - windmill-server
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      windmill-server:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python3 -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:8000/'', timeout=3)"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   postgres:
     image: postgres:15-alpine
@@ -116,3 +155,13 @@ services:
       - ./data/postgres:/var/lib/postgresql/data
       - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
     mem_limit: 512m
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
