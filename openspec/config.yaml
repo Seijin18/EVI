@@ -2,11 +2,11 @@
 schema: spec-driven
 
 context: |
-  EVI: FastAPI + LangGraph ReAct + Ollama (qwen2.5:7b) + Qdrant + Postgres sessions.
+  EVI: FastAPI + LangGraph ReAct + Ollama (qwen2.5:3b-instruct-q4_K_M) + Qdrant + Postgres sessions.
   Orchestration target: Windmill (scripts in repo, wmill sync). WhatsApp: Evolution API webhooks.
   Legacy n8n is being removed — do not add n8n workflows.
 
-  Hardware: 16GB RAM, GTX 1060 6GB — OLLAMA_MAX_LOADED_MODELS=1.
+  Hardware: 16GB RAM, GTX 1060 3GB — OLLAMA_MAX_LOADED_MODELS=1; primary LLM fits in VRAM.
 
   Product priority: productivity (files, notes, email/tasks, WhatsApp commitments)
   > remote (Telegram) > dev bridge > university RAG (secondary).

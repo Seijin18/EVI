@@ -6,7 +6,7 @@ alwaysApply: true
 # Stack EVI
 
 - **Agente**: FastAPI + LangGraph em `agent/`; memória curta em `BoundedMemory` (`agent/memory.py`).
-- **LLM**: Ollama local (`OLLAMA_BASE_URL`); priorize modelos já carregados; não assuma OpenAI/Anthropic.
+- **LLM**: Ollama `qwen2.5:3b-instruct-q4_K_M` (`agent/graph.py`); `OLLAMA_BASE_URL`; não assuma OpenAI/Anthropic.
 - **Dados**: Qdrant, Postgres, Windmill, Evolution API + Redis no compose; Neo4j adiado.
 - **MCP no projeto**: apenas `codebase-memory`. Não usar Graphiti nem memória episódica externa neste repo.
 
@@ -26,4 +26,4 @@ alwaysApply: true
 - Registre tools em `agent/tools/registry.py`; specs em `openspec/specs/`.
 - Nova feature: Tier 1 (`tests/unit`) + Tier 2 (`./scripts/evi-test <feature>`).
 - Variáveis sensíveis em `.env`; nunca commitar segredos.
-- Hardware alvo: 16 GB RAM — evite sugerir vários modelos Ollama grandes simultâneos.
+- Hardware alvo: 16 GB RAM, GTX 1060 3 GB — um LLM na GPU por vez; Llava 7B só sob demanda (CPU se não couber na VRAM).

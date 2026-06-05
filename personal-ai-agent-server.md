@@ -1,6 +1,6 @@
 # Personal AI Agent Server — Implementation Guide V2
 
-> **Hardware**: Intel i5 6th Gen · 16GB DDR4 · GTX 1060 6GB · Pop!_OS/Ubuntu
+> **Hardware**: Intel i5-7400 · 16GB DDR4 · GTX 1060 3GB · Pop!_OS/Ubuntu
 > **Budget**: $0/month · **Stack**: LangGraph + **Windmill** + Evolution API + Ollama + Qdrant + Postgres  
 > **Version**: 2.1 — Windmill orchestration; OpenSpec-driven (`openspec/specs/`)  
 > **Legacy note**: n8n removed from compose; this guide retains historical MCP/n8n sections below.
@@ -16,7 +16,7 @@
 | Messaging | Evolution API | WhatsApp webhooks → commitment queue |
 | Data | Postgres | Sessions + `pending_commitments` |
 | Vector | Qdrant | `university_notes` RAG (secondary priority) |
-| LLM | Ollama `qwen2.5:7b` | Local reasoning |
+| LLM | Ollama `qwen2.5:3b-instruct-q4_K_M` | Local reasoning |
 
 **WhatsApp commitment flow (no auto-schedule on webhook):**
 
@@ -53,7 +53,7 @@ Evolution webhook → extract + priority → Postgres pending_commitments
 
 ```
 System + Pop!_OS:           ~2.0 GB
-Ollama (Qwen 7B Q4):        ~4.5 GB  (primary reasoning model)
+Ollama (Qwen 3B Q4):        ~2.2 GB  (primary reasoning model, full GPU)
 Ollama (Llava 7B Q4):       ~0.5 GB  (vision model, loaded on-demand)
 Ollama (Whisper small):     ~0.4 GB  (audio transcription, CPU-based)
 Qdrant (vector DB):         ~1.0 GB  (semantic cache + embeddings)
@@ -63,9 +63,9 @@ agent-api (with MCP):       ~2.0 GB  (LangGraph + dependencies)
 Postgres (metadata):        ~0.5 GB  (conversation history + facts)
 MCP Servers:                ~0.3 GB  (Filesystem, Memory, Router processes)
 ─────────────────────────────────────
-Total Target:              ~12.7 GB ✅ ~3.3GB safe headroom on 16GB
+Total Target:              ~10.4 GB ✅ ~5.6GB safe headroom on 16GB
 ─────────────────────────────────────
-Fallback (headless):       ~11.2 GB ✅ (without Whisper + Llava)
+Fallback (headless):       ~9.0 GB ✅ (without Whisper + Llava)
 ```
 
 **Configuration Tips**:
@@ -81,7 +81,7 @@ Fallback (headless):       ~11.2 GB ✅ (without Whisper + Llava)
 
 ```
 WEEK 1: Foundation Layer
-    ├─ Ollama + Qwen 7B (text reasoning)
+    ├─ Ollama + Qwen 3B (text reasoning)
     ├─ Docker Compose stack
     ├─ LangGraph basic ReAct loop
     ├─ File organizer (inbox auto-sort)
@@ -128,9 +128,9 @@ WEEK 5+: Optional Polish
 curl -fsSL https://ollama.com/install.sh | sh
 
 # Pull primary models
-ollama pull qwen2.5:7b-instruct-q4_K_M    # ~4.1GB VRAM — reasoning
-ollama pull nomic-embed-text               # ~270MB — embeddings
-ollama pull llava:7b-q4_K_M                # ~5.2GB VRAM — vision (loaded on-demand)
+ollama pull qwen2.5:3b-instruct-q4_K_M    # ~2.2GB VRAM — reasoning (fits GTX 1060 3GB)
+ollama pull nomic-embed-text               # ~270MB — embeddings (CPU or unload LLM first)
+ollama pull llava:7b-q4_K_M                # vision on-demand; 3GB GPU may need CPU offload
 ollama pull whisper-small                  # ~490MB — audio transcription (CPU)
 
 # Set VRAM governor
@@ -146,7 +146,7 @@ EOF
 sudo systemctl daemon-reload && sudo systemctl restart ollama
 
 # Verify GPU offload — look for "layers: 32/32"
-ollama run qwen2.5:7b-instruct-q4_K_M "Say hello" --verbose
+ollama run qwen2.5:3b-instruct-q4_K_M "Say hello" --verbose
 ```
 
 ### 2. Docker Compose — Full Stack (V2)
@@ -458,11 +458,11 @@ class AgentState(TypedDict):
     mcp_tools_available: list
 
 llm = ChatOllama(
-    model="qwen2.5:7b-instruct-q4_K_M",
+    model="qwen2.5:3b-instruct-q4_K_M",
     base_url="http://host.docker.internal:11434",
     temperature=0.1,
-    num_ctx=4096,
-    num_gpu=99,
+    num_ctx=2048,
+    num_gpu=-1,
 )
 
 SYSTEM_PROMPT = """You are a personal AI assistant with MCP tool support.
@@ -951,7 +951,7 @@ bash scripts/copilot-dev-runner.sh debug-oom
              │
 ┌────────────▼────────────────────────┐
 │ LangGraph ReAct (MCP Client)        │
-│ • Reasoning (Qwen 7B)               │
+│ • Reasoning (Qwen 3B)               │
 │ • Memory (3-layer)                  │
 │ • Tool dispatch                     │
 └─┬──────────────┬──────────────┬─────┘

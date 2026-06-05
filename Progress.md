@@ -2,7 +2,7 @@
 
 > **Start Date**: May 12, 2026  
 > **Current Date**: June 5, 2026  
-> **Hardware**: Intel i5 6th Gen · 16GB DDR4 · GTX 1060 6GB · Pop!_OS/Ubuntu  
+> **Hardware**: Intel i5-7400 · 16GB DDR4 · GTX 1060 3GB · Pop!_OS/Ubuntu  
 > **Target Architecture**: LangGraph + Windmill + Evolution API + Ollama + Qdrant + Postgres (Neo4j/MCP deferred)  
 > **Source of truth**: `openspec/specs/` · Verify: `pytest tests/unit -q && ./scripts/evi-test smoke`
 
@@ -14,11 +14,11 @@
 
 - [x] **Ollama Installation** ✅
   - Service running as systemd with GPU offload enabled
-  - Models installed: qwen2.5:7b-instruct-q4_K_M (~4.1GB VRAM)
+  - Models installed: qwen2.5:3b-instruct-q4_K_M (~2.2GB VRAM)
   - VRAM governor configured: `OLLAMA_MAX_LOADED_MODELS=1`
 
 - [x] **Models Preparation** ✅
-  - `ollama pull qwen2.5:7b-instruct-q4_K_M` (reasoning)
+  - `ollama pull qwen2.5:3b-instruct-q4_K_M` (reasoning)
   - `ollama pull nomic-embed-text` (embeddings, CPU-based)
   - Pre-staged: `llava:7b-q4_K_M` (vision, on-demand)
   - Pre-staged: `whisper-small` (audio transcription, CPU-based)
@@ -260,7 +260,7 @@
 ### Current Allocation (Phase 0 Complete)
 ```
 System:      2.0 GB ✅
-Ollama:      4.5 GB ✅ (Qwen 7B Q4 loaded)
+Ollama:      2.2 GB ✅ (Qwen 3B Q4 loaded)
 Qdrant:      0.1 GB (empty, allocated 1GB)
 Neo4j:       0.2 GB (allocated 1.5GB)
 n8n:         0.1 GB (allocated 512MB)
@@ -274,10 +274,11 @@ Headroom:    ~3.3 GB ✅
 
 ### VRAM Usage (GPU)
 ```
-Qwen 7B Q4:   4.5 GB (persistent)
-Llava 7B:     UNLOADED (load on demand)
+Qwen 3B Q4:   ~2.2 GB (persistent, full GPU offload)
+nomic-embed:  ~0.6 GB when loaded (unload before LLM if tight)
+Llava 7B:     UNLOADED (3GB VRAM — CPU-only or skip on this GPU)
 Whisper:      CPU-based (no GPU)
-Total VRAM:   ~4.5 GB / 6GB GTX 1060 ✅
+Total VRAM:   ~2.2 GB / 3GB GTX 1060 ✅
 ```
 
 ---

@@ -20,7 +20,7 @@ assert send_telegram_message('EVI: teste 1/3 — sendMessage'), 'sendMessage fai
 print('OK sendMessage')
 "
 
-echo "==> 2/3 webhook + reply (Ollama ~60–120s)..."
+echo "==> 2/3 webhook + reply (Ollama ~15–45s com qwen2.5:3b)..."
 export PYTHONPATH="${ROOT}/agent"
 set -a && source .env && set +a
 export EVI_API_URL="${EVI_API_URL:-http://localhost:8002}"
