@@ -99,7 +99,10 @@ Google Calendar → calendário **EVI** → ⚙️ Settings → **Integrate cale
 ```env
 WINDMILL_GCAL_RESOURCE=u/shiba144/beneficial_gcal
 WINDMILL_CALENDAR_ID=SEU_CALENDAR_ID_AQUI
+EVI_TIMEZONE=America/Sao_Paulo
 ```
+
+Horários são **relógio local** (`09:00` = 9h em `EVI_TIMEZONE`), não UTC. Após mudar o script, rode `../scripts/wmill-sync.sh`.
 
 Resource OAuth atual após reconectar: confira com `wmill resource list`.
 
@@ -141,6 +144,7 @@ Verificação:
 1. `.env`: `TELEGRAM_MODE=polling`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
 2. `./scripts/evi-telegram-polling-setup.sh` — remove webhook e sobe poller no `agent-api`.
 3. Mensagens: `getUpdates` → agent → `sendMessage`. Digest de compromissos continua igual.
+4. **Logs:** `logs/telegram.jsonl` (turnos + tools usadas), Postgres `messages` com `session_id=telegram-<chat_id>`.
 
 ### Modo webhook (remoto via tunnel)
 

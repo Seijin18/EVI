@@ -91,6 +91,17 @@ def _access_token(resource: Any) -> str:
     )
 
 
+def _wall_clock(iso_time: str) -> str:
+    t = (iso_time or "").strip()
+    if t.endswith("Z"):
+        t = t[:-1]
+    elif len(t) > 19 and t[19] in "+-":
+        t = t[:19]
+    if len(t) == 16 and "T" in t:
+        t += ":00"
+    return t
+
+
 def main(
     title: str,
     start_time: str,
@@ -98,13 +109,17 @@ def main(
     description: str = "",
     gcal: str = "gcal",
     calendar_id: str = "primary",
+    timezone: str = "America/Sao_Paulo",
 ):
     token = _access_token(gcal)
     resolved_calendar = _resolve_calendar_id(token, calendar_id)
+    tz = (timezone or "America/Sao_Paulo").strip() or "America/Sao_Paulo"
+    start_local = _wall_clock(start_time)
+    end_local = _wall_clock(end_time)
     body: Dict[str, Any] = {
         "summary": title,
-        "start": {"dateTime": start_time, "timeZone": "UTC"},
-        "end": {"dateTime": end_time, "timeZone": "UTC"},
+        "start": {"dateTime": start_local, "timeZone": tz},
+        "end": {"dateTime": end_local, "timeZone": tz},
     }
     if description:
         body["description"] = description

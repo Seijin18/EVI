@@ -37,6 +37,11 @@ schema:
       description: ''
       default: null
       originalType: string
+    timezone:
+      type: string
+      description: IANA timezone for wall-clock start/end (e.g. America/Sao_Paulo)
+      default: America/Sao_Paulo
+      originalType: string
   required:
     - title
     - start_time

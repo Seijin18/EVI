@@ -1,7 +1,10 @@
+import json
 import os
+import re
 
 from langchain_core.tools import tool
 
+from tools.calendar_time import evi_timezone, normalize_wall_clock
 from tools.windmill_client import post_windmill
 
 
@@ -14,8 +17,8 @@ def schedule_event(
 
     Args:
         title: Event title.
-        start_time: ISO 8601 start (e.g. 2026-06-10T14:00:00Z).
-        end_time: ISO 8601 end.
+        start_time: Local wall clock (e.g. 2026-06-10T09:00:00) in EVI_TIMEZONE.
+        end_time: Local wall clock end time.
         description: Optional description.
     """
     gcal = os.getenv("WINDMILL_GCAL_RESOURCE", "gcal").strip()
@@ -24,14 +27,16 @@ def schedule_event(
     if gcal and not gcal.startswith("$res:"):
         gcal = f"$res:{gcal}"
     calendar_id = os.getenv("WINDMILL_CALENDAR_ID", "primary").strip() or "primary"
+    tz = evi_timezone()
     payload = {
         "action": "schedule_event",
         "title": title,
-        "start_time": start_time,
-        "end_time": end_time,
+        "start_time": normalize_wall_clock(start_time),
+        "end_time": normalize_wall_clock(end_time),
         "description": description,
         "gcal": gcal,
         "calendar_id": calendar_id,
+        "timezone": tz,
     }
     result = post_windmill(
         "WINDMILL_WEBHOOK_CALENDAR",
@@ -41,9 +46,24 @@ def schedule_event(
         wait_result=True,
     )
     if "failed" in result.lower():
-        return f"Failed to schedule event. {result}"
+        return f"Falha ao agendar '{title}'. {result[:400]}"
+
+    link = ""
+    try:
+        blob = json.loads(result) if result.strip().startswith("{") else None
+        if blob is None:
+            m = re.search(r'"html_link"\s*:\s*"([^"]+)"', result)
+            link = m.group(1) if m else ""
+        else:
+            link = blob.get("html_link") or ""
+    except (json.JSONDecodeError, TypeError):
+        m = re.search(r'"html_link"\s*:\s*"([^"]+)"', result)
+        link = m.group(1) if m else ""
+
     if '"status":"created"' in result or '"status": "created"' in result:
-        return f"Event '{title}' created in Google Calendar. {result}"
+        if link:
+            return f"Evento '{title}' criado no Google Calendar.\nLink: {link}"
+        return f"Evento '{title}' criado no Google Calendar."
     if '"status":"error"' in result or '"status": "error"' in result:
-        return f"Calendar error for '{title}'. {result}"
-    return f"Windmill job finished for '{title}'. {result}"
+        return f"Erro no Calendar para '{title}'. {result[:400]}"
+    return f"Windmill finalizou '{title}'. {result[:400]}"

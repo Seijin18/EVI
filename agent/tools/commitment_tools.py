@@ -13,7 +13,7 @@ from tools.task_tool import create_task
 
 
 def _iso_range(event_date: str | None, event_time: str | None) -> tuple[str, str]:
-    date = event_date or datetime.utcnow().strftime("%Y-%m-%d")
+    date = event_date or datetime.now().strftime("%Y-%m-%d")
     time = event_time or "12:00"
     if len(time) == 5:
         start = datetime.strptime(f"{date}T{time}:00", "%Y-%m-%dT%H:%M:%S")
@@ -21,8 +21,8 @@ def _iso_range(event_date: str | None, event_time: str | None) -> tuple[str, str
         start = datetime.strptime(f"{date}T12:00:00", "%Y-%m-%dT%H:%M:%S")
     end = start + timedelta(hours=1)
     return (
-        start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        start.strftime("%Y-%m-%dT%H:%M:%S"),
+        end.strftime("%Y-%m-%dT%H:%M:%S"),
     )
 
 
