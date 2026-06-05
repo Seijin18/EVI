@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, List
 
 from services.message_sources import IncomingMessage
 
@@ -12,10 +13,40 @@ def _text_from_message(data: Dict[str, Any]) -> str:
     if isinstance(msg.get("conversation"), str):
         return msg["conversation"]
     if msg.get("extendedTextMessage"):
-        return msg["extendedTextMessage"].get("text", "")
+        ext = msg["extendedTextMessage"]
+        return ext.get("text") or ext.get("matchedText") or ""
     if msg.get("imageMessage") and msg["imageMessage"].get("caption"):
         return msg["imageMessage"]["caption"]
+    if msg.get("buttonsResponseMessage"):
+        return msg["buttonsResponseMessage"].get("selectedDisplayText", "")
+    if msg.get("listResponseMessage"):
+        selected = msg["listResponseMessage"].get("singleSelectReply") or {}
+        return selected.get("title", "")
     return str(msg.get("text") or "")
+
+
+def _normalize_messages(data: Any) -> List[Dict[str, Any]]:
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+
+    if data.get("messages") is not None:
+        raw = data["messages"]
+        if isinstance(raw, list):
+            return [item for item in raw if isinstance(item, dict)]
+        if isinstance(raw, dict):
+            return [raw]
+
+    # Single message envelope: {key, message, messageTimestamp, ...}
+    if data.get("key") or data.get("messageTimestamp"):
+        return [data]
+
+    # Legacy fallback: bare inner message dict only
+    if data.get("message") and isinstance(data["message"], dict):
+        return [data]
+
+    return []
 
 
 def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
@@ -27,21 +58,9 @@ def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
         return results
 
     data = body.get("data") or body
-    messages: Any = None
-    if isinstance(data, list):
-        messages = data
-    elif isinstance(data, dict):
-        messages = data.get("messages") or data.get("message")
-        if messages is None and (data.get("key") or data.get("message")):
-            messages = [data]
-    if messages is None:
-        messages = []
-    if isinstance(messages, dict):
-        messages = [messages]
+    messages = _normalize_messages(data)
 
     for idx, item in enumerate(messages):
-        if not isinstance(item, dict):
-            continue
         key = item.get("key") or {}
         msg_id = key.get("id") or item.get("id") or f"evo_{idx}"
         remote = str(
@@ -60,8 +79,6 @@ def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
             or ""
         )
         if ts.isdigit():
-            from datetime import datetime
-
             ts = datetime.utcfromtimestamp(int(ts)).isoformat()
         results.append(
             IncomingMessage(

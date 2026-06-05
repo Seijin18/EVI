@@ -51,3 +51,9 @@ def log_telegram_turn(
     path = _log_path()
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    try:
+        from services.log_retention import trim_jsonl
+
+        trim_jsonl(path)
+    except Exception:
+        pass

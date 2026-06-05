@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from tools.calendar_time import evi_timezone
 
 _INTENT = re.compile(
-    r"\b(agende|agendar|agenda|crie?\s+um?\s+evento|criar\s+evento|marque|marcar)\b",
+    r"\b(agende|agendar|crie?\s+um?\s+evento|criar\s+evento|marque|marcar)\b",
     re.I,
 )
 _QUOTE_CHARS = "\"'\u201c\u201d\u201e\u201a«»"

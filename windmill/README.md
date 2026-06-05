@@ -108,13 +108,35 @@ Resource OAuth atual após reconectar: confira com `wmill resource list`.
 
 ## Google Tasks (`create_task`)
 
-Windmill não tem conector nativo Tasks; use resource **gcloud** com escopo OAuth `https://www.googleapis.com/auth/tasks`.
+O EVI chama `create_task` → Windmill → Google Tasks API usando o resource em `WINDMILL_GTASKS_RESOURCE` (parâmetro `gtasks` no script).
 
-1. Instance **Settings → OAuth** → add **gcloud** (redirect `http://localhost:8001/oauth/callback/gcloud`).
-2. Ao conectar, inclua escopo **Google Tasks API** (ou reconecte resource existente com Tasks habilitado).
-3. Workspace **Resources** → path ex. `u/<user>/gcloud` — copie para `.env` como `WINDMILL_GTASKS_RESOURCE`.
-4. Script `create_task` → parâmetro **gtasks** default = esse path (ou nome `gtasks` se renomear resource).
-5. HTTP trigger → `WINDMILL_WEBHOOK_TASKS` no `.env`; `../scripts/wmill-sync.sh`.
+**Importante:** o OAuth **`gcloud` do Windmill não é Google Tasks.** O conector `gcloud` pede só `https://www.googleapis.com/auth/cloud-platform` (tela “dados do Google Cloud”). Colocar escopos Tasks no Google Cloud Console **não muda** o que o Windmill pede na autorização.
+
+### Opção recomendada — OAuth custom `gtasks` (CE self-hosted)
+
+1. **Google Cloud Console** — Tasks API habilitada; escopos `tasks` no consent screen; redirect:
+   ```
+   http://localhost:8001/oauth/callback/gtasks
+   ```
+2. **Windmill Instance settings → OAuth** — adicione cliente **`gtasks`** (mesmo Client ID/Secret do `gcal`) com `connect_config`:
+   ```json
+   "gtasks": {
+     "id": "SEU_CLIENT_ID.apps.googleusercontent.com",
+     "secret": "SEU_CLIENT_SECRET",
+     "connect_config": {
+       "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+       "token_url": "https://oauth2.googleapis.com/token",
+       "scopes": ["https://www.googleapis.com/auth/tasks"],
+       "extra_params": { "access_type": "offline", "prompt": "consent" }
+     }
+   }
+   ```
+   (No CE, edite o JSON de OAuth na instância — padrão usado para Keycloak/custom providers.)
+3. **Workspace `evi` → Resources** → tipo **`gtasks`** → Connect → Google deve pedir **“Criar, editar, organizar e excluir tarefas”**.
+4. `.env`: `WINDMILL_GTASKS_RESOURCE=u/<user>/<nome_do_resource>`
+5. `docker compose up -d agent-api` e `./scripts/evi-test tasks --live-windmill`
+
+Não use resource `gcloud`/`equitable_gcloud` para Tasks — o token terá escopo Cloud Platform e a API retorna 403.
 
 Verificação:
 

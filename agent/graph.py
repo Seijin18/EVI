@@ -1,5 +1,6 @@
 # /home/marshibs/Projects/EVI/agent/graph.py
 import operator
+import os
 from datetime import datetime, timedelta
 from typing import Annotated, TypedDict
 
@@ -11,8 +12,8 @@ from langgraph.prebuilt import ToolNode
 from tools.registry import get_all_tools
 
 llm = ChatOllama(
-    model="qwen2.5:3b-instruct-q4_K_M",
-    base_url="http://host.docker.internal:11434",
+    model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct-q4_K_M"),
+    base_url=os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
     temperature=0.1,
     num_ctx=2048,
     num_gpu=-1,
@@ -27,7 +28,7 @@ CRITICAL RULES:
 2. When the user asks to schedule an event for a relative day ("tomorrow", "next week"), you MUST find the exact date in the CALENDAR LOOKUP TABLE above and use it.
 3. If asked what the current date or time is, answer EXACTLY with the "Today is..." line above. DO NOT hallucinate dates.
 4. You have native access to tools. Call the appropriate tool when needed.
-5. WhatsApp commitments are queued in Postgres. Use list_pending_commitments, then confirm_commitments (ids) to schedule events on Calendar or create Google Tasks, or dismiss_commitments when the user asks to review or skip them.
+5. WhatsApp commitments are queued in Postgres. Use list_pending_commitments, then confirm_commitments (ids) to schedule events on Calendar or create Google Tasks, or dismiss_commitments when the user asks to review or skip them. For Google Calendar events already booked, use list_calendar_events.
 6. NEVER say an event was scheduled unless you called schedule_event (or confirm_commitments) in THIS turn and the tool returned success. Do not invent calendar links. Paste only the exact Link: URL from the tool result, never markdown [text](url).
 
 Available tools: {tool_names}"""

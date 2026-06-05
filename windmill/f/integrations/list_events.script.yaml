@@ -1,0 +1,34 @@
+summary: ''
+description: ''
+lock: '!inline f/integrations/list_events.script.lock'
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    calendar_id:
+      type: string
+      description: Google calendar id (primary = default calendar)
+      default: primary
+      originalType: string
+    days_ahead:
+      type: integer
+      description: How many days ahead to search
+      default: 7
+      originalType: integer
+    gcal:
+      type: string
+      description: Windmill resource path for Google Calendar OAuth
+      default: gcal
+      originalType: string
+    max_results:
+      type: integer
+      description: Maximum events to return
+      default: 25
+      originalType: integer
+    timezone:
+      type: string
+      description: IANA timezone for display (e.g. America/Sao_Paulo)
+      default: America/Sao_Paulo
+      originalType: string
+  required: []

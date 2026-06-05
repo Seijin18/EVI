@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -133,6 +133,11 @@ class WhatsAppProcessor:
         self._log_entries: List[Dict[str, Any]] = []
 
     def log(self, entry: Dict[str, Any]) -> None:
+        if "ts" not in entry:
+            entry = {
+                **entry,
+                "ts": datetime.now(timezone.utc).isoformat(),
+            }
         self._log_entries.append(entry)
         if self.verbose:
             print(json.dumps(entry, ensure_ascii=False))

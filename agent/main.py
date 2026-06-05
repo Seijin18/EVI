@@ -239,14 +239,35 @@ def evolution_webhook(
     from services.evolution_parser import parse_evolution_webhook
     from services.whatsapp_processor import WhatsAppProcessor
 
+    from datetime import datetime, timezone
+
+    from services.log_retention import append_jsonl, trim_jsonl
+
     log_dir = Path(os.getenv("EVI_LOG_DIR", "/tmp/evi-logs"))
     log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "evolution_webhook.jsonl"
+    ts = datetime.now(timezone.utc).isoformat()
+    event = body.get("event") or body.get("type") or "unknown"
     raw = parse_evolution_webhook(body)
     messages, filter_stats = filter_for_processing(raw, log_dir=log_dir)
-    proc = WhatsAppProcessor(log_path=log_dir / "evolution_webhook.jsonl")
-    proc.log({"step": "filter", **filter_stats})
-    commitments = proc.process_messages(messages)
-    proc.flush_log()
+
+    if messages:
+        proc = WhatsAppProcessor(log_path=log_path)
+        proc.log({"step": "filter", "event": event, **filter_stats})
+        commitments = proc.process_messages(messages)
+        proc.flush_log()
+    else:
+        commitments = []
+        append_jsonl(
+            log_path,
+            {
+                "ts": ts,
+                "step": "skip",
+                "event": event,
+                "parsed": len(raw),
+                **filter_stats,
+            },
+        )
     rows = [c.to_golden_row() for c in commitments]
     queued_ids: list[int] = []
     try:
@@ -277,9 +298,21 @@ def evolution_webhook(
                 queued_ids, [c.priority for c in commitments]
             )
         except Exception as notify_exc:
-            proc.log({"step": "notify_error", "error": str(notify_exc)[:200]})
+            append_jsonl(
+                log_path,
+                {
+                    "ts": ts,
+                    "step": "notify_error",
+                    "error": str(notify_exc)[:200],
+                },
+            )
     except Exception as exc:
-        proc.log({"step": "queue_error", "error": str(exc)[:200]})
+        append_jsonl(
+            log_path,
+            {"ts": ts, "step": "queue_error", "error": str(exc)[:200]},
+        )
+
+    trim_jsonl(log_path)
 
     return {
         "ok": True,
