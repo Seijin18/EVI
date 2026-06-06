@@ -6,11 +6,13 @@ import os
 from typing import Any, Callable, Dict, Set
 
 from services.commitment_review.handler import try_direct_review
+from services.direct_task import try_direct_task
 from services.evolution_client import (
     format_evi_whatsapp,
     is_evi_bot_message,
     send_whatsapp_text,
 )
+from services.telegram_schedule import try_direct_schedule
 
 
 def parse_control_jids() -> Set[str]:
@@ -47,13 +49,42 @@ def process_whatsapp_control_message(
             "review_direct": True,
         }
 
+    scheduled = try_direct_schedule(text)
+    if scheduled:
+        sent = send_whatsapp_text(jid, scheduled, add_prefix=True)
+        return {
+            "ok": True,
+            "response": format_evi_whatsapp(scheduled),
+            "session_id": session_id,
+            "whatsapp_sent": sent,
+            "scheduled_direct": True,
+        }
+
+    tasked = try_direct_task(text)
+    if tasked:
+        sent = send_whatsapp_text(jid, tasked, add_prefix=True)
+        return {
+            "ok": True,
+            "response": format_evi_whatsapp(tasked),
+            "session_id": session_id,
+            "whatsapp_sent": sent,
+            "task_direct": True,
+        }
+
     try:
         result = invoke_chat(text, session_id)
-        reply = result.get("response") or ""
+        reply = (result.get("response") or "").strip()
     except Exception as exc:
         reply = f"Não consegui processar agora. Detalhe: {str(exc)[:180]}"
 
-    sent = send_whatsapp_text(jid, reply, add_prefix=True) if reply else False
+    if not reply:
+        reply = (
+            "Não obtive resposta do agente. Tente comandos diretos: "
+            "'criar tarefa teste', 'agende almoço amanhã 12h', "
+            "'listar compromissos pendentes'."
+        )
+
+    sent = send_whatsapp_text(jid, reply, add_prefix=True)
     return {
         "ok": True,
         "response": format_evi_whatsapp(reply) if reply else "",

@@ -8,6 +8,7 @@ from services.telegram_audit import log_telegram_turn
 from services.telegram_format import format_for_telegram
 from services.commitment_review.handler import try_direct_review
 from services.telegram_notify import send_telegram_message
+from services.direct_task import try_direct_task
 from services.telegram_schedule import try_direct_schedule
 
 ChatInvoke = Callable[[str, str], Dict[str, Any]]
@@ -87,6 +88,17 @@ def process_telegram_update(
             ai_content=direct,
             tools=[{"type": "direct", "tool": "schedule_event"}],
             extra={"scheduled_direct": True},
+        )
+
+    tasked = try_direct_task(text)
+    if tasked:
+        return _reply_direct(
+            session_id=session_id,
+            chat_id=chat_id,
+            text=text,
+            ai_content=tasked,
+            tools=[{"type": "direct", "tool": "create_task"}],
+            extra={"task_direct": True},
         )
 
     try:

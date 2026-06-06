@@ -1,6 +1,7 @@
 """Postgres session persistence (MVP)."""
 
 import os
+import threading
 from contextlib import contextmanager
 from typing import Any, Dict, List
 
@@ -12,8 +13,22 @@ DATABASE_URL = os.getenv(
     "postgresql://evi:evi@postgres:5432/evidb",
 )
 
+_init_lock = threading.Lock()
+_db_initialized = False
+
 
 def init_db() -> None:
+    global _db_initialized
+    if _db_initialized:
+        return
+    with _init_lock:
+        if _db_initialized:
+            return
+        _run_migrations()
+        _db_initialized = True
+
+
+def _run_migrations() -> None:
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -56,6 +71,13 @@ def init_db() -> None:
                 """
             )
         conn.commit()
+
+
+def reset_db_init_for_tests() -> None:
+    """Allow tests to re-run migrations."""
+    global _db_initialized
+    with _init_lock:
+        _db_initialized = False
 
 
 @contextmanager
