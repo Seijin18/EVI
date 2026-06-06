@@ -15,9 +15,11 @@ Substitui `evi-whatsapp-reply` (cancelado) por review multicanal + canal de cont
 | 4 | `evi-commitment-review-multichannel` | Done | `services/commitment_review/` |
 | 5 | `evi-commitment-audit` | Done | `source_chat`, `list_scheduled_today` |
 | 6 | `evi-whatsapp-control-chat` | Done | `EVI_WHATSAPP_CONTROL_JIDS`, prefixo `[EVI]` |
-| 7 | `evi-whatsapp-llm-extract` | Pending | Fallback LLM quando heurística falha |
-| 8 | `evi-windmill-list-events-spec` | Partial | SCN-CAL-06 em baseline-v2; live harness pendente |
-| 9 | `evi-dx-openspec-refresh` | Partial | BACKLOG.md + planning.mdc atualizados |
+| 7 | `evi-whatsapp-llm-extract` | Done | Arquivado 2026-06-06; SCN-WA-16 |
+| 8 | `evi-windmill-list-events-spec` | Done | Arquivado 2026-06-06; `evi-test calendar-list` |
+| 9 | `evi-dx-openspec-refresh` | Done | Arquivado 2026-06-06; rules + cleanup |
+
+**Nota:** Itens #2–6 foram implementados no commit `547667e` sem archives OpenSpec separados (código + specs em `openspec/specs/`).
 
 ### Cancelado
 
@@ -25,12 +27,24 @@ Substitui `evi-whatsapp-reply` (cancelado) por review multicanal + canal de cont
 |--------|--------|
 | `evi-whatsapp-reply` | Ack automático no chat de origem não desejado; substituído por canal de controle + audit |
 
-## Etapa 4 — sob demanda
+## Etapa 4 — ops (completa)
 
-| Change | Notas |
-|--------|-------|
-| `evi-agent-health-deep` | GET /health com deps |
-| `evi-prometheus-metrics` | Métricas compose |
-| `evi-github-actions-smoke` | CI |
-| `evi-rag-tier2-live` | Qdrant live harness |
-| Neo4j / MCP / multimodal | `openspec/specs/roadmap.md` |
+| # | Change | Status | Notas |
+|---|--------|--------|-------|
+| 10 | `evi-long-memory-architecture` | Done | Arquivado 2026-06-06; spec `data-long-memory` |
+| 11 | `evi-agent-health-deep` | Done | Arquivado 2026-06-06; GET /health SCN-API-02 |
+| 12 | `evi-prometheus-metrics` | Done | Arquivado 2026-06-06; `/metrics` SCN-OPS-03 |
+| 13 | `evi-github-actions-smoke` | Done | Arquivado 2026-06-06; `.github/workflows/ci.yml` |
+| 14 | `evi-rag-tier2-live` | Done | Arquivado 2026-06-06; `evi-test rag --live-qdrant` |
+
+## Etapa 5 — memória longa (sob demanda)
+
+Spec: [`openspec/specs/data-long-memory/spec.md`](specs/data-long-memory/spec.md)
+
+| # | Change | Fase | Notas |
+|---|--------|------|-------|
+| 15 | `evi-contact-filesystem-memory` | 5a | FS por JID + ingest pós-commitment |
+| 16 | `evi-daily-summary-windmill` | 5a | Cron resumo do dia |
+| 17 | `evi-conversation-graph-neo4j` | 5b | Neo4j + graph_tool (após 5a) |
+
+**Fora do repo:** Graphiti MCP. **Outros deferidos:** MCP isolado, multimodal — `openspec/specs/roadmap.md`

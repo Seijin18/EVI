@@ -26,3 +26,10 @@ The tool `query_university_notes` SHALL return top-k chunks with source metadata
 #### Scenario: SCN-RAG-03
 - **WHEN** query runs with a natural-language question
 - **THEN** response includes ranked chunks with source references
+
+### Requirement: Live RAG harness
+The project SHALL provide `./scripts/evi-test rag --live-qdrant` to ingest a fixture PDF and query Qdrant when the stack is up.
+
+#### Scenario: SCN-RAG-04
+- **WHEN** `./scripts/evi-test rag --live-qdrant` runs with Qdrant and Ollama embeddings available
+- **THEN** ingest succeeds and query returns chunks or a documented empty result without failure prefix

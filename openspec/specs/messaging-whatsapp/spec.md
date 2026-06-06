@@ -87,3 +87,11 @@ The system SHALL notify via Telegram when configured and either 5+ unnotified pe
 #### Scenario: SCN-WA-12
 - **WHEN** `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set and notification threshold is met
 - **THEN** a digest message is sent via Telegram Bot API
+
+### Requirement: LLM fallback extraction
+When `EVI_WHATSAPP_LLM_EXTRACT` is true and heuristic extraction returns no commitment, the processor SHALL attempt Ollama structured extraction before discarding the message.
+
+#### Scenario: SCN-WA-16
+- **GIVEN** fixture message w005 (consultation scheduling) and `EVI_WHATSAPP_LLM_EXTRACT=true`
+- **WHEN** `extract_commitment_with_fallback` runs with mocked LLM returning valid JSON
+- **THEN** a commitment with `type`, `title`, and date/time fields is produced

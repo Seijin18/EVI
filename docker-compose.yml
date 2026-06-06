@@ -91,6 +91,7 @@ services:
       retries: 5
       start_period: 5s
 
+  # Prometheus: scrape http://agent-api:8000/metrics when EVI_METRICS_ENABLED=true (no prometheus container in compose)
   agent-api:
     build: ./agent
     ports: ["8002:8000"]
@@ -126,6 +127,7 @@ services:
       - EVI_WHATSAPP_CONTROL_JIDS=${EVI_WHATSAPP_CONTROL_JIDS:-}
       - EVI_WHATSAPP_REPLY_PREFIX=${EVI_WHATSAPP_REPLY_PREFIX:-[EVI] }
       - EVI_NOTIFY_CHANNELS=${EVI_NOTIFY_CHANNELS:-telegram}
+      - EVI_METRICS_ENABLED=${EVI_METRICS_ENABLED:-true}
       # In-container outbound WhatsApp must use Docker DNS (not localhost from .env)
       - EVOLUTION_SERVER_URL=http://evolution-api:8080
       - EVOLUTION_INSTANCE_NAME=${EVOLUTION_INSTANCE_NAME:-evi}

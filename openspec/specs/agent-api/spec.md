@@ -13,6 +13,13 @@ The system SHALL expose `GET /` returning status and service list.
 - **WHEN** client calls `GET /`
 - **THEN** response status is 200 with `status` field
 
+### Requirement: Deep health
+The system SHALL expose `GET /health` reporting aggregate `status` (`ok`, `degraded`, or `down`) and per-dependency checks for graph, postgres, qdrant, windmill, and ollama.
+
+#### Scenario: SCN-API-02
+- **WHEN** client calls `GET /health`
+- **THEN** response status is 200 with `status` and `checks` object
+
 ### Requirement: Chat
 The system SHALL expose `POST /chat` accepting `message` and optional `session_id`.
 

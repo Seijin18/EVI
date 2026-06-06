@@ -127,6 +127,29 @@ def run_calendar(live_n8n: bool) -> bool:
     return _result("calendar", ok, "payload ok")
 
 
+def run_calendar_list(live_windmill: bool) -> bool:
+    if live_windmill:
+        try:
+            from tools.calendar_tool import list_calendar_events
+
+            text = str(list_calendar_events.invoke({"days_ahead": 7, "limit": 10}))
+            ok = "Próximos eventos" in text or "Nenhum evento" in text
+            if not ok:
+                ok = "failed" not in text.lower() and "falha" not in text.lower()
+        except ImportError as e:
+            return _result("calendar-list", False, str(e))
+        except Exception as e:
+            return _result("calendar-list", False, str(e))
+        return _result("calendar-list", ok, text[:200])
+
+    tool_path = AGENT_DIR / "tools" / "calendar_tool.py"
+    if not tool_path.is_file():
+        return _result("calendar-list", False, "calendar_tool.py missing")
+    src = tool_path.read_text(encoding="utf-8")
+    ok = "list_calendar_events" in src and "WINDMILL_WEBHOOK_LIST_EVENTS" in src
+    return _result("calendar-list", ok, "offline wiring (use --live-windmill)")
+
+
 def run_tasks(live_n8n: bool) -> bool:
     text = "payload ok"
     if live_n8n:
@@ -325,24 +348,61 @@ def run_dev_bridge(dry: bool) -> bool:
     return _result("dev-bridge", ok)
 
 
-def run_rag() -> bool:
-    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    try:
-        import httpx
+def _ensure_rag_fixture_pdf() -> Path:
+    pdf = FIXTURES / "rag" / "sample.pdf"
+    if pdf.is_file():
+        return pdf
+    txt = FIXTURES / "rag" / "sample.txt"
+    if not txt.is_file():
+        raise FileNotFoundError("rag fixtures missing")
+    import fitz
 
-        r = httpx.get(f"{qdrant_url}/collections", timeout=3.0)
-        if r.status_code >= 500:
-            return _result("rag", True, "skipped (qdrant down)")
-    except Exception:
-        return _result("rag", True, "skipped (qdrant unreachable)")
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), txt.read_text(encoding="utf-8")[:500])
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(pdf)
+    doc.close()
+    return pdf
 
-    from tools.rag_tool import extract_and_chunk_pdf
 
+def run_rag(live_qdrant: bool) -> bool:
+    if live_qdrant:
+        qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+        try:
+            import httpx
+
+            r = httpx.get(f"{qdrant_url}/collections", timeout=5.0)
+            if r.status_code >= 500:
+                return _result("rag", False, "qdrant down")
+        except Exception as e:
+            return _result("rag", False, str(e))
+
+        try:
+            from tools.rag_tool import ingest_university_pdf, query_university_notes
+
+            pdf = _ensure_rag_fixture_pdf()
+            ing = str(ingest_university_pdf.invoke({"file_path": str(pdf)}))
+            if "Successfully" not in ing and "ingested" not in ing.lower():
+                return _result("rag", False, ing[:200])
+            out = str(
+                query_university_notes.invoke(
+                    {"query": "university note text", "top_k": 2}
+                )
+            )
+            ok = "Failed to query" not in out
+            return _result("rag", ok, out[:200])
+        except ImportError as e:
+            return _result("rag", False, str(e))
+        except Exception as e:
+            return _result("rag", False, str(e))
+
+    rag_tool = AGENT_DIR / "tools" / "rag_tool.py"
+    if not rag_tool.is_file():
+        return _result("rag", False, "rag_tool.py missing")
     sample = FIXTURES / "rag" / "sample.txt"
-    if sample.exists():
-        ok = len(sample.read_text()) > 0
-        return _result("rag", ok, "fixture text ok")
-    return _result("rag", True, "skipped (no pdf fixture)")
+    ok = sample.is_file() and "university_notes" in rag_tool.read_text(encoding="utf-8")
+    return _result("rag", ok, "offline wiring (use --live-qdrant)")
 
 
 def run_commitments() -> bool:
@@ -381,6 +441,49 @@ def run_commitments() -> bool:
         return _result("commitments", True, f"skipped ({e})")
 
 
+def run_metrics(live: bool) -> bool:
+    metrics_py = AGENT_DIR / "services" / "metrics.py"
+    if not metrics_py.is_file():
+        return _result("metrics", False, "metrics.py missing")
+    src = metrics_py.read_text(encoding="utf-8")
+    ok = "evi_http_requests_total" in src and "evi_webhook_duration_seconds" in src
+    if live:
+        base = os.getenv("EVI_API_URL", "http://localhost:8002")
+        try:
+            import httpx
+
+            r = httpx.get(f"{base}/metrics", timeout=5.0)
+            ok = r.status_code == 200 and "evi_http_requests_total" in r.text
+            return _result("metrics", ok, f"http {r.status_code}")
+        except Exception as e:
+            return _result("metrics", False, str(e))
+    return _result("metrics", ok, "offline wiring (use --full for live)")
+
+
+def run_health(live: bool) -> bool:
+    if live:
+        base = os.getenv("EVI_API_URL", "http://localhost:8002")
+        try:
+            import httpx
+
+            r = httpx.get(f"{base}/health", timeout=10.0)
+            ok = r.status_code == 200 and r.json().get("status") in (
+                "ok",
+                "degraded",
+            )
+            detail = r.json().get("status", r.text[:80])
+        except Exception as e:
+            return _result("health", False, str(e))
+        return _result("health", ok, str(detail))
+
+    health_py = AGENT_DIR / "services" / "health.py"
+    if not health_py.is_file():
+        return _result("health", False, "health.py missing")
+    src = health_py.read_text(encoding="utf-8")
+    ok = "run_health_checks" in src and "postgres" in src
+    return _result("health", ok, "offline wiring (use --full for live)")
+
+
 def run_chat() -> bool:
     base = os.getenv("EVI_API_URL", "http://localhost:8002")
     try:
@@ -410,7 +513,7 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
         run_evolution,
         run_watcher,
         lambda: run_dev_bridge(True),
-        run_rag,
+        lambda: run_rag(False),
     ]
     if full:
         tests.append(run_chat)
@@ -429,6 +532,7 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--full", action="store_true", help="Include Tier 3 (chat)")
     parser.add_argument("--live-windmill", action="store_true")
+    parser.add_argument("--live-qdrant", action="store_true")
     parser.add_argument("--live-telegram", action="store_true")
     parser.add_argument("--live-n8n", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--log", dest="log_path", default=None)
@@ -443,6 +547,7 @@ def main() -> int:
         "memory": run_memory,
         "file-organizer": run_file_organizer,
         "calendar": lambda: run_calendar(live_wm),
+        "calendar-list": lambda: run_calendar_list(live_wm),
         "tasks": lambda: run_tasks(live_wm),
         "evolution": run_evolution,
         "email": lambda: run_email(live_wm),
@@ -452,8 +557,10 @@ def main() -> int:
         "telegram": lambda: run_telegram(args.live_telegram),
         "watcher": run_watcher,
         "dev-bridge": lambda: run_dev_bridge(args.dry),
-        "rag": run_rag,
+        "rag": lambda: run_rag(args.live_qdrant),
         "chat": run_chat,
+        "health": lambda: run_health(args.full),
+        "metrics": lambda: run_metrics(args.full),
         "commitments": run_commitments,
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }

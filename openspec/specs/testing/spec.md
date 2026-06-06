@@ -54,6 +54,34 @@ The project SHALL include unit tests for `evolution_filter` covering whitelist a
 - **WHEN** `pytest tests/unit/test_evolution_filter.py` runs
 - **THEN** all tests pass without network
 
+### Requirement: LLM extract unit traceability
+The project SHALL map SCN-WA-16 to a unit test with mocked Ollama (no network).
+
+#### Scenario: SCN-WA-16 trace
+- **WHEN** `pytest tests/unit/test_whatsapp_llm_extract.py` runs
+- **THEN** fallback extraction for w005 passes with mocked LLM
+
+### Requirement: Calendar list events live harness
+The project SHALL provide `./scripts/evi-test calendar-list --live-windmill` for SCN-CAL-06 live verification.
+
+#### Scenario: SCN-CAL-06 live
+- **WHEN** `./scripts/evi-test calendar-list --live-windmill` runs with Windmill and gcal OAuth configured
+- **THEN** `list_calendar_events` returns upcoming events or an empty-list message without failure prefix
+
+### Requirement: OpenSpec backlog index
+The project SHALL maintain `openspec/BACKLOG.md` as the ordered propose queue with status per change.
+
+#### Scenario: SCN-DX-01
+- **WHEN** a maintainer runs the architecture review ritual
+- **THEN** `openspec/BACKLOG.md` lists completed and on-demand changes with current status
+
+### Requirement: GitHub Actions offline smoke
+The repository SHALL include a CI workflow that runs unit tests and `./scripts/evi-test smoke` without Docker or Ollama.
+
+#### Scenario: SCN-CI-01
+- **WHEN** `.github/workflows/ci.yml` runs on push to main
+- **THEN** pytest and offline smoke complete successfully
+
 #### Scenario: SCN-API trace
 - **WHEN** `./scripts/evi-test smoke --full` runs with stack up
 - **THEN** SCN-API-01 health check is included
@@ -89,3 +117,10 @@ docker-compose SHALL define healthchecks for core data services and gate agent-a
 #### Scenario: SCN-OPS-01
 - **WHEN** `docker compose up -d` runs on a clean stack
 - **THEN** agent-api starts only after postgres, qdrant, and windmill-server report healthy
+
+### Requirement: Prometheus metrics endpoint
+When `EVI_METRICS_ENABLED` is true, agent-api SHALL expose `GET /metrics` with Prometheus text format including HTTP and webhook histograms.
+
+#### Scenario: SCN-OPS-03
+- **WHEN** client calls `GET /metrics` with metrics enabled
+- **THEN** response includes `evi_http_requests_total` metric family

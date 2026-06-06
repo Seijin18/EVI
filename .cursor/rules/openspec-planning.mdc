@@ -28,17 +28,18 @@ alwaysApply: true
 
 First message should name the target change, e.g. *Implement `evi-commitment-review-multichannel` via `openspec instructions apply --json`.*
 
-## Active backlog (Jun 2026 — P0–P3 done)
+## Active backlog (Jun 2026 — série WhatsApp completa)
 
 Full ordered queue: [`openspec/BACKLOG.md`](../../openspec/BACKLOG.md)
 
 | Status | Change |
 |--------|--------|
-| Done | P0–P3 (inbox, review, Windmill, WhatsApp whitelist, n8n deprecate) |
-| Done | `evi-as-built-baseline-v2` (spec sync + docs) |
-| Next | `evi-whatsapp-observability` → `evi-commitment-review-multichannel` → audit → control chat |
+| Done | P0–P3 + série #1–9 + Etapa 4 (#10–14 ops) |
+| On demand | Etapa 5: contact FS, daily summary, Neo4j — see `data-long-memory` spec |
 
 **Cancelled:** `evi-whatsapp-reply` — use control chat + multichannel review instead.
+
+**Note:** Items #2–6 (observability → control-chat) shipped in code without separate OpenSpec archives; see BACKLOG.
 
 ## Do not read by default
 

@@ -28,9 +28,18 @@ Three tiers:
 | Telegram (live webhook) | `./scripts/evi-test telegram --live-telegram` | SCN-TG-02 |
 | Telegram (polling) | `TELEGRAM_MODE=polling` + poller startup | SCN-TG-04 |
 | Telegram (direct list) | `tests/unit/test_telegram_list.py` | SCN-TG-05 |
-| Calendar list events | `tests/unit/test_telegram_list.py` | SCN-CAL-06 |
+| Calendar list events (unit) | `tests/unit/test_telegram_list.py` | SCN-CAL-06 |
+| Calendar list events (mock) | `./scripts/evi-test calendar-list` | SCN-CAL-06 |
+| Calendar list events (live) | `./scripts/evi-test calendar-list --live-windmill` | SCN-CAL-06 live |
 | Evolution log fields | `./scripts/evi-test evolution` | SCN-WA-13..15 |
 | JSONL log retention | `agent/services/log_retention.py` | SCN-OPS-02 |
+| Deep health (unit) | `tests/unit/test_health.py` | SCN-API-02 |
+| Deep health (offline) | `./scripts/evi-test health` | SCN-API-02 |
+| Deep health (live) | `./scripts/evi-test health --full` | SCN-API-02 live |
+| Prometheus metrics | `./scripts/evi-test metrics` | SCN-OPS-03 |
+| GitHub Actions CI | `.github/workflows/ci.yml` | SCN-CI-01 |
+| RAG (offline) | `./scripts/evi-test rag` | SCN-RAG-01..03 wiring |
+| RAG (live Qdrant) | `./scripts/evi-test rag --live-qdrant` | SCN-RAG-04 |
 | Notes | `./scripts/evi-test notes` | SCN-NOTE-02 |
 | Session/Postgres | `DATABASE_URL=... ./scripts/evi-test session` | SCN-E2E-03 |
 
@@ -43,6 +52,7 @@ Three tiers:
 | SCN-EMAIL-03 | `tests/unit/test_email_tool.py` — `summarize_inbox` wiring |
 | SCN-WA-09 | `tests/unit/test_evolution_filter.py` |
 | SCN inbox priority | `tests/unit/test_commitment_priority.py` |
+| SCN-WA-16 LLM fallback | `tests/unit/test_whatsapp_llm_extract.py` |
 
 ```bash
 pytest tests/unit/test_commitment_tools.py -q

@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export PYTHONPATH="${ROOT}/agent:${PYTHONPATH:-}"
 
-# Live Windmill needs langchain + agent env; prefer agent-api container when up
-if [[ " $* " == *" --live-windmill "* ]]; then
+# Live Windmill/RAG need langchain + agent env; prefer agent-api container when up
+if [[ " $* " == *" --live-windmill "* ]] || [[ " $* " == *" --live-qdrant "* ]]; then
   if docker compose -f "${ROOT}/docker-compose.yml" ps --status running agent-api 2>/dev/null | grep -q agent-api; then
     exec docker compose -f "${ROOT}/docker-compose.yml" exec -T \
       -e "EVI_REPO_ROOT=${ROOT}" \

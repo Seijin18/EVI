@@ -77,6 +77,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="EVI — Evolving Virtual Intelligence", lifespan=lifespan)
 
+from services.metrics import PrometheusMiddleware  # noqa: E402
+
+app.add_middleware(PrometheusMiddleware)
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -109,6 +113,20 @@ def root():
         "status": "EVI is alive",
         "services": ["graph", "tools", "postgres" if os.getenv("DATABASE_URL") else "memory-only"],
     }
+
+
+@app.get("/health")
+def health():
+    from services.health import run_health_checks
+
+    return run_health_checks(graph_ready=app_state.graph is not None)
+
+
+@app.get("/metrics")
+def metrics():
+    from services.metrics import metrics_response
+
+    return metrics_response()
 
 
 @app.get("/tools")
@@ -233,8 +251,12 @@ def evolution_webhook(
     _: None = Depends(verify_api_key),
 ):
     """Evolution API MESSAGES_UPSERT → commitment extraction."""
+    import time
     from pathlib import Path
 
+    from services.metrics import observe_webhook
+
+    _wh_start = time.perf_counter()
     from services.evolution_filter import claim_message_id, filter_for_processing
     from services.evolution_parser import parse_evolution_webhook
     from services.whatsapp_processor import WhatsAppProcessor
@@ -400,6 +422,8 @@ def evolution_webhook(
         )
 
     trim_jsonl(log_path)
+
+    observe_webhook("evolution", time.perf_counter() - _wh_start)
 
     return {
         "ok": True,

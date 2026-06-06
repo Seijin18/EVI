@@ -1,0 +1,29 @@
+name: EVI CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dev dependencies
+        run: |
+          pip install -r requirements-dev.txt
+          pip install prometheus-client starlette
+
+      - name: Unit tests
+        run: PYTHONPATH=agent python3 -m pytest tests/unit -q
+
+      - name: Offline smoke (evi-test)
+        run: ./scripts/evi-test smoke

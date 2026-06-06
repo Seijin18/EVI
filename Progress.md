@@ -16,6 +16,7 @@
 | Remote | Telegram webhook or polling |
 | Data | Postgres sessions + `pending_commitments` |
 | Vector | Qdrant `university_notes` (secondary) |
+| Ops | `GET /health`, `GET /metrics`, CI smoke |
 
 ## Completed (P0–P3 + Jun 2026)
 
@@ -25,15 +26,20 @@
 - Commitment loop: list/confirm/dismiss tools, Telegram digest (SCN-WA-12)
 - Telegram: E2E reply (SCN-TG-02), direct schedule/list bypass, polling (SCN-TG-04)
 - Evolution logs: `filtered_out`, `message_ts` (SCN-WA-13..15)
+- WhatsApp control chat (`EVI_WHATSAPP_CONTROL_JIDS`), multichannel review, LLM extract fallback (SCN-WA-16)
 - n8n removed; compose healthchecks (SCN-OPS-01)
 
 ## Active series (architecture review)
 
-See [`openspec/BACKLOG.md`](openspec/BACKLOG.md). Done: baseline-v2, multichannel review, audit, control chat. Next: `evi-whatsapp-llm-extract`.
+Série jun/2026 + Etapa 4 ops **completas** — ver [`openspec/BACKLOG.md`](openspec/BACKLOG.md). Etapa 4: `/health`, `/metrics`, GitHub Actions CI, RAG live harness. Próximo: Etapa 5 memória longa (`data-long-memory`).
 
-## Deferred
+## Deferred memory (Etapa 5)
 
-[`openspec/specs/roadmap.md`](openspec/specs/roadmap.md) — Neo4j, MCP isolado, multimodal, Prometheus, CI.
+[`openspec/specs/data-long-memory/spec.md`](openspec/specs/data-long-memory/spec.md) — hot layer (Postgres) done; cold FS per contact + Neo4j graph planned. See [`openspec/BACKLOG.md`](openspec/BACKLOG.md) #15–17.
+
+## Deferred ops / other
+
+[`openspec/specs/roadmap.md`](openspec/specs/roadmap.md) — Etapa 4 ops, MCP isolado, multimodal.
 
 ## Historical detail
 

@@ -28,6 +28,7 @@ Implement **one change at a time**. Read only `contextFiles` from apply instruct
 | Productivity tools | `specs/tools-productivity/spec.md` | `agent/tools/`, `registry.py` |
 | Windmill | `specs/integrations-windmill/spec.md` | `windmill/`, `agent/tools/*_tool.py` |
 | RAG | `specs/data-rag/spec.md` | `agent/tools/rag_tool.py` |
+| Long memory (planned) | `specs/data-long-memory/spec.md` | `agent/db.py`, Etapa 5 backlog |
 | WhatsApp | `specs/messaging-whatsapp/spec.md` | `agent/services/whatsapp_processor.py` |
 | Remote | `specs/remote-access/spec.md` | `agent/auth.py`, webhooks |
 | Testing | `specs/testing/spec.md` | `scripts/evi-test`, `tests/` |

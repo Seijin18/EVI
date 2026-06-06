@@ -167,7 +167,9 @@ class WhatsAppProcessor:
                 }
             )
 
-            c = extract_commitment(msg)
+            from services.whatsapp_llm_extract import extract_commitment_with_fallback
+
+            c, method = extract_commitment_with_fallback(msg)
             if c and c.source_id not in seen:
                 seen.add(c.source_id)
                 results.append(c)
@@ -175,9 +177,20 @@ class WhatsAppProcessor:
                     {
                         "step": "extract",
                         "source_id": msg.id,
+                        "method": method,
                         "commitments": [c.to_golden_row()],
                     }
                 )
+            elif method == "none":
+                from services.whatsapp_llm_extract import llm_extract_enabled
+
+                if llm_extract_enabled():
+                    self.log(
+                        {
+                            "step": "llm_extract_skip",
+                            "source_id": msg.id,
+                        }
+                    )
         self.log({"step": "dedupe", "merged": len(messages) - len(results)})
         return results
 
