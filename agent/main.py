@@ -235,7 +235,7 @@ def evolution_webhook(
     """Evolution API MESSAGES_UPSERT → commitment extraction."""
     from pathlib import Path
 
-    from services.evolution_filter import filter_for_processing
+    from services.evolution_filter import claim_message_id, filter_for_processing
     from services.evolution_parser import parse_evolution_webhook
     from services.whatsapp_processor import WhatsAppProcessor
 
@@ -249,7 +249,79 @@ def evolution_webhook(
     ts = datetime.now(timezone.utc).isoformat()
     event = body.get("event") or body.get("type") or "unknown"
     raw = parse_evolution_webhook(body)
-    messages, filter_stats, dropped = filter_for_processing(raw, log_dir=log_dir)
+    from services.evolution_client import is_evi_bot_message
+    from services.whatsapp_control import (
+        parse_control_jids,
+        process_whatsapp_control_message,
+    )
+
+    control_jids = parse_control_jids()
+    control_results: list[dict] = []
+    ingest_raw = []
+    for msg in raw:
+        if msg.sender in control_jids:
+            if is_evi_bot_message(msg.text):
+                append_jsonl(
+                    log_path,
+                    {
+                        "ts": ts,
+                        "step": "skip",
+                        "event": event,
+                        "hint": "evi_echo",
+                        "sender": msg.sender,
+                    },
+                )
+                continue
+            if not claim_message_id(msg.id, log_dir=log_dir):
+                append_jsonl(
+                    log_path,
+                    {
+                        "ts": ts,
+                        "step": "skip",
+                        "event": event,
+                        "hint": "duplicate_control",
+                        "source_id": msg.id,
+                        "sender": msg.sender,
+                        "raw_preview": msg.text[:80],
+                    },
+                )
+                continue
+            append_jsonl(
+                log_path,
+                {
+                    "ts": ts,
+                    "step": "control_in",
+                    "event": event,
+                    "source_id": msg.id,
+                    "message_ts": msg.ts or "",
+                    "sender": msg.sender,
+                    "from_me": msg.from_me,
+                    "raw_preview": msg.text[:80],
+                },
+            )
+            result = process_whatsapp_control_message(
+                jid=msg.sender,
+                text=msg.text,
+                invoke_chat=_telegram_invoke_chat,
+            )
+            control_results.append(result)
+            append_jsonl(
+                log_path,
+                {
+                    "ts": ts,
+                    "step": "control_out",
+                    "event": event,
+                    "sender": msg.sender,
+                    "whatsapp_sent": result.get("whatsapp_sent"),
+                    "review_direct": result.get("review_direct"),
+                    "response_preview": (result.get("response") or "")[:120],
+                    "error": result.get("error"),
+                },
+            )
+        else:
+            ingest_raw.append(msg)
+
+    messages, filter_stats, dropped = filter_for_processing(ingest_raw, log_dir=log_dir)
 
     for item in dropped:
         append_jsonl(
@@ -278,6 +350,8 @@ def evolution_webhook(
         }
         if event == "messages.upsert" and len(raw) == 0:
             entry["hint"] = "parser_empty_text_or_unsupported_type"
+        elif event == "messages.upsert" and len(raw) > 0 and filter_stats["received"] == 0:
+            entry["hint"] = "all_control_channel"
         append_jsonl(log_path, entry)
     rows = [c.to_golden_row() for c in commitments]
     queued_ids: list[int] = []
@@ -299,11 +373,13 @@ def evolution_webhook(
                 due_date=c.due,
                 priority=c.priority,
                 raw_text=raw_text,
+                source_chat=raw.sender if raw else "",
+                source_label=raw.label if raw else "",
             )
             if row_id:
                 queued_ids.append(row_id)
         try:
-            from services.commitment_notify import maybe_notify_new_pending
+            from services.commitment_review import maybe_notify_new_pending
 
             maybe_notify_new_pending(
                 queued_ids, [c.priority for c in commitments]
@@ -333,6 +409,7 @@ def evolution_webhook(
         "commitments": rows,
         "queued": len(queued_ids),
         "queued_ids": queued_ids,
+        "control": control_results,
     }
 
 

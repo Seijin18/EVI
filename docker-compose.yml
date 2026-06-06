@@ -123,6 +123,12 @@ services:
       - EVI_WHATSAPP_SKIP_GROUPS=${EVI_WHATSAPP_SKIP_GROUPS:-true}
       - EVI_WHATSAPP_GROUP_WHITELIST=${EVI_WHATSAPP_GROUP_WHITELIST:-}
       - EVI_WHATSAPP_DEDUPE_IDS=${EVI_WHATSAPP_DEDUPE_IDS:-true}
+      - EVI_WHATSAPP_CONTROL_JIDS=${EVI_WHATSAPP_CONTROL_JIDS:-}
+      - EVI_WHATSAPP_REPLY_PREFIX=${EVI_WHATSAPP_REPLY_PREFIX:-[EVI] }
+      - EVI_NOTIFY_CHANNELS=${EVI_NOTIFY_CHANNELS:-telegram}
+      # In-container outbound WhatsApp must use Docker DNS (not localhost from .env)
+      - EVOLUTION_SERVER_URL=http://evolution-api:8080
+      - EVOLUTION_INSTANCE_NAME=${EVOLUTION_INSTANCE_NAME:-evi}
     volumes:
       - ./watched_folders:/watched_folders
       - ./logs:/logs

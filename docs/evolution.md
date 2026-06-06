@@ -76,3 +76,22 @@ O log inclui `"step": "filter"` com contadores (`received`, `kept`, `skipped_old
 IDs já vistos ficam em `logs/evolution_seen_ids.json`. Para reprocessar tudo: apague esse arquivo e reinicie só se necessário.
 
 Depois de mudar filtros: `docker compose up -d agent-api` e opcionalmente `./scripts/setup-evolution.sh` (sem `--reset`) para atualizar settings na Evolution.
+
+## Grupo whitelist (ingest de compromissos)
+
+1. No WhatsApp, abra o grupo e copie o JID de `logs/evolution_webhook.jsonl` (`sender` em linhas `filtered_out` com `reason: group`) ou use o Manager.
+2. Defina no `.env`: `EVI_WHATSAPP_GROUP_WHITELIST=120363012345678901@g.us`
+3. Rode `./scripts/setup-evolution.sh` (define `groupsIgnore=false` quando whitelist não vazia).
+4. `docker compose up -d agent-api`
+
+## Canal de controle EVI (chat + digest)
+
+Para conversar com a EVI e receber digest de pendentes **no WhatsApp** (sem ack no chat de origem):
+
+| Variável | Exemplo |
+|----------|---------|
+| `EVI_WHATSAPP_CONTROL_JIDS` | `5511999999999@s.whatsapp.net` (Mensagens para mim) ou JID de grupo só seu |
+| `EVI_NOTIFY_CHANNELS` | `telegram,whatsapp` |
+| `EVI_WHATSAPP_REPLY_PREFIX` | `[EVI] ` (padrão) |
+
+Suas mensagens no JID de controle vão para `/chat` e comandos de review (`listar pendentes`, `confirmar 1`, `agendados hoje`). Respostas da EVI saem com prefixo `[EVI]` e não reentram no pipeline de ingest.

@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict
 
 from services.telegram_audit import log_telegram_turn
 from services.telegram_format import format_for_telegram
-from services.telegram_list import try_direct_list
+from services.commitment_review.handler import try_direct_review
 from services.telegram_notify import send_telegram_message
 from services.telegram_schedule import try_direct_schedule
 
@@ -67,15 +67,15 @@ def process_telegram_update(
     chat_id = message.get("chat", {}).get("id", "telegram")
     session_id = f"telegram-{chat_id}"
 
-    listed = try_direct_list(text)
-    if listed:
+    reviewed = try_direct_review(text, confirmed_via="telegram")
+    if reviewed:
         return _reply_direct(
             session_id=session_id,
             chat_id=chat_id,
             text=text,
-            ai_content=listed,
-            tools=[{"type": "direct", "tool": "list_calendar_events"}],
-            extra={"listed_direct": True},
+            ai_content=reviewed,
+            tools=[{"type": "direct", "tool": "commitment_review"}],
+            extra={"review_direct": True},
         )
 
     direct = try_direct_schedule(text)

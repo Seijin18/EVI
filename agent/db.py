@@ -45,6 +45,14 @@ def init_db() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_pending_status
                     ON pending_commitments(status, created_at DESC);
+                ALTER TABLE pending_commitments
+                    ADD COLUMN IF NOT EXISTS source_chat VARCHAR(128);
+                ALTER TABLE pending_commitments
+                    ADD COLUMN IF NOT EXISTS source_label VARCHAR(128);
+                ALTER TABLE pending_commitments
+                    ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+                ALTER TABLE pending_commitments
+                    ADD COLUMN IF NOT EXISTS confirmed_via VARCHAR(32);
                 """
             )
         conn.commit()
@@ -98,6 +106,8 @@ def insert_pending_commitment(
     due_date: str | None = None,
     priority: str = "normal",
     raw_text: str = "",
+    source_chat: str = "",
+    source_label: str = "",
 ) -> int | None:
     with _conn() as conn:
         with conn.cursor() as cur:
@@ -106,8 +116,8 @@ def insert_pending_commitment(
                 INSERT INTO pending_commitments (
                     source, source_id, type, title,
                     event_date, event_time, due_date,
-                    priority, raw_text
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    priority, raw_text, source_chat, source_label
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source, source_id) DO NOTHING
                 RETURNING id
                 """,
@@ -121,6 +131,8 @@ def insert_pending_commitment(
                     due_date or None,
                     priority,
                     raw_text[:2000] if raw_text else None,
+                    source_chat or None,
+                    source_label or None,
                 ),
             )
             row = cur.fetchone()
@@ -135,7 +147,8 @@ def list_pending_commitments(limit: int = 50) -> List[Dict[str, Any]]:
                 """
                 SELECT id, source, source_id, type, title,
                        event_date::text, event_time, due_date::text,
-                       priority, status, raw_text, created_at
+                       priority, status, raw_text, source_chat, source_label,
+                       confirmed_at, confirmed_via, created_at
                 FROM pending_commitments
                 WHERE status = 'pending'
                 ORDER BY
@@ -154,20 +167,60 @@ def list_pending_commitments(limit: int = 50) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-def update_commitment_status(commitment_id: int, status: str) -> bool:
+def update_commitment_status(
+    commitment_id: int,
+    status: str,
+    *,
+    confirmed_via: str | None = None,
+) -> bool:
     with _conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE pending_commitments
-                SET status = %s
-                WHERE id = %s AND status = 'pending'
-                """,
-                (status, commitment_id),
-            )
+            if status == "scheduled" and confirmed_via:
+                cur.execute(
+                    """
+                    UPDATE pending_commitments
+                    SET status = %s, confirmed_at = NOW(), confirmed_via = %s
+                    WHERE id = %s AND status = 'pending'
+                    """,
+                    (status, confirmed_via, commitment_id),
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE pending_commitments
+                    SET status = %s
+                    WHERE id = %s AND status = 'pending'
+                    """,
+                    (status, commitment_id),
+                )
             ok = cur.rowcount > 0
         conn.commit()
     return ok
+
+
+def list_scheduled_today(limit: int = 50) -> List[Dict[str, Any]]:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, source, source_id, type, title,
+                       event_date::text, event_time, due_date::text,
+                       priority, status, source_chat, source_label,
+                       confirmed_at, confirmed_via, created_at
+                FROM pending_commitments
+                WHERE status = 'scheduled'
+                  AND (
+                    event_date = CURRENT_DATE
+                    OR due_date = CURRENT_DATE
+                    OR confirmed_at::date = CURRENT_DATE
+                  )
+                ORDER BY confirmed_at DESC NULLS LAST, created_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
 
 
 def count_unnotified_pending() -> int:

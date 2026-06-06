@@ -277,8 +277,12 @@ def run_watcher() -> bool:
 
 def run_evolution() -> bool:
     import json
+    import tempfile
+    from pathlib import Path as P
 
+    from services.evolution_filter import filter_for_processing
     from services.evolution_parser import parse_evolution_webhook
+    from services.evolution_client import is_evi_bot_message
     from services.whatsapp_processor import extract_commitment
 
     fixtures = [
@@ -298,6 +302,18 @@ def run_evolution() -> bool:
             ok = False
         elif "Reunião" in msgs[0].text:
             ok = ok and extract_commitment(msgs[0]) is not None
+        if msgs and msgs[0].ts:
+            ok = ok and "T" in msgs[0].ts
+    with tempfile.TemporaryDirectory() as tmp:
+        kept, stats, dropped = filter_for_processing(
+            parse_evolution_webhook(json.loads((FIXTURES / "evolution" / "messages_upsert.json").read_text())),
+            log_dir=P(tmp),
+        )
+        ok = ok and stats["received"] >= 1
+        if dropped:
+            ok = ok and bool(dropped[0].get("message_ts"))
+    ok = ok and is_evi_bot_message("[EVI] teste")
+    ok = ok and not is_evi_bot_message("oi")
     return _result("evolution", ok, f"parsed={parsed}")
 
 

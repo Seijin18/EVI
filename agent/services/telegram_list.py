@@ -1,9 +1,11 @@
-"""Direct list/review for Telegram (Calendar events or pending WhatsApp commitments)."""
+"""Backward-compatible wrappers — see commitment_review.handler."""
 
 from __future__ import annotations
 
 import re
 from typing import Optional
+
+from services.commitment_review.handler import try_direct_review
 
 _LIST_INTENT = re.compile(
     r"\b("
@@ -15,7 +17,6 @@ _LIST_INTENT = re.compile(
     r")\b",
     re.I,
 )
-_PENDING = re.compile(r"\bpendente?s?\b", re.I)
 
 
 def wants_list(text: str) -> bool:
@@ -23,18 +24,4 @@ def wants_list(text: str) -> bool:
 
 
 def try_direct_list(text: str) -> Optional[str]:
-    """List calendar events or pending commitments without LLM."""
-    if not wants_list(text):
-        return None
-
-    if _PENDING.search(text):
-        from tools.commitment_tools import list_pending_commitments
-
-        raw = list_pending_commitments.invoke({"limit": 20})
-        if raw == "No pending commitments.":
-            return "Nenhum compromisso pendente do WhatsApp."
-        return f"Compromissos pendentes (WhatsApp):\n{raw}"
-
-    from tools.calendar_tool import list_calendar_events
-
-    return list_calendar_events.invoke({"days_ahead": 7, "limit": 25})
+    return try_direct_review(text, confirmed_via="telegram")

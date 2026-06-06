@@ -66,6 +66,21 @@ Extracted commitments from Evolution webhooks SHALL be persisted to Postgres `pe
 - **WHEN** commitment text contains urgency keywords
 - **THEN** priority is classified as `urgent`, `work`, or `university` when matched
 
+### Requirement: Evolution webhook log observability
+Evolution webhook processing SHALL write JSONL audit lines with processing timestamp `ts` and WhatsApp message time `message_ts` when available.
+
+#### Scenario: SCN-WA-13
+- **WHEN** a message is ingested after filtering
+- **THEN** log line includes `step: ingest`, `message_ts`, `sender`, `from_me`, `is_group`
+
+#### Scenario: SCN-WA-14
+- **WHEN** a parsed message is dropped by `evolution_filter`
+- **THEN** log line includes `step: filtered_out`, `reason`, and `message_ts`
+
+#### Scenario: SCN-WA-15
+- **WHEN** `messages.upsert` yields zero parsed messages
+- **THEN** skip log MAY include `hint: parser_empty_text_or_unsupported_type`
+
 ### Requirement: Pending commitment notifications
 The system SHALL notify via Telegram when configured and either 5+ unnotified pending items exist or a new item has high priority.
 

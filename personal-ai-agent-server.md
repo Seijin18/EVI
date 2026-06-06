@@ -2,8 +2,8 @@
 
 > **Hardware**: Intel i5-7400 · 16GB DDR4 · GTX 1060 3GB · Pop!_OS/Ubuntu
 > **Budget**: $0/month · **Stack**: LangGraph + **Windmill** + Evolution API + Ollama + Qdrant + Postgres  
-> **Version**: 2.1 — Windmill orchestration; OpenSpec-driven (`openspec/specs/`)  
-> **Legacy note**: n8n removed from compose; this guide retains historical MCP/n8n sections below.
+> **Version**: 2.2 — Windmill orchestration; **requirements:** [`openspec/specs/`](openspec/specs/) · **status:** [`Progress.md`](Progress.md) · **backlog:** [`openspec/BACKLOG.md`](openspec/BACKLOG.md)  
+> **Legacy note**: Sections below may be outdated; trust OpenSpec specs for as-built behavior.
 
 ---
 
@@ -29,8 +29,8 @@ Evolution webhook → extract + priority → Postgres pending_commitments
 **Windmill OAuth resources:** `gcal` (Calendar), `gcloud` (Google Tasks API scope), `gmail`.  
 **Env:** `WINDMILL_*_RESOURCE`, `WINDMILL_CALENDAR_ID`, `WINDMILL_TOKEN`. See `windmill/README.md`.
 
-**OpenSpec:** archived `evi-commitment-close-loop` (June 2026); verify `python3 tests/unit/test_commitment_tools.py && ./scripts/evi-test smoke`.  
-**Next:** `evi-windmill-live-verify`, `evi-telegram-digest-e2e` — see `Progress.md`.
+**Verify:** `./scripts/evi-test smoke` · `openspec validate --specs`  
+**Next changes:** see [`openspec/BACKLOG.md`](openspec/BACKLOG.md).
 
 ---
 

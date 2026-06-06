@@ -41,7 +41,25 @@ def list_pending_commitments(limit: int = 20) -> str:
 
 
 @tool
-def confirm_commitments(commitment_ids: List[int]) -> str:
+def list_scheduled_today(limit: int = 25) -> str:
+    """List commitments scheduled today with source chat and confirmation channel."""
+    from db import init_db, list_scheduled_today as _list_today
+    from services.commitment_review.digest import format_scheduled_today
+
+    init_db()
+    rows = _list_today(limit=limit)
+    for r in rows:
+        for k in ("created_at", "confirmed_at"):
+            if r.get(k):
+                r[k] = str(r[k])
+    return format_scheduled_today(rows)
+
+
+@tool
+def confirm_commitments(
+    commitment_ids: List[int],
+    confirmed_via: str = "chat",
+) -> str:
     """
     Confirm selected pending commitments: events → Google Calendar, tasks → Google Tasks.
     Marks rows as scheduled on success.
@@ -65,7 +83,9 @@ def confirm_commitments(commitment_ids: List[int]) -> str:
                 }
             )
             if "created" in out.lower():
-                update_commitment_status(int(cid), "scheduled")
+                update_commitment_status(
+                    int(cid), "scheduled", confirmed_via=confirmed_via
+                )
                 results.append(f"#{cid}: {out[:120]}")
             else:
                 results.append(f"#{cid}: failed — {out[:200]}")
@@ -83,7 +103,9 @@ def confirm_commitments(commitment_ids: List[int]) -> str:
             }
         )
         if "created" in out.lower():
-            update_commitment_status(int(cid), "scheduled")
+            update_commitment_status(
+                int(cid), "scheduled", confirmed_via=confirmed_via
+            )
             results.append(f"#{cid}: {out[:120]}")
         else:
             results.append(f"#{cid}: failed — {out[:200]}")

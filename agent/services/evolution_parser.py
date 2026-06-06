@@ -72,6 +72,7 @@ def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
         text = _text_from_message(item)
         if not text.strip():
             continue
+        label = str(item.get("pushName") or key.get("pushName") or "")
         ts = str(
             item.get("messageTimestamp")
             or item.get("timestamp")
@@ -88,6 +89,7 @@ def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
                 ts=ts or "",
                 from_me=from_me,
                 is_group=is_group,
+                label=label,
             )
         )
     return results

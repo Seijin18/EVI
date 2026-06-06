@@ -13,6 +13,7 @@ from tools.commitment_tools import (
     confirm_commitments,
     dismiss_commitments,
     list_pending_commitments,
+    list_scheduled_today,
 )
 from tools.task_tool import create_task
 
@@ -29,6 +30,7 @@ def get_all_tools():
         create_task,
         summarize_inbox,
         list_pending_commitments,
+        list_scheduled_today,
         confirm_commitments,
         dismiss_commitments,
     ]

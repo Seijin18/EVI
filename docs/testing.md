@@ -26,6 +26,11 @@ Three tiers:
 | Telegram (live E2E) | `./scripts/evi-telegram-verify.sh` | SCN-TG-02, SCN-WA-12 |
 | Telegram (mock) | `./scripts/evi-test telegram` | SCN-TG-01 |
 | Telegram (live webhook) | `./scripts/evi-test telegram --live-telegram` | SCN-TG-02 |
+| Telegram (polling) | `TELEGRAM_MODE=polling` + poller startup | SCN-TG-04 |
+| Telegram (direct list) | `tests/unit/test_telegram_list.py` | SCN-TG-05 |
+| Calendar list events | `tests/unit/test_telegram_list.py` | SCN-CAL-06 |
+| Evolution log fields | `./scripts/evi-test evolution` | SCN-WA-13..15 |
+| JSONL log retention | `agent/services/log_retention.py` | SCN-OPS-02 |
 | Notes | `./scripts/evi-test notes` | SCN-NOTE-02 |
 | Session/Postgres | `DATABASE_URL=... ./scripts/evi-test session` | SCN-E2E-03 |
 

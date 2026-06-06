@@ -52,6 +52,28 @@ def _save_seen_ids(path: Path, seen: Set[str]) -> None:
     path.write_text(json.dumps(trimmed), encoding="utf-8")
 
 
+def seen_ids_path(log_dir: Path | None = None) -> Path:
+    return (log_dir or Path("/tmp/evi-logs")) / "evolution_seen_ids.json"
+
+
+def claim_message_id(msg_id: str, *, log_dir: Path | None = None) -> bool:
+    """Return True if id is new (claim it); False if duplicate and dedupe is on."""
+    dedupe = os.getenv("EVI_WHATSAPP_DEDUPE_IDS", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if not dedupe or not msg_id:
+        return True
+    path = seen_ids_path(log_dir)
+    seen = _load_seen_ids(path)
+    if msg_id in seen:
+        return False
+    seen.add(msg_id)
+    _save_seen_ids(path, seen)
+    return True
+
+
 def _parse_group_whitelist() -> Set[str]:
     raw = os.getenv("EVI_WHATSAPP_GROUP_WHITELIST", "").strip()
     if not raw:
@@ -97,7 +119,7 @@ def filter_for_processing(
         return [], stats, dropped
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_h)
-    seen_path = (log_dir or Path("/tmp/evi-logs")) / "evolution_seen_ids.json"
+    seen_path = seen_ids_path(log_dir)
     seen = _load_seen_ids(seen_path) if dedupe else set()
 
     def _drop(msg: IncomingMessage, reason: str) -> None:
@@ -113,8 +135,14 @@ def filter_for_processing(
             }
         )
 
+    evi_prefix = os.getenv("EVI_WHATSAPP_REPLY_PREFIX", "[EVI] ").strip()
+
     candidates: List[IncomingMessage] = []
     for msg in messages:
+        if evi_prefix and msg.text.strip().startswith(evi_prefix):
+            stats["skipped_from_me"] += 1
+            _drop(msg, "evi_echo")
+            continue
         if incoming_only and msg.from_me:
             stats["skipped_from_me"] += 1
             _drop(msg, "from_me")

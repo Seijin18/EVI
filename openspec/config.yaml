@@ -20,6 +20,11 @@ context: |
   Verification: Tier 1 unit tests + Tier 2 ./scripts/evi-test <feature> before archive.
   Apply: use `openspec instructions apply --change <name> --json` for contextFiles only.
 
+  Architecture review ritual (quarterly or after major feature):
+  1. `./scripts/evi-test smoke` + `openspec validate --specs`
+  2. Compare as-built vs `openspec/specs/`; update `openspec/BACKLOG.md`
+  3. One active change; archive before starting next.
+
 rules:
   proposal:
     - Max 15 lines of intent; link product priority.

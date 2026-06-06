@@ -106,6 +106,8 @@ Horários são **relógio local** (`09:00` = 9h em `EVI_TIMEZONE`), não UTC. Ap
 
 Resource OAuth atual após reconectar: confira com `wmill resource list`.
 
+**Token frio / 422 na primeira chamada:** Windmill pode renovar o OAuth do resource (`gcal`, `gtasks`, `gmail`) só após o primeiro acesso. O agent repete automaticamente uma vez (`EVI_WINDMILL_RETRY_ATTEMPTS=2`, pausa `EVI_WINDMILL_RETRY_DELAY_SEC=2`).
+
 ## Google Tasks (`create_task`)
 
 O EVI chama `create_task` → Windmill → Google Tasks API usando o resource em `WINDMILL_GTASKS_RESOURCE` (parâmetro `gtasks` no script).

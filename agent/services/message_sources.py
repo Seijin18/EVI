@@ -17,6 +17,7 @@ class IncomingMessage:
     ts: str  # ISO-8601
     from_me: bool = False
     is_group: bool = False
+    label: str = ""  # pushName or chat display name
 
 
 class MessageSource(ABC):

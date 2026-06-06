@@ -15,3 +15,7 @@
 | Compose healthchecks | Done | SCN-OPS-01 healthchecks + depends_on healthy |
 | WhatsApp live adapter | Integration | Meta / Twilio / export — see remote-access design |
 | GitHub Actions CI | Ops | Optional; local `evi-test smoke` for now |
+| WhatsApp reply on confirm | Cancelled | Use control-chat + multichannel review instead |
+| Commitment audit (scheduled + source chat) | Feature | `evi-commitment-audit` — see `openspec/BACKLOG.md` |
+| Multichannel commitment digest/review | Feature | `evi-commitment-review-multichannel` |
+| WhatsApp control chat (`[EVI]` prefix) | Feature | `evi-whatsapp-control-chat` |

@@ -42,6 +42,12 @@ PYTHONPATH=agent python3 tests/unit/test_whatsapp_processor.py
 openspec validate <change>
 ```
 
+## Backlog and review
+
+- Propose queue: [`BACKLOG.md`](BACKLOG.md)
+- Deferred only: [`specs/roadmap.md`](specs/roadmap.md)
+- After archive: update BACKLOG status; `openspec validate --specs`
+
 ## Do not read by default
 
 - `personal-ai-agent-server.md`, `Progress.md`, `.cursor/plans/`

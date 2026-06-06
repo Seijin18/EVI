@@ -8,7 +8,7 @@ alwaysApply: true
 ## Before proposing or planning
 
 1. `openspec list` — prefer **zero** active changes; archive or finish the current one first.
-2. **One feature = one change** (kebab-case), e.g. `evi-commitment-inbox`.
+2. **One feature = one change** (kebab-case), e.g. `evi-commitment-review-multichannel`.
 3. Product priority (from `openspec/config.yaml`): WhatsApp commitments / productivity > Telegram > dev bridge > university RAG.
 
 ## Propose a change
@@ -26,29 +26,28 @@ alwaysApply: true
 
 ## New chat (low context)
 
-First message should name the target change, e.g. *Implement `evi-commitment-inbox` via `openspec instructions apply --json`.*
+First message should name the target change, e.g. *Implement `evi-commitment-review-multichannel` via `openspec instructions apply --json`.*
 
-## Roadmap order (reference)
+## Active backlog (Jun 2026 — P0–P3 done)
 
-| P | Change | Notes |
-|---|--------|-------|
-| P0 | `evi-cursor-openspec-rules` | Cursor rules (DX) |
-| P0 | `evi-calendar-windmill-as-built` | Spec = live Calendar |
-| P0 | `evi-commitment-inbox` | Postgres queue |
-| P1 | `evi-commitment-review-chat` | List/confirm in chat |
-| P1 | `evi-commitment-notifications` | Telegram digest |
-| P2 | `evi-windmill-google-tasks` / `evi-windmill-gmail-summary` | Windmill scripts |
-| P3 | `evi-whatsapp-group-whitelist-spec`, `evi-deprecate-n8n-spec` | Spec cleanup |
+Full ordered queue: [`openspec/BACKLOG.md`](../../openspec/BACKLOG.md)
 
-Dependencies: inbox → review & notify; calendar-as-built → review (schedule_event).
+| Status | Change |
+|--------|--------|
+| Done | P0–P3 (inbox, review, Windmill, WhatsApp whitelist, n8n deprecate) |
+| Done | `evi-as-built-baseline-v2` (spec sync + docs) |
+| Next | `evi-whatsapp-observability` → `evi-commitment-review-multichannel` → audit → control chat |
+
+**Cancelled:** `evi-whatsapp-reply` — use control chat + multichannel review instead.
 
 ## Do not read by default
 
-- `personal-ai-agent-server.md`, `Progress.md`
+- `personal-ai-agent-server.md`, `Progress.md` (use as index only)
 - `openspec/changes/archive/**`
 - Old `.cursor/plans/` unless the user points to the current plan
 
 ## Index
 
 - [openspec/AGENTS.md](../../openspec/AGENTS.md) — domain map + verify commands
+- [openspec/BACKLOG.md](../../openspec/BACKLOG.md) — propose queue
 - [openspec/specs/roadmap.md](../../openspec/specs/roadmap.md) — deferred items only
