@@ -3,27 +3,18 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
 from typing import List
 
 from langchain_core.tools import tool
 
+from tools.calendar_time import iso_event_range
 from tools.calendar_tool import schedule_event
 from tools.task_tool import create_task
 
 
-def _iso_range(event_date: str | None, event_time: str | None) -> tuple[str, str]:
-    date = event_date or datetime.now().strftime("%Y-%m-%d")
-    time = event_time or "12:00"
-    if len(time) == 5:
-        start = datetime.strptime(f"{date}T{time}:00", "%Y-%m-%dT%H:%M:%S")
-    else:
-        start = datetime.strptime(f"{date}T12:00:00", "%Y-%m-%dT%H:%M:%S")
-    end = start + timedelta(hours=1)
-    return (
-        start.strftime("%Y-%m-%dT%H:%M:%S"),
-        end.strftime("%Y-%m-%dT%H:%M:%S"),
-    )
+def _tool_succeeded(out: str) -> bool:
+    low = out.lower()
+    return "created" in low or "criado" in low
 
 
 @tool
@@ -82,7 +73,7 @@ def confirm_commitments(
                     "notes": (row.get("raw_text") or "")[:500],
                 }
             )
-            if "created" in out.lower():
+            if _tool_succeeded(out):
                 update_commitment_status(
                     int(cid), "scheduled", confirmed_via=confirmed_via
                 )
@@ -93,7 +84,7 @@ def confirm_commitments(
         if row["type"] != "event":
             results.append(f"#{cid}: unsupported type {row['type']}")
             continue
-        start, end = _iso_range(row.get("event_date"), row.get("event_time"))
+        start, end = iso_event_range(row.get("event_date"), row.get("event_time"))
         out = schedule_event.invoke(
             {
                 "title": row["title"],
@@ -102,7 +93,7 @@ def confirm_commitments(
                 "description": (row.get("raw_text") or "")[:500],
             }
         )
-        if "created" in out.lower():
+        if _tool_succeeded(out):
             update_commitment_status(
                 int(cid), "scheduled", confirmed_via=confirmed_via
             )

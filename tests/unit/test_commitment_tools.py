@@ -58,7 +58,9 @@ def test_confirm_event_calls_schedule():
         }
     ]
     updates = []
-    _db.update_commitment_status = lambda cid, status: updates.append((cid, status)) or True
+    _db.update_commitment_status = (
+        lambda cid, status, confirmed_via="chat": updates.append((cid, status)) or True
+    )
     with patch(
         "tools.calendar_tool.post_windmill",
         return_value='{"status":"created","action":"schedule_event"}',
@@ -80,7 +82,9 @@ def test_confirm_task_calls_create_task():
         }
     ]
     updates = []
-    _db.update_commitment_status = lambda cid, status: updates.append((cid, status)) or True
+    _db.update_commitment_status = (
+        lambda cid, status, confirmed_via="chat": updates.append((cid, status)) or True
+    )
     with patch(
         "tools.task_tool.post_windmill",
         return_value='{"status":"created","action":"create_task"}',
