@@ -249,7 +249,18 @@ def evolution_webhook(
     ts = datetime.now(timezone.utc).isoformat()
     event = body.get("event") or body.get("type") or "unknown"
     raw = parse_evolution_webhook(body)
-    messages, filter_stats = filter_for_processing(raw, log_dir=log_dir)
+    messages, filter_stats, dropped = filter_for_processing(raw, log_dir=log_dir)
+
+    for item in dropped:
+        append_jsonl(
+            log_path,
+            {
+                "ts": ts,
+                "step": "filtered_out",
+                "event": event,
+                **item,
+            },
+        )
 
     if messages:
         proc = WhatsAppProcessor(log_path=log_path)
@@ -258,16 +269,16 @@ def evolution_webhook(
         proc.flush_log()
     else:
         commitments = []
-        append_jsonl(
-            log_path,
-            {
-                "ts": ts,
-                "step": "skip",
-                "event": event,
-                "parsed": len(raw),
-                **filter_stats,
-            },
-        )
+        entry = {
+            "ts": ts,
+            "step": "skip",
+            "event": event,
+            "parsed": len(raw),
+            **filter_stats,
+        }
+        if event == "messages.upsert" and len(raw) == 0:
+            entry["hint"] = "parser_empty_text_or_unsupported_type"
+        append_jsonl(log_path, entry)
     rows = [c.to_golden_row() for c in commitments]
     queued_ids: list[int] = []
     try:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from services.message_sources import IncomingMessage
@@ -79,7 +79,7 @@ def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
             or ""
         )
         if ts.isdigit():
-            ts = datetime.utcfromtimestamp(int(ts)).isoformat()
+            ts = datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat()
         results.append(
             IncomingMessage(
                 id=str(msg_id),

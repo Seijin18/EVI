@@ -6,9 +6,19 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, TypedDict
 
 from services.message_sources import IncomingMessage
+
+
+class DroppedMessage(TypedDict):
+    source_id: str
+    message_ts: str
+    sender: str
+    from_me: bool
+    is_group: bool
+    raw_preview: str
+    reason: str
 
 _MAX_SEEN_IDS = 5000
 
@@ -53,7 +63,7 @@ def filter_for_processing(
     messages: List[IncomingMessage],
     *,
     log_dir: Path | None = None,
-) -> Tuple[List[IncomingMessage], Dict[str, int]]:
+) -> Tuple[List[IncomingMessage], Dict[str, int], List[DroppedMessage]]:
     """Keep only recent, new, incoming direct-chat messages."""
     max_per = int(os.getenv("EVI_WHATSAPP_MAX_PER_WEBHOOK", "10"))
     max_age_h = float(os.getenv("EVI_WHATSAPP_MAX_AGE_HOURS", "24"))
@@ -82,27 +92,45 @@ def filter_for_processing(
         "skipped_seen": 0,
         "kept": 0,
     }
+    dropped: List[DroppedMessage] = []
     if not messages:
-        return [], stats
+        return [], stats, dropped
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_h)
     seen_path = (log_dir or Path("/tmp/evi-logs")) / "evolution_seen_ids.json"
     seen = _load_seen_ids(seen_path) if dedupe else set()
 
+    def _drop(msg: IncomingMessage, reason: str) -> None:
+        dropped.append(
+            {
+                "source_id": msg.id,
+                "message_ts": msg.ts or "",
+                "sender": msg.sender,
+                "from_me": msg.from_me,
+                "is_group": msg.is_group,
+                "raw_preview": msg.text[:80],
+                "reason": reason,
+            }
+        )
+
     candidates: List[IncomingMessage] = []
     for msg in messages:
         if incoming_only and msg.from_me:
             stats["skipped_from_me"] += 1
+            _drop(msg, "from_me")
             continue
         if skip_groups and msg.is_group and msg.sender not in group_whitelist:
             stats["skipped_group"] += 1
+            _drop(msg, "group")
             continue
         parsed = _parse_ts(msg.ts)
         if parsed and parsed < cutoff:
             stats["skipped_old"] += 1
+            _drop(msg, "old")
             continue
         if dedupe and msg.id in seen:
             stats["skipped_seen"] += 1
+            _drop(msg, "seen")
             continue
         candidates.append(msg)
 
@@ -112,9 +140,11 @@ def filter_for_processing(
     )
     kept = candidates[:max_per]
     stats["kept"] = len(kept)
+    for msg in candidates[max_per:]:
+        _drop(msg, "max_per_webhook")
 
     if dedupe and kept:
         seen.update(m.id for m in kept)
         _save_seen_ids(seen_path, seen)
 
-    return kept, stats
+    return kept, stats, dropped

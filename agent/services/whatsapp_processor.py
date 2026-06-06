@@ -154,8 +154,18 @@ class WhatsAppProcessor:
         seen: set[str] = set()
         results: List[Commitment] = []
         for msg in messages:
-            preview = msg.text[:50] + ("..." if len(msg.text) > 50 else "")
-            self.log({"step": "ingest", "source_id": msg.id, "raw_preview": preview})
+            preview = msg.text[:80] + ("..." if len(msg.text) > 80 else "")
+            self.log(
+                {
+                    "step": "ingest",
+                    "message_ts": msg.ts or "",
+                    "source_id": msg.id,
+                    "sender": msg.sender,
+                    "from_me": msg.from_me,
+                    "is_group": msg.is_group,
+                    "raw_preview": preview,
+                }
+            )
 
             c = extract_commitment(msg)
             if c and c.source_id not in seen:

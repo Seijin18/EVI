@@ -35,27 +35,31 @@ def _env(**overrides: str):
 def test_skips_groups_by_default(tmp_path):
     env = {"EVI_WHATSAPP_SKIP_GROUPS": "true", "EVI_WHATSAPP_DEDUPE_IDS": "false"}
     with patch.dict(os.environ, env, clear=True):
-        kept, stats = filter_for_processing([_group_msg()], log_dir=tmp_path)
+        kept, stats, dropped = filter_for_processing([_group_msg()], log_dir=tmp_path)
 
     assert kept == []
     assert stats["skipped_group"] == 1
+    assert dropped[0]["reason"] == "group"
+    assert dropped[0]["message_ts"]
 
 
 def test_whitelisted_group_passes(tmp_path):
     with _env(EVI_WHATSAPP_GROUP_WHITELIST=GROUP_JID):
-        kept, stats = filter_for_processing([_group_msg()], log_dir=tmp_path)
+        kept, stats, dropped = filter_for_processing([_group_msg()], log_dir=tmp_path)
 
     assert len(kept) == 1
+    assert dropped == []
     assert kept[0].sender == GROUP_JID
     assert stats["skipped_group"] == 0
 
 
 def test_non_whitelisted_group_still_skipped(tmp_path):
     with _env(EVI_WHATSAPP_GROUP_WHITELIST=GROUP_JID):
-        kept, stats = filter_for_processing([_group_msg(jid=OTHER_GROUP)], log_dir=tmp_path)
+        kept, stats, dropped = filter_for_processing([_group_msg(jid=OTHER_GROUP)], log_dir=tmp_path)
 
     assert kept == []
     assert stats["skipped_group"] == 1
+    assert dropped[0]["reason"] == "group"
 
 
 if __name__ == "__main__":
