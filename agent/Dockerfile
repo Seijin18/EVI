@@ -6,7 +6,9 @@ RUN pip install --no-cache-dir \
     fastapi uvicorn \
     langchain langgraph langchain-community \
     langchain-ollama langchain-qdrant \
-    qdrant-client httpx pymupdf requests psycopg2-binary prometheus-client neo4j
+    qdrant-client httpx pymupdf requests psycopg2-binary prometheus-client neo4j \
+    # Optional LLM providers — install only what EVI_LLM_PROVIDER requires
+    langchain-google-genai langchain-openai langchain-anthropic
 
 COPY . .
 

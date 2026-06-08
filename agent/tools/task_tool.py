@@ -2,13 +2,13 @@ import os
 
 from langchain_core.tools import tool
 
-from tools.windmill_client import post_windmill
+from integrations.factory import get_integration
 
 
 @tool
 def create_task(title: str, due_date: str = "", notes: str = "") -> str:
     """
-    Create a Google Task via Windmill script/webhook.
+    Create a Google Task via the configured orchestration backend.
     """
     gtasks = os.getenv("WINDMILL_GTASKS_RESOURCE", "gtasks").strip()
     if not gtasks.startswith("$res:"):
@@ -19,13 +19,7 @@ def create_task(title: str, due_date: str = "", notes: str = "") -> str:
         "notes": notes,
         "gtasks": gtasks,
     }
-    result = post_windmill(
-        "WINDMILL_WEBHOOK_TASKS",
-        payload,
-        "http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/create_task",
-        timeout=180,
-        wait_result=True,
-    )
+    result = get_integration().post("create_task", payload, timeout=180, wait_result=True)
     if "failed" in result.lower():
         return f"Failed to create task. {result}"
     if '"status":"created"' in result or '"status": "created"' in result:

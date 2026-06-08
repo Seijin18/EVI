@@ -61,12 +61,11 @@ def test_confirm_event_calls_schedule():
     _db.update_commitment_status = (
         lambda cid, status, confirmed_via="chat": updates.append((cid, status)) or True
     )
-    with patch(
-        "tools.calendar_tool.post_windmill",
-        return_value='{"status":"created","action":"schedule_event"}',
-    ) as sched:
+    mock_client = MagicMock()
+    mock_client.post.return_value = '{"status":"created","action":"schedule_event"}'
+    with patch("tools.calendar_tool.get_integration", return_value=mock_client):
         out = confirm_commitments.invoke({"commitment_ids": [2]})
-    assert sched.called
+    assert mock_client.post.called
     assert updates == [(2, "scheduled")]
     assert "#2:" in out
 
@@ -85,13 +84,12 @@ def test_confirm_task_calls_create_task():
     _db.update_commitment_status = (
         lambda cid, status, confirmed_via="chat": updates.append((cid, status)) or True
     )
-    with patch(
-        "tools.task_tool.post_windmill",
-        return_value='{"status":"created","action":"create_task"}',
-    ) as task:
+    mock_task_client = MagicMock()
+    mock_task_client.post.return_value = '{"status":"created","action":"create_task"}'
+    with patch("tools.task_tool.get_integration", return_value=mock_task_client):
         confirm_commitments.invoke({"commitment_ids": [3]})
-    assert task.called
-    payload = task.call_args[0][1]
+    assert mock_task_client.post.called
+    payload = mock_task_client.post.call_args[0][1]
     assert payload["title"] == "Comprar leite"
     assert payload["due_date"] == "2026-06-12"
     assert updates == [(3, "scheduled")]

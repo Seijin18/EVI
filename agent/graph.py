@@ -5,19 +5,13 @@ from datetime import datetime, timedelta
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import SystemMessage
-from langchain_ollama import ChatOllama
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
 
+from llm import build_llm
 from tools.registry import get_all_tools
 
-llm = ChatOllama(
-    model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct-q4_K_M"),
-    base_url=os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
-    temperature=0.1,
-    num_ctx=2048,
-    num_gpu=-1,
-)
+llm = build_llm()
 
 SYSTEM_PROMPT = """You are EVI, a precise and helpful personal AI assistant for Marcos (Brazil).
 

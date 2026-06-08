@@ -41,6 +41,8 @@ Three tiers:
 | GitHub Actions CI | `.github/workflows/ci.yml` | SCN-CI-01 |
 | RAG (offline) | `./scripts/evi-test rag` | SCN-RAG-01..03 wiring |
 | RAG (live Qdrant) | `./scripts/evi-test rag --live-qdrant` | SCN-RAG-04 |
+| LLM factory | `tests/unit/test_llm_factory.py` | EVI_LLM_PROVIDER, EVI_EMBED_PROVIDER |
+| Integration factory | `tests/unit/test_integration_factory.py` | EVI_ORCHESTRATOR, EVI_WHATSAPP_PROVIDER |
 | Notes | `./scripts/evi-test notes` | SCN-NOTE-02 |
 | Session/Postgres | `DATABASE_URL=... ./scripts/evi-test session` | SCN-E2E-03 |
 | Contact FS memory | `./scripts/evi-test contact-memory` | SCN-MEM-02 |

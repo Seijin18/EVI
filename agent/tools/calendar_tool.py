@@ -4,8 +4,8 @@ import re
 
 from langchain_core.tools import tool
 
+from integrations.factory import get_integration
 from tools.calendar_time import evi_timezone, normalize_wall_clock
-from tools.windmill_client import post_windmill
 
 
 def _calendar_payload(extra: dict) -> dict:
@@ -25,7 +25,7 @@ def schedule_event(
     title: str, start_time: str, end_time: str, description: str = ""
 ) -> str:
     """
-    Schedule a Google Calendar event via Windmill script/webhook.
+    Schedule a Google Calendar event via the configured orchestration backend.
 
     Args:
         title: Event title.
@@ -50,13 +50,7 @@ def schedule_event(
         "calendar_id": calendar_id,
         "timezone": tz,
     }
-    result = post_windmill(
-        "WINDMILL_WEBHOOK_CALENDAR",
-        payload,
-        "http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/schedule_event",
-        timeout=180,
-        wait_result=True,
-    )
+    result = get_integration().post("schedule_event", payload, timeout=180, wait_result=True)
     if "failed" in result.lower():
         return f"Falha ao agendar '{title}'. {result[:400]}"
 
@@ -96,13 +90,7 @@ def list_calendar_events(days_ahead: int = 7, limit: int = 25) -> str:
             "max_results": limit,
         }
     )
-    result = post_windmill(
-        "WINDMILL_WEBHOOK_LIST_EVENTS",
-        payload,
-        "http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/list_events",
-        timeout=120,
-        wait_result=True,
-    )
+    result = get_integration().post("list_events", payload, timeout=120, wait_result=True)
     if "failed" in result.lower():
         return f"Falha ao listar eventos. {result[:400]}"
 

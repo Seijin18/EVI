@@ -2,21 +2,21 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any
 from langchain_core.tools import tool
-from langchain_ollama import OllamaEmbeddings
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
+from llm import build_embeddings
+
 # Configuration
 QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
 COLLECTION_NAME = "university_notes"
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 
 # Initialize clients
 qdrant_client = QdrantClient(url=QDRANT_URL)
-embeddings_model = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_BASE_URL)
+embeddings_model = build_embeddings()
 
 # Ensure collection exists
 try:
