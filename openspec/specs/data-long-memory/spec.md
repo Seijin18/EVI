@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define phased long-term memory for EVI: hot Postgres, cold per-contact filesystem, and deferred Neo4j knowledge graph. Not yet implemented beyond hot layer.
+Define phased long-term memory for EVI: hot Postgres, cold per-contact filesystem, and optional Neo4j knowledge graph (compose profile `graph`).
 
 ## Requirements
 
@@ -13,19 +13,27 @@ The system SHALL persist recent chat turns in Postgres `messages` and structured
 - **WHEN** an Evolution webhook queues a commitment
 - **THEN** `pending_commitments` row includes `source_chat` and `raw_text`
 
-### Requirement: Cold filesystem per contact (planned)
-Future implementation SHALL store per-contact long memory under `EVI_CONTACT_MEMORY_DIR/contacts/{jid_sanitized}/` with `profile.md`, `timeline.jsonl`, and optional `summaries/YYYY-MM-DD.md`.
+### Requirement: Cold filesystem per contact
+The system SHALL store per-contact long memory under `EVI_CONTACT_MEMORY_DIR/contacts/{jid_sanitized}/` with `profile.md`, `timeline.jsonl`, and optional `summaries/YYYY-MM-DD.md`. Evolution webhook SHALL append timeline entries when commitments are queued.
 
 #### Scenario: SCN-MEM-02
-- **WHEN** `openspec/specs/data-long-memory/spec.md` is inspected
-- **THEN** the directory contract and file roles are documented
+- **WHEN** `./scripts/evi-test contact-memory` runs
+- **THEN** a timeline line is written under the contact directory contract
 
-### Requirement: Knowledge graph layer (deferred)
-Future Neo4j integration SHALL model `Contact`, `Group`, `Commitment`, `Fact`, and `Summary` nodes with relational edges; it MUST NOT ship before Etapa 5a filesystem memory is stable.
+#### Scenario: SCN-MEM-02b
+- **WHEN** `./scripts/evi-test daily-summary` runs
+- **THEN** `summaries/YYYY-MM-DD.md` is created for contacts with activity
+
+### Requirement: Knowledge graph layer (optional)
+When `NEO4J_URI` is set, the system SHALL sync `Contact` and `Commitment` nodes with `ORIGINATED_FROM` edges and expose `query_conversation_graph` tool.
 
 #### Scenario: SCN-MEM-03
-- **WHEN** roadmap is reviewed
-- **THEN** `evi-conversation-graph-neo4j` is listed after `evi-contact-filesystem-memory`
+- **WHEN** `./scripts/evi-test graph` runs offline
+- **THEN** `graph_tool.py` and `graph_sync.py` wiring is validated
+
+#### Scenario: SCN-MEM-03b
+- **WHEN** `docker compose --profile graph up -d neo4j` runs with `NEO4J_URI` on agent-api
+- **THEN** queued commitments create graph nodes (best-effort sync)
 
 ### Requirement: External episodic memory excluded
 The EVI repository MUST NOT depend on Graphiti or external episodic-memory MCP for long-term storage.

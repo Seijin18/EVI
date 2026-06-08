@@ -86,7 +86,7 @@ def run_file_organizer() -> bool:
     return _result("file-organizer", ok, "classify rules")
 
 
-def run_calendar(live_n8n: bool) -> bool:
+def run_calendar(live_windmill: bool) -> bool:
     import json
     from pathlib import Path as P
 
@@ -96,7 +96,7 @@ def run_calendar(live_n8n: bool) -> bool:
         "start_time": "2026-06-10T10:00:00Z",
         "end_time": "2026-06-10T11:00:00Z",
     }
-    if live_n8n:
+    if live_windmill:
         try:
             from tools.calendar_tool import schedule_event
 
@@ -118,7 +118,7 @@ def run_calendar(live_n8n: bool) -> bool:
         except Exception as e:
             return _result("calendar", False, str(e))
         return _result("calendar", ok, text[:200])
-    fixture = FIXTURES / "n8n" / "calendar_payload.json"
+    fixture = FIXTURES / "windmill" / "calendar_payload.json"
     if not fixture.exists():
         fixture.parent.mkdir(parents=True, exist_ok=True)
         fixture.write_text(json.dumps(payload), encoding="utf-8")
@@ -150,9 +150,9 @@ def run_calendar_list(live_windmill: bool) -> bool:
     return _result("calendar-list", ok, "offline wiring (use --live-windmill)")
 
 
-def run_tasks(live_n8n: bool) -> bool:
+def run_tasks(live_windmill: bool) -> bool:
     text = "payload ok"
-    if live_n8n:
+    if live_windmill:
         try:
             from tools.task_tool import create_task
 
@@ -164,7 +164,7 @@ def run_tasks(live_n8n: bool) -> bool:
         except Exception as e:
             return _result("tasks", False, str(e))
         return _result("tasks", ok, text[:200])
-    fixture = FIXTURES / "n8n" / "task_payload.json"
+    fixture = FIXTURES / "windmill" / "task_payload.json"
     if not fixture.exists():
         fixture.parent.mkdir(parents=True, exist_ok=True)
         fixture.write_text(
@@ -192,7 +192,7 @@ def run_email(live_windmill: bool = False) -> bool:
         except Exception as e:
             return _result("email", False, str(e))
         return _result("email", ok, text[:200])
-    fixture = FIXTURES / "n8n" / "email_summary.json"
+    fixture = FIXTURES / "windmill" / "email_summary.json"
     if not fixture.exists():
         return _result("email", False, "fixture missing")
     data = json.loads(fixture.read_text())
@@ -484,6 +484,141 @@ def run_health(live: bool) -> bool:
     return _result("health", ok, "offline wiring (use --full for live)")
 
 
+def run_contact_memory() -> bool:
+    import tempfile
+
+    from services.contact_filesystem import ingest_commitment, memory_enabled
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["EVI_CONTACT_MEMORY_DIR"] = tmp
+        ok = ingest_commitment(
+            jid="evi-test@s.whatsapp.net",
+            source_id="harness-1",
+            title="Harness event",
+            raw_text="SCN-MEM-02",
+            commitment_id=99,
+            label="Harness",
+        )
+        ok = ok and memory_enabled()
+        timeline = Path(tmp) / "contacts" / "evi-test@s.whatsapp.net" / "timeline.jsonl"
+        ok = ok and timeline.is_file() and timeline.read_text(encoding="utf-8").strip()
+    return _result("contact-memory", ok, "FS ingest")
+
+
+def run_daily_summary() -> bool:
+    import tempfile
+
+    from services.contact_filesystem import ingest_commitment
+    from services.daily_summary import run_daily_summaries
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["EVI_CONTACT_MEMORY_DIR"] = tmp
+        ingest_commitment(
+            jid="evi-test@s.whatsapp.net",
+            source_id="harness-2",
+            title="Summary item",
+            raw_text="hoje",
+            commitment_id=100,
+        )
+        n = run_daily_summaries()
+        summaries = list(Path(tmp).glob("contacts/*/summaries/*.md"))
+        ok = n >= 1 and bool(summaries)
+    return _result("daily-summary", ok, f"written={n}")
+
+
+def run_graph() -> bool:
+    tool = AGENT_DIR / "tools" / "graph_tool.py"
+    sync = AGENT_DIR / "services" / "graph_sync.py"
+    if not tool.is_file() or not sync.is_file():
+        return _result("graph", False, "graph modules missing")
+    src = tool.read_text(encoding="utf-8")
+    ok = "query_conversation_graph" in src and "NEO4J_URI" in sync.read_text(encoding="utf-8")
+    if os.getenv("NEO4J_URI"):
+        try:
+            from tools.graph_tool import query_conversation_graph
+
+            out = str(query_conversation_graph.invoke({"jid": "", "limit": 3}))
+            ok = ok and ("disabled" not in out.lower() or "No graph" in out)
+        except Exception as e:
+            return _result("graph", False, str(e))
+        return _result("graph", ok, out[:120])
+    return _result("graph", ok, "offline wiring (set NEO4J_URI for live)")
+
+
+def run_memory_live() -> bool:
+    """Live stack validation: FS on mounted volume, daily-summary job, optional Neo4j."""
+    mem_dir = os.getenv("EVI_CONTACT_MEMORY_DIR", "").strip()
+    if not mem_dir:
+        return _result("memory-live", True, "skipped (EVI_CONTACT_MEMORY_DIR unset)")
+
+    from services.contact_filesystem import contact_dir, ingest_commitment, memory_enabled
+    from services.daily_summary import run_daily_summaries
+
+    jid = "evi-memory-live@s.whatsapp.net"
+    sid = f"live-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    ok = memory_enabled()
+    ok = ok and ingest_commitment(
+        jid=jid,
+        source_id=sid,
+        title="Memory live test",
+        raw_text="validação memória longa",
+        commitment_id=9001,
+        label="EVI harness",
+    )
+    timeline = contact_dir(jid) / "timeline.jsonl"
+    ok = ok and timeline.is_file() and sid in timeline.read_text(encoding="utf-8")
+
+    n = run_daily_summaries()
+    summaries = list(contact_dir(jid).glob("summaries/*.md"))
+    ok = ok and n >= 1 and bool(summaries)
+
+    base = os.getenv("EVI_API_URL", "").strip()
+    if not base:
+        base = (
+            "http://127.0.0.1:8000"
+            if (AGENT_DIR / "main.py").is_file()
+            else "http://localhost:8002"
+        )
+    base = base.rstrip("/")
+    api_key = os.getenv("EVI_API_KEY", "").strip()
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["X-Api-Key"] = api_key
+    try:
+        import httpx
+
+        r = httpx.post(f"{base}/jobs/daily-summary", headers=headers, json={}, timeout=30.0)
+        ok = ok and r.status_code == 200 and r.json().get("ok") is True
+        job_detail = f"job_written={r.json().get('written')}"
+    except Exception as e:
+        return _result("memory-live", False, f"daily-summary job: {e}")
+
+    graph_detail = "graph=skipped"
+    if os.getenv("NEO4J_URI", "").strip() and os.getenv("NEO4J_PASSWORD", "").strip():
+        from services.graph_sync import run_cypher, sync_commitment
+        from tools.graph_tool import query_conversation_graph
+
+        synced = sync_commitment(
+            commitment_id=9001,
+            jid=jid,
+            title="Memory live test",
+            ctype="event",
+            status="pending",
+            label="EVI harness",
+        )
+        rows = run_cypher(
+            "MATCH (c:Contact {jid: $jid})<-[:ORIGINATED_FROM]-(m:Commitment {id: $cid}) "
+            "RETURN m.title AS title LIMIT 1",
+            {"jid": jid, "cid": 9001},
+        )
+        out = str(query_conversation_graph.invoke({"jid": jid, "limit": 5}))
+        ok = ok and synced and rows and "Memory live test" in out
+        graph_detail = f"graph_nodes={len(rows)}"
+
+    detail = f"timeline={timeline.name}, summaries={len(summaries)}, {job_detail}, {graph_detail}"
+    return _result("memory-live", ok, detail)
+
+
 def run_chat() -> bool:
     base = os.getenv("EVI_API_URL", "http://localhost:8002")
     try:
@@ -562,6 +697,10 @@ def main() -> int:
         "health": lambda: run_health(args.full),
         "metrics": lambda: run_metrics(args.full),
         "commitments": run_commitments,
+        "contact-memory": run_contact_memory,
+        "daily-summary": run_daily_summary,
+        "graph": run_graph,
+        "memory-live": run_memory_live,
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
 

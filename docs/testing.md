@@ -25,6 +25,7 @@ Three tiers:
 | Telegram (polling setup) | `./scripts/evi-telegram-polling-setup.sh` | SCN-TG-03 |
 | Telegram (live E2E) | `./scripts/evi-telegram-verify.sh` | SCN-TG-02, SCN-WA-12 |
 | Telegram (mock) | `./scripts/evi-test telegram` | SCN-TG-01 |
+| Telegram LLM audit/persist | `tests/unit/test_telegram_handler.py` | SCN-TG-02 |
 | Telegram (live webhook) | `./scripts/evi-test telegram --live-telegram` | SCN-TG-02 |
 | Telegram (polling) | `TELEGRAM_MODE=polling` + poller startup | SCN-TG-04 |
 | Telegram (direct list) | `tests/unit/test_telegram_list.py` | SCN-TG-05 |
@@ -42,6 +43,10 @@ Three tiers:
 | RAG (live Qdrant) | `./scripts/evi-test rag --live-qdrant` | SCN-RAG-04 |
 | Notes | `./scripts/evi-test notes` | SCN-NOTE-02 |
 | Session/Postgres | `DATABASE_URL=... ./scripts/evi-test session` | SCN-E2E-03 |
+| Contact FS memory | `./scripts/evi-test contact-memory` | SCN-MEM-02 |
+| Daily summary | `./scripts/evi-test daily-summary` | SCN-MEM-02b |
+| Knowledge graph | `./scripts/evi-test graph` | SCN-MEM-03 |
+| Memory live (stack) | `./scripts/evi-test memory-live` | SCN-MEM-02/03 live |
 
 ### Unit tests (commitment review)
 
@@ -66,6 +71,8 @@ jq -s '.' logs/whatsapp_*.jsonl | less
 ```
 
 Golden file: `tests/golden/whatsapp_commitments.json`
+
+Windmill offline fixtures: `tests/fixtures/windmill/` (replaces legacy `n8n/` prefix per SCN-DEP-02).
 
 ## OpenSpec verify
 

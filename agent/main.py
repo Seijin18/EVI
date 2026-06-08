@@ -400,6 +400,32 @@ def evolution_webhook(
             )
             if row_id:
                 queued_ids.append(row_id)
+                try:
+                    from services.contact_filesystem import ingest_commitment
+
+                    ingest_commitment(
+                        jid=raw.sender if raw else "",
+                        source_id=c.source_id,
+                        title=c.title,
+                        raw_text=raw_text,
+                        commitment_id=row_id,
+                        label=raw.label if raw else "",
+                    )
+                except Exception:
+                    pass
+                try:
+                    from services.graph_sync import sync_commitment
+
+                    sync_commitment(
+                        commitment_id=row_id,
+                        jid=raw.sender if raw else "",
+                        title=c.title,
+                        ctype=c.type,
+                        status="pending",
+                        label=raw.label if raw else "",
+                    )
+                except Exception:
+                    pass
         try:
             from services.commitment_review import maybe_notify_new_pending
 
@@ -435,6 +461,15 @@ def evolution_webhook(
         "queued_ids": queued_ids,
         "control": control_results,
     }
+
+
+@app.post("/jobs/daily-summary")
+def daily_summary_job(_: None = Depends(verify_api_key)):
+    """Windmill cron target: write per-contact daily summaries."""
+    from services.daily_summary import run_daily_summaries
+
+    written = run_daily_summaries()
+    return {"ok": True, "written": written}
 
 
 @app.post("/run-task")

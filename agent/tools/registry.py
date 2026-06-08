@@ -16,6 +16,7 @@ from tools.commitment_tools import (
     list_scheduled_today,
 )
 from tools.task_tool import create_task
+from tools.graph_tool import query_conversation_graph
 
 
 def get_all_tools():
@@ -33,4 +34,5 @@ def get_all_tools():
         list_scheduled_today,
         confirm_commitments,
         dismiss_commitments,
+        query_conversation_graph,
     ]

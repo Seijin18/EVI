@@ -28,11 +28,18 @@ def test_processes_text_and_sends():
         assert session_id == "telegram-933619568"
         return {"response": "Oi!"}
 
-    with patch("services.telegram_handler.send_telegram_message", return_value=True) as send:
+    with (
+        patch("services.telegram_handler.send_telegram_message", return_value=True) as send,
+        patch("services.telegram_handler._persist_turn") as persist,
+        patch("services.telegram_handler.log_telegram_turn") as audit,
+    ):
         out = process_telegram_update(update, fake_chat)
     assert out["telegram_sent"] is True
     assert out["response"] == "Oi!"
+    assert out.get("llm") is True
     send.assert_called_once()
+    persist.assert_called_once_with("telegram-933619568", "olá", "Oi!")
+    audit.assert_called_once()
 
 
 if __name__ == "__main__":

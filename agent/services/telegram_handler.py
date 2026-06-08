@@ -118,14 +118,12 @@ def process_telegram_update(
             extra={"error": True},
         )
 
-    ai_content = format_for_telegram(result.get("response") or "")
-    sent = False
-    if ai_content:
-        sent = send_telegram_message(ai_content, chat_id=chat_id)
-
-    return {
-        "ok": True,
-        "response": ai_content,
-        "session_id": session_id,
-        "telegram_sent": sent,
-    }
+    tools = result.get("tools") or result.get("output_messages") or []
+    return _reply_direct(
+        session_id=session_id,
+        chat_id=chat_id,
+        text=text,
+        ai_content=result.get("response") or "",
+        tools=tools if isinstance(tools, list) else [],
+        extra={"llm": True},
+    )

@@ -22,13 +22,13 @@
 | GitHub Actions smoke | `evi-github-actions-smoke` |
 | RAG live harness | `evi-rag-tier2-live` |
 
-## Etapa 5 — long memory (see `data-long-memory` spec)
+## Etapa 5 — long memory (Done — see `data-long-memory` spec)
 
 | Phase | Item | Notes |
 |-------|------|-------|
-| 5a | Contact filesystem | `evi-contact-filesystem-memory` — `EVI_CONTACT_MEMORY_DIR` |
-| 5a | Daily summary cron | `evi-daily-summary-windmill` — Windmill job |
-| 5b | Knowledge graph | `evi-conversation-graph-neo4j` — Neo4j + `graph_tool.py` (~1–1.5 GB RAM) |
+| 5a | Contact filesystem | Done — `EVI_CONTACT_MEMORY_DIR`, `evi-test contact-memory` |
+| 5a | Daily summary cron | Done — `/jobs/daily-summary`, Windmill `daily_summary.py` |
+| 5b | Knowledge graph | Done — compose profile `graph`, `query_conversation_graph` tool |
 
 ## Other deferred
 

@@ -1,0 +1,8 @@
+summary: Daily contact memory summaries
+description: POST agent-api /jobs/daily-summary to write summaries/YYYY-MM-DD.md per JID
+lock: '!inline f/integrations/daily_summary.script.lock'
+kind: script
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties: {}

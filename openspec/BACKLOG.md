@@ -37,14 +37,20 @@ Substitui `evi-whatsapp-reply` (cancelado) por review multicanal + canal de cont
 | 13 | `evi-github-actions-smoke` | Done | Arquivado 2026-06-06; `.github/workflows/ci.yml` |
 | 14 | `evi-rag-tier2-live` | Done | Arquivado 2026-06-06; `evi-test rag --live-qdrant` |
 
-## Etapa 5 — memória longa (sob demanda)
+## Etapa 4.5 — bugfix + DX (completa)
+
+| # | Change | Status | Notas |
+|---|--------|--------|-------|
+| — | `evi-telegram-audit-fix` | Done | LLM persist/audit; fixtures `windmill/`; `docs/testing.md` |
+
+## Etapa 5 — memória longa (completa)
 
 Spec: [`openspec/specs/data-long-memory/spec.md`](specs/data-long-memory/spec.md)
 
-| # | Change | Fase | Notas |
-|---|--------|------|-------|
-| 15 | `evi-contact-filesystem-memory` | 5a | FS por JID + ingest pós-commitment |
-| 16 | `evi-daily-summary-windmill` | 5a | Cron resumo do dia |
-| 17 | `evi-conversation-graph-neo4j` | 5b | Neo4j + graph_tool (após 5a) |
+| # | Change | Fase | Status | Notas |
+|---|--------|------|--------|-------|
+| 15 | `evi-contact-filesystem-memory` | 5a | Done | `contact_filesystem.py`, ingest no webhook |
+| 16 | `evi-daily-summary-windmill` | 5a | Done | `daily_summary.py`, `/jobs/daily-summary`, Windmill cron |
+| 17 | `evi-conversation-graph-neo4j` | 5b | Done | Neo4j profile `graph`, `graph_tool.py`, `graph_sync.py` |
 
 **Fora do repo:** Graphiti MCP. **Outros deferidos:** MCP isolado, multimodal — `openspec/specs/roadmap.md`
