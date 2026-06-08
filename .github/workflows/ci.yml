@@ -20,10 +20,20 @@ jobs:
       - name: Install dev dependencies
         run: |
           pip install -r requirements-dev.txt
-          pip install prometheus-client starlette
+          pip install prometheus-client starlette ruff
+
+      - name: Ruff lint
+        run: ruff check agent/ --select E,W,F --ignore E501
 
       - name: Unit tests
         run: PYTHONPATH=agent python3 -m pytest tests/unit -q
 
       - name: Offline smoke (evi-test)
         run: ./scripts/evi-test smoke
+
+      - name: Tier-2 offline features
+        run: |
+          ./scripts/evi-test evolution
+          EVI_CONTACT_MEMORY_DIR=$(mktemp -d) ./scripts/evi-test contact-memory
+          EVI_CONTACT_MEMORY_DIR=$(mktemp -d) ./scripts/evi-test daily-summary
+          ./scripts/evi-test commitments

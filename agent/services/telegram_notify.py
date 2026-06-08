@@ -6,7 +6,6 @@ import json
 import os
 import urllib.error
 import urllib.request
-from typing import List
 
 
 def send_telegram_message(text: str, chat_id: str | int | None = None) -> bool:
@@ -32,12 +31,5 @@ def send_telegram_message(text: str, chat_id: str | int | None = None) -> bool:
         return False
 
 
-def format_pending_digest(rows: List[dict]) -> str:
-    lines = ["EVI: novos compromissos WhatsApp pendentes:"]
-    for r in rows[:10]:
-        pr = r.get("priority", "normal")
-        lines.append(
-            f"• [{r['id']}] ({pr}) {r['title']} — {r.get('event_date') or r.get('due_date') or 'sem data'}"
-        )
-    lines.append("No chat: peça para listar/confirmar compromissos pendentes.")
-    return "\n".join(lines)
+
+from services.commitment_review.digest import format_pending_digest  # noqa: E402,F401

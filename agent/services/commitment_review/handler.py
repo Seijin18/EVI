@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Optional
 
@@ -18,6 +17,14 @@ _LIST_INTENT = re.compile(
 )
 _PENDING = re.compile(r"\bpendente?s?\b", re.I)
 _TODAY = re.compile(r"\b(hoje|agendados?\s+hoje)\b", re.I)
+_CONFIRM_ALL = re.compile(
+    r"\b(confirmar?\s+tudo|agendar?\s+todos?|confirmar?\s+todos?)\b",
+    re.I,
+)
+_DISMISS_ALL = re.compile(
+    r"\b(dispensar?\s+tudo|descartar?\s+tudo|dispensar?\s+todos?|cancelar?\s+todos?\s+pendentes?)\b",
+    re.I,
+)
 _CONFIRM = re.compile(
     r"\b(confirmar?|confirma|agendar?)\b\s*([\d,\s]+)",
     re.I,
@@ -32,9 +39,41 @@ def _parse_ids(group: str) -> list[int]:
     return [int(x) for x in re.findall(r"\d+", group)]
 
 
+def _get_all_pending_ids() -> list[int]:
+    from tools.commitment_tools import list_pending_commitments
+    import json
+
+    raw = list_pending_commitments.invoke({"limit": 100})
+    if not raw or raw == "No pending commitments.":
+        return []
+    try:
+        rows = json.loads(raw)
+        if isinstance(rows, list):
+            return [r["id"] for r in rows if isinstance(r, dict) and "id" in r]
+    except (ValueError, KeyError):
+        return [int(x) for x in re.findall(r'"id":\s*(\d+)', raw)]
+    return []
+
+
 def try_direct_review(text: str, *, confirmed_via: str = "chat") -> Optional[str]:
     """Handle list/confirm/dismiss/today without LLM."""
     stripped = text.strip()
+
+    if _CONFIRM_ALL.search(stripped):
+        ids = _get_all_pending_ids()
+        if not ids:
+            return "Nenhum compromisso pendente para confirmar."
+        from tools.commitment_tools import confirm_commitments
+
+        return confirm_commitments.invoke({"commitment_ids": ids, "confirmed_via": confirmed_via})
+
+    if _DISMISS_ALL.search(stripped):
+        ids = _get_all_pending_ids()
+        if not ids:
+            return "Nenhum compromisso pendente para dispensar."
+        from tools.commitment_tools import dismiss_commitments
+
+        return dismiss_commitments.invoke({"commitment_ids": ids})
 
     m = _CONFIRM.search(stripped)
     if m:

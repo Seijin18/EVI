@@ -118,6 +118,12 @@ def process_telegram_update(
             extra={"error": True},
         )
 
+    try:
+        from services.profile_updater import extract_profile_facts, merge_profile
+        merge_profile(str(chat_id), extract_profile_facts(text))
+    except Exception:
+        pass
+
     tools = result.get("tools") or result.get("output_messages") or []
     return _reply_direct(
         session_id=session_id,

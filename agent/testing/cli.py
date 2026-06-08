@@ -88,7 +88,6 @@ def run_file_organizer() -> bool:
 
 def run_calendar(live_windmill: bool) -> bool:
     import json
-    from pathlib import Path as P
 
     payload = {
         "action": "schedule_event",

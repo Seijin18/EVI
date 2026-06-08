@@ -84,6 +84,12 @@ def process_whatsapp_control_message(
             "'listar compromissos pendentes'."
         )
 
+    try:
+        from services.profile_updater import extract_profile_facts, merge_profile
+        merge_profile(jid, extract_profile_facts(text))
+    except Exception:
+        pass
+
     sent = send_whatsapp_text(jid, reply, add_prefix=True)
     return {
         "ok": True,

@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any
 
-from services.contact_filesystem import contact_dir, ensure_contact, list_contact_dirs, memory_enabled
+from services.contact_filesystem import ensure_contact, list_contact_dirs, memory_enabled
 
 
 def _today_str(when: date | None = None) -> str:
-    return (when or date.today()).strftime("%Y-%m-%d")
+    if when:
+        return when.strftime("%Y-%m-%d")
+    tz = ZoneInfo(os.getenv("EVI_TIMEZONE", "America/Sao_Paulo"))
+    return datetime.now(tz).date().strftime("%Y-%m-%d")
 
 
 def _read_timeline(path: Path) -> list[dict[str, Any]]:
@@ -40,6 +44,17 @@ def _scheduled_today_rows() -> list[dict[str, Any]]:
         return list_scheduled_today(limit=50)
     except Exception:
         return []
+
+
+def _llm_summarize(raw_md: str) -> str:
+    from llm import build_llm
+
+    prompt = f"Gere um resumo diário conciso em português a partir deste contexto:\n\n{raw_md}"
+    try:
+        resp = build_llm(temperature=0.3).invoke(prompt)
+        return resp.content if hasattr(resp, "content") else str(resp)
+    except Exception:
+        return raw_md
 
 
 def build_summary_markdown(
@@ -79,7 +94,10 @@ def build_summary_markdown(
     else:
         lines.append("- (nenhum)")
     lines.append("")
-    return "\n".join(lines)
+    raw = "\n".join(lines)
+    if os.getenv("EVI_DAILY_SUMMARY_LLM", "").lower() in ("1", "true", "yes"):
+        return _llm_summarize(raw)
+    return raw
 
 
 def write_summary(jid: str, content: str, *, day: date | None = None) -> Path:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -48,11 +48,33 @@ _SKIP_PATTERNS = re.compile(
 
 _TIME_RE = re.compile(r"(\d{1,2})[h:](\d{2})?", re.I)
 _REL_DAY_RE = re.compile(r"\bamanh[ãa]\b", re.I)
-_FRIDAY_RE = re.compile(r"\bsexta\b", re.I)
+_TODAY_RE = re.compile(r"\bhoje\b", re.I)
+_FRIDAY_RE = re.compile(r"\bsexta(?:-feira)?\b", re.I)
 _SUNDAY_RE = re.compile(r"\bdomingo\b", re.I)
 _MEETING_RE = re.compile(r"\b(reuni[ãa]o|encontro|call)\b", re.I)
 _REMIND_RE = re.compile(r"\b(lembre|enviar|mandar|entregar|relat[oó]rio)\b", re.I)
 _DINNER_RE = re.compile(r"\b(jantar|almoco|almoço)\b", re.I)
+_NEXT_WEEK_RE = re.compile(r"\bpr[oó]xima?\s+semana\b", re.I)
+_WEEKDAY_RE = re.compile(
+    r"\b(segunda(?:-feira)?|ter[cç]a(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|"
+    r"s[aá]bado)\b",
+    re.I,
+)
+_WEEKDAY_MAP = {
+    "segunda": 0, "terça": 1, "terca": 1, "quarta": 2, "quinta": 3, "sábado": 5, "sabado": 5,
+}
+_MONTH_DAY_RE = re.compile(
+    r"\b(?:dia\s+)?(\d{1,2})\s+de\s+"
+    r"(jan(?:eiro)?|fev(?:ereiro)?|mar(?:ço|co)?|abr(?:il)?|mai(?:o)?|jun(?:ho)?|"
+    r"jul(?:ho)?|ago(?:sto)?|set(?:embro)?|out(?:ubro)?|nov(?:embro)?|dez(?:embro)?)\b",
+    re.I,
+)
+_MONTH_MAP = {
+    "jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
+    "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12,
+}
+_PERIOD_RE = re.compile(r"\b(de\s+manh[ãa]|[àa]\s+tarde|[àa]\s+noite|[àa]\s+meia[\s-]noite)\b", re.I)
+_PERIOD_TIME = {"manhã": "09:00", "manha": "09:00", "tarde": "14:00", "noite": "20:00", "meia": "00:00"}
 
 
 def _parse_ref_dt(ts: str) -> datetime:
@@ -67,29 +89,66 @@ def _next_weekday(ref: datetime, weekday: int) -> datetime:
     return ref + timedelta(days=days_ahead)
 
 
+def _resolve_date(text: str, ref: datetime) -> Optional[str]:
+    """Return ISO date string from natural language date expressions, or None."""
+    if _TODAY_RE.search(text):
+        return ref.strftime("%Y-%m-%d")
+    if _REL_DAY_RE.search(text):
+        return (ref + timedelta(days=1)).strftime("%Y-%m-%d")
+    if _NEXT_WEEK_RE.search(text):
+        return _next_weekday(ref, 0).strftime("%Y-%m-%d")
+    m = _MONTH_DAY_RE.search(text)
+    if m:
+        day = int(m.group(1))
+        mon_key = m.group(2)[:3].lower()
+        month = _MONTH_MAP.get(mon_key)
+        if month:
+            year = ref.year if month >= ref.month else ref.year + 1
+            try:
+                from datetime import date as _date
+                return _date(year, month, day).strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+    m = _WEEKDAY_RE.search(text)
+    if m:
+        key = m.group(1).lower().rstrip("-feira").replace("ç", "c").replace("á", "a").replace("ã", "a")
+        key = re.sub(r"-feira$", "", key)
+        for wk, idx in _WEEKDAY_MAP.items():
+            if key.startswith(wk[:4]):
+                return _next_weekday(ref, idx).strftime("%Y-%m-%d")
+    if _FRIDAY_RE.search(text):
+        return _next_weekday(ref, 4).strftime("%Y-%m-%d")
+    if _SUNDAY_RE.search(text):
+        return _next_weekday(ref, 6).strftime("%Y-%m-%d")
+    return None
+
+
+def _resolve_time(text: str) -> Optional[str]:
+    """Return HH:MM from explicit time or period-of-day, or None."""
+    m = _TIME_RE.search(text)
+    if m:
+        h, mn = int(m.group(1)), int(m.group(2) or 0)
+        return f"{h:02d}:{mn:02d}"
+    pm = _PERIOD_RE.search(text)
+    if pm:
+        word = pm.group(1).lower()
+        for key, val in _PERIOD_TIME.items():
+            if key in word:
+                return val
+    return None
+
+
 def extract_commitment(msg: IncomingMessage) -> Optional[Commitment]:
     text = msg.text.strip()
     if len(text) < 12 or _SKIP_PATTERNS.match(text):
         return None
 
     ref = _parse_ref_dt(msg.ts)
-    date_str: Optional[str] = None
-    time_str: Optional[str] = None
+    date_str: Optional[str] = _resolve_date(text, ref)
+    time_str: Optional[str] = _resolve_time(text)
     due_str: Optional[str] = None
     ctype = "task"
     title = text[:80]
-
-    if _REL_DAY_RE.search(text):
-        date_str = (ref + timedelta(days=1)).strftime("%Y-%m-%d")
-    elif _FRIDAY_RE.search(text):
-        due_str = _next_weekday(ref, 4).strftime("%Y-%m-%d")
-    elif _SUNDAY_RE.search(text):
-        date_str = _next_weekday(ref, 6).strftime("%Y-%m-%d")
-
-    tm = _TIME_RE.search(text)
-    if tm:
-        h, m = int(tm.group(1)), int(tm.group(2) or 0)
-        time_str = f"{h:02d}:{m:02d}"
 
     if _MEETING_RE.search(text):
         ctype = "event"
