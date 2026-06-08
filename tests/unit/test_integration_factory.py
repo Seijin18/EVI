@@ -45,7 +45,7 @@ def test_get_messaging_default_is_evolution():
 def test_windmill_client_post_delegates():
     from integrations.windmill import WindmillClient
     wc = WindmillClient()
-    with patch("integrations.windmill.post_windmill", return_value='{"status":"created"}') as mock_pw:
+    with patch("integrations.windmill._windmill_post", return_value='{"status":"created"}') as mock_pw:
         result = wc.post("schedule_event", {"title": "test"}, timeout=30)
     mock_pw.assert_called_once()
     assert "created" in result

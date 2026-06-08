@@ -54,3 +54,11 @@ Spec: [`openspec/specs/data-long-memory/spec.md`](specs/data-long-memory/spec.md
 | 17 | `evi-conversation-graph-neo4j` | 5b | Done | Neo4j profile `graph`, `graph_tool.py`, `graph_sync.py` |
 
 **Fora do repo:** Graphiti MCP. **Outros deferidos:** MCP isolado, multimodal — `openspec/specs/roadmap.md`
+
+## Etapa 6 — arquitetura modular (completa)
+
+Spec: [`openspec/specs/providers/spec.md`](specs/providers/spec.md)
+
+| # | Change | Status | Notas |
+|---|--------|--------|-------|
+| 18 | `evi-modular-architecture` | Done | `agent/llm.py`, `agent/integrations/`, `agent/messaging/`; commit `1edef57` |

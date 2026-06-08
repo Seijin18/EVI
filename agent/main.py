@@ -426,6 +426,14 @@ def evolution_webhook(
                     )
                 except Exception:
                     pass
+                try:
+                    from services.commitment_capture_notify import (
+                        notify_commitment_captured,
+                    )
+
+                    notify_commitment_captured(row_id, c.title, c.type)
+                except Exception:
+                    pass
         try:
             from services.commitment_review import maybe_notify_new_pending
 

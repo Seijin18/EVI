@@ -27,6 +27,7 @@ Implement **one change at a time**. Read only `contextFiles` from apply instruct
 | API | `specs/agent-api/spec.md` | `agent/main.py` |
 | Productivity tools | `specs/tools-productivity/spec.md` | `agent/tools/`, `registry.py` |
 | Windmill | `specs/integrations-windmill/spec.md` | `windmill/`, `agent/tools/*_tool.py` |
+| Providers | `specs/providers/spec.md` | `agent/llm.py`, `agent/integrations/`, `agent/messaging/` |
 | RAG | `specs/data-rag/spec.md` | `agent/tools/rag_tool.py` |
 | Long memory | `specs/data-long-memory/spec.md` | `contact_filesystem.py`, `daily_summary.py`, `graph_tool.py` |
 | WhatsApp | `specs/messaging-whatsapp/spec.md` | `agent/services/whatsapp_processor.py` |
