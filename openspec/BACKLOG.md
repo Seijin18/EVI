@@ -62,3 +62,30 @@ Spec: [`openspec/specs/providers/spec.md`](specs/providers/spec.md)
 | # | Change | Status | Notas |
 |---|--------|--------|-------|
 | 18 | `evi-modular-architecture` | Done | `agent/llm.py`, `agent/integrations/`, `agent/messaging/`; commit `1edef57` |
+| 18.1 | `evi-windmill-client-inversion` | Done | Lógica HTTP para `integrations/windmill.py`; `windmill_client.py` virou shim; commit `4097f86` |
+| 18.2 | `evi-commitment-capture-notify` | Done | `commitment_capture_notify.py`; notify control JID ao capturar; commit `4097f86` |
+| 18.3 | `evi-providers-spec-sync` | Done | `openspec/specs/providers/spec.md`; AGENTS.md + BACKLOG.md; commit `4097f86` |
+
+## Etapa 7 — cobertura e DX
+
+| # | Change | Status | Notas |
+|---|--------|--------|-------|
+| 19 | `evi-test-coverage-gap` | Done | 25 new tests; `telegram_notify.py` re-exports from `digest.py`; commit `6635c94` |
+| 20 | `evi-ci-extended` | Done | CI: ruff lint + Tier-2 offline features; 11 ruff violations fixed; commit `6635c94` |
+| 21 | `evi-daily-summary-tz-fix` | Done | `_today_str()` usa `ZoneInfo(EVI_TIMEZONE)`; commit `6635c94` |
+
+## Etapa 8 — WhatsApp productivity
+
+| # | Change | Status | Notas |
+|---|--------|--------|-------|
+| 22 | `evi-confirm-all` | Done | `_CONFIRM_ALL`/`_DISMISS_ALL` + `_get_all_pending_ids()`; commit `6635c94` |
+| 23 | `evi-extraction-expand` | Done | `_resolve_date`/`_resolve_time` com hoje, semana, weekdays PT, meses, períodos; commit `6635c94` |
+
+## Etapa 9 — memória inteligente
+
+| # | Change | Status | Notas |
+|---|--------|--------|-------|
+| 24 | `evi-daily-summary-llm` | Done | `_llm_summarize()` quando `EVI_DAILY_SUMMARY_LLM=true`; commit `6635c94` |
+| 25 | `evi-profile-auto-update` | Done | `profile_updater.py`; integrado em `whatsapp_control` + `telegram_handler`; commit `6635c94` |
+
+**Deferred (roadmap):** `list_calendars` tool, `/chat`+`/run-task` auth, Compose Ollama profile, Redis cache, MCP isolation, WhatsApp Meta/Twilio adapter — ver [`openspec/specs/roadmap.md`](specs/roadmap.md)

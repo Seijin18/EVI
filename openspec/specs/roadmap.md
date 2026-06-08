@@ -30,11 +30,44 @@
 | 5a | Daily summary cron | Done — `/jobs/daily-summary`, Windmill `daily_summary.py` |
 | 5b | Knowledge graph | Done — compose profile `graph`, `query_conversation_graph` tool |
 
+## Etapa 6 — arquitetura modular (Done — see `providers` spec)
+
+| Item | Change |
+|------|--------|
+| LLM/embed factory | `evi-modular-architecture` |
+| Windmill HTTP inversion | `evi-windmill-client-inversion` |
+| Commitment capture notify | `evi-commitment-capture-notify` |
+
+## Etapa 7 — cobertura e DX (see BACKLOG #19–21)
+
+| Item | Change |
+|------|--------|
+| Unit tests: whatsapp_control, handler, digest, log_retention | `evi-test-coverage-gap` |
+| CI tier-2 + ruff | `evi-ci-extended` |
+| Daily summary timezone fix | `evi-daily-summary-tz-fix` |
+
+## Etapa 8 — WhatsApp productivity (see BACKLOG #22–23)
+
+| Item | Change |
+|------|--------|
+| "confirmar tudo" bulk command | `evi-confirm-all` |
+| Expanded extraction patterns (hoje, terça, próxima semana) | `evi-extraction-expand` |
+
+## Etapa 9 — memória inteligente (see BACKLOG #24–25)
+
+| Item | Change |
+|------|--------|
+| Daily summary with LLM | `evi-daily-summary-llm` |
+| Profile.md auto-update | `evi-profile-auto-update` |
+
 ## Other deferred
 
 | Item | Type | Notes |
 |------|------|-------|
+| `list_calendars` LangGraph tool | Feature | Windmill script exists; precisa de registry entry |
+| `/chat` + `/run-task` API key auth | Security | Backward-compat; noop se `EVI_API_KEY` não configurado |
+| Compose Ollama profile | Infrastructure | Profile `ollama` para stack completamente self-contained |
 | MCP isolated servers | Architecture | After 3+ stable tools need isolated restart |
 | Llava + Whisper | Feature | Multimodal remote |
 | Redis embedding cache | Performance | Optional |
-| WhatsApp live adapter | Integration | Meta / Twilio — see remote-access design |
+| WhatsApp live adapter | Integration | Meta / Twilio — facilitado pelo `BaseMessagingClient` |
