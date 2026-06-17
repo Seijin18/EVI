@@ -61,6 +61,9 @@ def _reply_direct(
 def process_telegram_update(
     update: Dict[str, Any],
     invoke_chat: ChatInvoke,
+    *,
+    reset_session: Callable[[str], None] | None = None,
+    compact_session: Callable[[str], None] | None = None,
 ) -> Dict[str, Any]:
     """Process one Telegram update dict; invoke_chat(message, session_id) -> {response: ...}."""
     message = update.get("message") or {}
@@ -70,6 +73,37 @@ def process_telegram_update(
     text = message["text"]
     chat_id = message.get("chat", {}).get("id", "telegram")
     session_id = f"telegram-{chat_id}"
+
+    from services.dev_bridge import try_dev_command
+
+    dev_reply = try_dev_command(text)
+    if dev_reply:
+        return _reply_direct(
+            session_id=session_id,
+            chat_id=chat_id,
+            text=text,
+            ai_content=dev_reply,
+            tools=[{"type": "direct", "tool": "dev_bridge"}],
+            extra={"dev_bridge": True},
+        )
+
+    from services.chat_commands import try_chat_command
+
+    cmd_reply = try_chat_command(
+        text,
+        session_id=session_id,
+        on_reset=(lambda: reset_session(session_id)) if reset_session else None,
+        on_compact=(lambda: compact_session(session_id)) if compact_session else None,
+    )
+    if cmd_reply:
+        return _reply_direct(
+            session_id=session_id,
+            chat_id=chat_id,
+            text=text,
+            ai_content=cmd_reply,
+            tools=[{"type": "direct", "tool": "chat_command"}],
+            extra={"chat_command": True},
+        )
 
     if direct_handlers_enabled():
         reviewed = try_direct_review(text, confirmed_via="telegram")

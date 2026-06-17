@@ -6,8 +6,9 @@ alwaysApply: false
 
 # EVI dev bridge
 
-- **EVI (`agent-api`)**: runtime productivity — tools, `/chat`, n8n webhooks, notes, WhatsApp processor tests.
+- **EVI (`agent-api`)**: runtime productivity — tools, `/chat`, webhooks, notes, WhatsApp processor tests.
 - **Cursor Agent**: implement and refactor code in this repo; use codebase-memory MCP first.
+- **Cursor CLI** (`scripts/cursor-dev-runner.sh`): plan/apply in worktree — only when `EVI_DEV_BRIDGE_ENABLED=true` and user sends `dev approve <id>` on control chat.
 - **Copilot CLI**: `scripts/copilot-dev-runner.sh` for explain/scaffold/debug — not for user-facing agent replies.
 
 See [docs/dev-workflow.md](../../docs/dev-workflow.md).

@@ -377,10 +377,13 @@ def run_evolution() -> bool:
 
 
 def run_dev_bridge(dry: bool) -> bool:
-    script = REPO_ROOT / "scripts" / "copilot-dev-runner.sh"
-    ok = script.exists() and os.access(script, os.X_OK)
+    copilot = REPO_ROOT / "scripts" / "copilot-dev-runner.sh"
+    cursor = REPO_ROOT / "scripts" / "cursor-dev-runner.sh"
+    ok = copilot.exists() and os.access(copilot, os.X_OK)
+    ok = ok and cursor.is_file() and os.access(cursor, os.X_OK)
+    ok = ok and (AGENT_DIR / "services" / "dev_bridge.py").is_file()
     if dry and ok:
-        return _result("dev-bridge", True, "script present (dry)")
+        return _result("dev-bridge", True, "scripts + dev_bridge.py (dry)")
     return _result("dev-bridge", ok)
 
 
@@ -520,6 +523,57 @@ def run_health(live: bool) -> bool:
     return _result("health", ok, "offline wiring (use --full for live)")
 
 
+def run_contact_learning() -> bool:
+    import tempfile
+    from unittest.mock import patch
+
+    from services.contact_filesystem import ingest_commitment
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["EVI_CONTACT_MEMORY_DIR"] = tmp
+        jid = "5516992657231@s.whatsapp.net"
+        ingest_commitment(
+            jid=jid,
+            source_id="learn-1",
+            title="Reunião",
+            raw_text="amanhã 10h",
+            commitment_id=1,
+            label="Leozao",
+        )
+        ok = "list_whatsapp_contacts" in (
+            AGENT_DIR / "tools" / "registry.py"
+        ).read_text(encoding="utf-8")
+        ok = ok and (AGENT_DIR / "services" / "contact_learning.py").is_file()
+        ok = ok and (AGENT_DIR / "services" / "whatsapp_backfill.py").is_file()
+        with patch(
+            "services.contact_learning._llm_synthesize",
+            return_value="Contato trabalha em projetos X.",
+        ):
+            from services.contact_learning import learn_contact
+
+            out = learn_contact("Leozao", days=7, fetch_messages=False)
+        ok = ok and "Leozao" in out and "Aprendizado" in out
+    return _result("contact-learning", ok, "offline learn + registry")
+
+
+def run_heartbeat() -> bool:
+    from services.heartbeat import run_heartbeat
+
+    dry = run_heartbeat(dry=True)
+    ok = dry.get("ok") is True and "checklist" in dry
+    prev = os.environ.get("EVI_HEARTBEAT_ENABLED")
+    os.environ["EVI_HEARTBEAT_ENABLED"] = "false"
+    try:
+        live = run_heartbeat()
+        ok = ok and live.get("enabled") is False
+    finally:
+        if prev is None:
+            os.environ.pop("EVI_HEARTBEAT_ENABLED", None)
+        else:
+            os.environ["EVI_HEARTBEAT_ENABLED"] = prev
+    return _result("heartbeat", ok, "dry + disabled stub")
+
+
 def run_contact_memory() -> bool:
     import tempfile
 
@@ -538,7 +592,11 @@ def run_contact_memory() -> bool:
         ok = ok and memory_enabled()
         timeline = Path(tmp) / "contacts" / "evi-test@s.whatsapp.net" / "timeline.jsonl"
         ok = ok and timeline.is_file() and timeline.read_text(encoding="utf-8").strip()
-    return _result("contact-memory", ok, "FS ingest")
+        from services.contact_memory_audit import format_memory_audit
+
+        audit = format_memory_audit(limit=5)
+        ok = ok and "Memória de contatos" in audit
+    return _result("contact-memory", ok, "FS ingest + audit")
 
 
 def run_daily_summary() -> bool:
@@ -878,7 +936,9 @@ def main() -> int:
         "metrics": lambda: run_metrics(args.full),
         "commitments": run_commitments,
         "contact-memory": run_contact_memory,
+        "contact-learning": run_contact_learning,
         "daily-summary": run_daily_summary,
+        "heartbeat": run_heartbeat,
         "graph": run_graph,
         "memory-live": run_memory_live,
         "runtime-v3": run_runtime_v3,

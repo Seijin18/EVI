@@ -22,6 +22,13 @@ _SKILL_RULES: list[tuple[re.Pattern[str], str]] = [
         ),
         "commitment-review",
     ),
+    (
+        re.compile(
+            r"\b(aprenda|aprender|estude|estudar|conhecer\s+sobre|últimos?\s+\d+\s+dias?)\b",
+            re.I,
+        ),
+        "contact-learning",
+    ),
 ]
 
 _MAX_SKILL_CHARS = 2500

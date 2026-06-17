@@ -62,7 +62,7 @@ def _build_context(jid: str, label: str, days: int) -> str:
 
 
 def _llm_synthesize(context: str, label: str, days: int) -> str:
-    from llm import build_llm, extract_llm_text
+    from llm import build_background_llm, extract_llm_text
 
     prompt = f"""Você é o EVI. Com base APENAS no contexto abaixo, escreva uma síntese em português sobre o contato «{label}» nos últimos {days} dias.
 
@@ -76,7 +76,7 @@ Seja conciso (máx. 12 linhas). Não invente fatos ausentes do contexto.
 
 Contexto:
 {context[:12000]}"""
-    resp = build_llm(temperature=0.3).invoke(prompt)
+    resp = build_background_llm(temperature=0.3).invoke(prompt)
     if hasattr(resp, "content"):
         return extract_llm_text(resp.content).strip()
     return str(resp).strip()

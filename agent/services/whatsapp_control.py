@@ -26,6 +26,7 @@ def parse_control_jids() -> Set[str]:
 
 
 ChatInvoke = Callable[[str, str], Dict[str, Any]]
+SessionHook = Callable[[str], None]
 
 
 def process_whatsapp_control_message(
@@ -33,12 +34,45 @@ def process_whatsapp_control_message(
     jid: str,
     text: str,
     invoke_chat: ChatInvoke,
+    reset_session: SessionHook | None = None,
+    compact_session: SessionHook | None = None,
 ) -> Dict[str, Any]:
     """Handle a user message from a control JID; reply via Evolution."""
     session_id = f"whatsapp-{jid}"
 
     if is_evi_bot_message(text):
         return {"ok": True, "skipped": "evi_echo"}
+
+    from services.dev_bridge import try_dev_command
+
+    dev_reply = try_dev_command(text)
+    if dev_reply:
+        sent = send_whatsapp_text(jid, dev_reply, add_prefix=True)
+        return {
+            "ok": True,
+            "response": format_evi_whatsapp(dev_reply),
+            "session_id": session_id,
+            "whatsapp_sent": sent,
+            "dev_bridge": True,
+        }
+
+    from services.chat_commands import try_chat_command
+
+    cmd_reply = try_chat_command(
+        text,
+        session_id=session_id,
+        on_reset=(lambda: reset_session(session_id)) if reset_session else None,
+        on_compact=(lambda: compact_session(session_id)) if compact_session else None,
+    )
+    if cmd_reply:
+        sent = send_whatsapp_text(jid, cmd_reply, add_prefix=True)
+        return {
+            "ok": True,
+            "response": format_evi_whatsapp(cmd_reply),
+            "session_id": session_id,
+            "whatsapp_sent": sent,
+            "chat_command": True,
+        }
 
     if direct_handlers_enabled():
         direct = try_direct_review(text, confirmed_via="whatsapp")

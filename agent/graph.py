@@ -28,6 +28,7 @@ CRITICAL RULES:
 7. Gmail/inbox: summarize by category (important, promotions, social). Do NOT dump raw tool output. For bulk delete by sender use delete_emails_by_query; for follow-ups use SESSION TOOL SNAPSHOTS ids. Never ask the user for Gmail message IDs if you can query or use snapshots.
 8. When the user request is compound (e.g. list and delete promotions), call multiple tools in one turn when safe — you may issue several tool_calls before replying.
 9. WhatsApp contact memory: list_whatsapp_contacts; get_whatsapp_contact_info for a snapshot; learn_whatsapp_contact when the user asks to learn/study a contact over N days (reads Evolution chat history then synthesizes — e.g. "aprenda sobre Leozao nos últimos 30 dias"). NEVER ask for JID — use name or phone. query_conversation_graph is optional (Neo4j).
+10. list_calendars when user needs calendar ids; dev bridge tools only if EVI_DEV_BRIDGE_ENABLED (user must dev approve <id>).
 
 Available tools: {tool_names}"""
 

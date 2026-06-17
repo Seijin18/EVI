@@ -77,6 +77,18 @@ def _run_migrations() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_session_tool_snapshots
                     ON session_tool_snapshots(session_id, created_at DESC);
+                CREATE TABLE IF NOT EXISTS dev_jobs (
+                    job_id VARCHAR(16) PRIMARY KEY,
+                    description TEXT NOT NULL,
+                    status VARCHAR(16) NOT NULL DEFAULT 'pending',
+                    requested_by VARCHAR(128) DEFAULT '',
+                    result_summary TEXT,
+                    log_path TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS idx_dev_jobs_status
+                    ON dev_jobs(status, created_at DESC);
                 """
             )
         conn.commit()
@@ -395,3 +407,68 @@ def mark_pending_notified(ids: List[int]) -> None:
                 (ids,),
             )
         conn.commit()
+
+
+def create_dev_job(job_id: str, description: str, *, requested_by: str = "") -> None:
+    init_db()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO dev_jobs (job_id, description, requested_by)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (job_id) DO NOTHING
+                """,
+                (job_id, description, requested_by),
+            )
+        conn.commit()
+
+
+def get_dev_job(job_id: str) -> Dict[str, Any] | None:
+    init_db()
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM dev_jobs WHERE job_id = %s", (job_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def update_dev_job(
+    job_id: str,
+    *,
+    status: str,
+    result_summary: str = "",
+    log_path: str = "",
+) -> None:
+    init_db()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE dev_jobs
+                SET status = %s,
+                    result_summary = COALESCE(NULLIF(%s, ''), result_summary),
+                    log_path = COALESCE(NULLIF(%s, ''), log_path),
+                    updated_at = NOW()
+                WHERE job_id = %s
+                """,
+                (status, result_summary, log_path, job_id),
+            )
+        conn.commit()
+
+
+def list_dev_jobs(*, limit: int = 10) -> List[Dict[str, Any]]:
+    init_db()
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT job_id, description, status, requested_by, created_at
+                FROM dev_jobs
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]

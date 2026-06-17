@@ -95,6 +95,8 @@ def _check_graph(graph_ready: bool) -> dict[str, Any]:
 
 
 def run_health_checks(*, graph_ready: bool = True) -> dict[str, Any]:
+    from services.contact_memory_audit import contact_memory_health
+
     llm, embed = _active_providers()
     checks = {
         "graph": _check_graph(graph_ready),
@@ -102,6 +104,7 @@ def run_health_checks(*, graph_ready: bool = True) -> dict[str, Any]:
         "qdrant": _check_qdrant(),
         "windmill": _check_windmill(),
         "ollama": _check_ollama(),
+        "contact_memory": contact_memory_health(),
     }
     if llm == "gemini" or embed == "google":
         checks["gemini"] = _check_gemini()

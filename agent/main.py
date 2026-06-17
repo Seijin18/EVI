@@ -54,6 +54,36 @@ def _hydrate_memory(session_id: str) -> None:
         pass
 
 
+def _reset_session(_session_id: str) -> None:
+    app_state.memory.clear()
+
+
+def _compact_session(session_id: str) -> None:
+    from services.memory_flush import maybe_flush_before_compaction
+    from llm import extract_llm_text
+
+    msgs = app_state.memory.get_messages()
+    last_user = ""
+    last_ai = ""
+    for m in reversed(msgs):
+        if getattr(m, "type", None) == "ai" and not last_ai:
+            last_ai = extract_llm_text(getattr(m, "content", ""))
+        if getattr(m, "type", None) == "human" and not last_user:
+            last_user = str(getattr(m, "content", ""))
+        if last_user and last_ai:
+            break
+    maybe_flush_before_compaction(
+        session_id=session_id,
+        messages=msgs,
+        user_text=last_user,
+        assistant_text=last_ai,
+    )
+    kept = msgs[-4:]
+    app_state.memory.clear()
+    for msg in kept:
+        app_state.memory.add(msg)
+
+
 def _telegram_invoke_chat(message: str, session_id: str) -> Dict[str, Any]:
     return chat(ChatRequest(message=message, session_id=session_id))
 
@@ -71,7 +101,11 @@ async def lifespan(app: FastAPI):
     if os.getenv("TELEGRAM_MODE", "").strip().lower() == "polling":
         from services.telegram_poller import start_poller
 
-        start_poller(_telegram_invoke_chat)
+        start_poller(
+            _telegram_invoke_chat,
+            reset_session=_reset_session,
+            compact_session=_compact_session,
+        )
     try:
         from pathlib import Path
         from services.log_retention import prune_logs
@@ -154,11 +188,20 @@ def reset_memory():
 def chat(
     request: ChatRequest,
     x_session_id: Optional[str] = Header(default=None),
+    _: None = Depends(verify_api_key),
 ):
     if not app_state.graph:
         raise HTTPException(status_code=500, detail="Agent graph not initialized")
 
     session_id = request.session_id or x_session_id or app_state.default_session
+
+    from services.session_lane import session_lane
+
+    with session_lane(session_id):
+        return _chat_impl(request, session_id)
+
+
+def _chat_impl(request: ChatRequest, session_id: str) -> Dict[str, Any]:
     _hydrate_memory(session_id)
 
     from services.context_assembly import build_context
@@ -281,7 +324,12 @@ def telegram_webhook(
     from services.telegram_handler import process_telegram_update
 
     payload = update.model_dump() if hasattr(update, "model_dump") else {"message": update.message}
-    return process_telegram_update(payload, _telegram_invoke_chat)
+    return process_telegram_update(
+        payload,
+        _telegram_invoke_chat,
+        reset_session=_reset_session,
+        compact_session=_compact_session,
+    )
 
 
 @app.post("/webhooks/evolution")
@@ -364,6 +412,8 @@ def evolution_webhook(
                 jid=msg.sender,
                 text=msg.text,
                 invoke_chat=_telegram_invoke_chat,
+                reset_session=_reset_session,
+                compact_session=_compact_session,
             )
             control_results.append(result)
             append_jsonl(
@@ -525,8 +575,24 @@ def daily_summary_job(_: None = Depends(verify_api_key)):
     return {"ok": True, "written": written}
 
 
+@app.post("/jobs/heartbeat")
+def heartbeat_job(_: None = Depends(verify_api_key)):
+    """Windmill cron target: run HEARTBEAT.md checklist."""
+    from services.heartbeat import run_heartbeat
+
+    return run_heartbeat()
+
+
+@app.post("/jobs/contact-learn")
+def contact_learn_job(_: None = Depends(verify_api_key)):
+    """Windmill cron target: re-synthesize active contacts (no Evolution backfill)."""
+    from services.contact_learn_cron import run_contact_learn_batch
+
+    return run_contact_learn_batch()
+
+
 @app.post("/run-task")
-def run_task(request: TaskRequest):
+def run_task(request: TaskRequest, _: None = Depends(verify_api_key)):
     tool_map = {t.name: t for t in AVAILABLE_TOOLS}
     if request.task not in tool_map:
         raise HTTPException(

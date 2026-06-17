@@ -144,3 +144,37 @@ def list_calendar_events(
             line += f"\n  {link}"
         lines.append(line)
     return "\n".join(lines)
+
+
+@tool
+def list_calendars() -> str:
+    """
+    List Google calendars available to EVI (summary + calendar id).
+    Use when configuring WINDMILL_CALENDAR_ID or user asks which calendars exist.
+    """
+    gcal = os.getenv("WINDMILL_GCAL_RESOURCE", "gcal").strip()
+    if gcal.startswith("$var:"):
+        gcal = gcal[5:]
+    if gcal and not gcal.startswith("$res:"):
+        gcal = f"$res:{gcal}"
+    payload = {"gcal": gcal}
+    result = get_integration().post("list_calendars", payload, timeout=60, wait_result=True)
+    if "failed" in result.lower():
+        return _format_windmill_error(result, "listar calendários")
+    try:
+        blob = json.loads(result) if result.strip().startswith("{") else None
+    except json.JSONDecodeError:
+        blob = None
+    if blob is None:
+        return f"Resposta inesperada: {result[:400]}"
+    if blob.get("status") == "error":
+        return f"Erro: {blob.get('detail', result)[:400]}"
+    cals = blob.get("calendars") or []
+    if not cals:
+        return "Nenhum calendário encontrado na conta Google."
+    lines = ["Calendários Google:"]
+    for c in cals:
+        summary = c.get("summary") or "(sem nome)"
+        cid = c.get("id") or "?"
+        lines.append(f"• {summary}\n  id: {cid}")
+    return "\n".join(lines)

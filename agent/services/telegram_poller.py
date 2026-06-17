@@ -10,7 +10,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from services.telegram_handler import ChatInvoke, process_telegram_update
 
@@ -52,7 +52,12 @@ def fetch_updates(token: str, offset: int = 0, timeout: int = 30) -> List[Dict[s
     return data.get("result") or []
 
 
-def _poll_loop(token: str, invoke_chat: ChatInvoke) -> None:
+def _poll_loop(
+    token: str,
+    invoke_chat: ChatInvoke,
+    reset_session: Callable[[str], None] | None = None,
+    compact_session: Callable[[str], None] | None = None,
+) -> None:
     offset = 0
     delete_webhook(token)
     print("EVI: Telegram poller started (long polling)", flush=True)
@@ -65,7 +70,12 @@ def _poll_loop(token: str, invoke_chat: ChatInvoke) -> None:
                 if uid is not None:
                     offset = int(uid) + 1
                 try:
-                    out = process_telegram_update(update, invoke_chat)
+                    out = process_telegram_update(
+                        update,
+                        invoke_chat,
+                        reset_session=reset_session,
+                        compact_session=compact_session,
+                    )
                     logger.info(
                         "update %s session=%s sent=%s",
                         uid,
@@ -79,7 +89,13 @@ def _poll_loop(token: str, invoke_chat: ChatInvoke) -> None:
             time.sleep(5)
 
 
-def start_poller(invoke_chat: ChatInvoke, token: Optional[str] = None) -> bool:
+def start_poller(
+    invoke_chat: ChatInvoke,
+    token: Optional[str] = None,
+    *,
+    reset_session: Callable[[str], None] | None = None,
+    compact_session: Callable[[str], None] | None = None,
+) -> bool:
     """Start background long-polling thread. Idempotent."""
     global _thread
     tok = (token or os.getenv("TELEGRAM_BOT_TOKEN", "")).strip()
@@ -91,7 +107,7 @@ def start_poller(invoke_chat: ChatInvoke, token: Optional[str] = None) -> bool:
     _stop.clear()
     _thread = threading.Thread(
         target=_poll_loop,
-        args=(tok, invoke_chat),
+        args=(tok, invoke_chat, reset_session, compact_session),
         name="telegram-poller",
         daemon=True,
     )

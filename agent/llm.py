@@ -19,6 +19,37 @@ def _embed_provider() -> str:
     return os.getenv("EVI_EMBED_PROVIDER", "ollama").strip().lower()
 
 
+def build_ollama_llm(*, temperature: float | None = None, num_ctx: int | None = None):
+    """Always Ollama — for background tasks (extract, summaries, contact learn)."""
+    from langchain_ollama import ChatOllama
+
+    return ChatOllama(
+        model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct-q4_K_M"),
+        base_url=os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
+        temperature=temperature if temperature is not None else 0.1,
+        num_ctx=num_ctx if num_ctx is not None else 2048,
+        num_gpu=-1,
+    )
+
+
+def build_background_llm(*, temperature: float | None = None, num_ctx: int | None = None):
+    """Background/cron LLM — Ollama unless EVI_BACKGROUND_LLM_PROVIDER overrides chat provider."""
+    override = os.getenv("EVI_BACKGROUND_LLM_PROVIDER", "ollama").strip().lower()
+    if override == "ollama":
+        return build_ollama_llm(temperature=temperature, num_ctx=num_ctx)
+    if override in ("gemini", "openai", "anthropic"):
+        prev = os.environ.get("EVI_LLM_PROVIDER")
+        os.environ["EVI_LLM_PROVIDER"] = override
+        try:
+            return build_llm(temperature=temperature, num_ctx=num_ctx)
+        finally:
+            if prev is None:
+                os.environ.pop("EVI_LLM_PROVIDER", None)
+            else:
+                os.environ["EVI_LLM_PROVIDER"] = prev
+    return build_ollama_llm(temperature=temperature, num_ctx=num_ctx)
+
+
 def build_llm(*, temperature: float | None = None, num_ctx: int | None = None):
     """Return a LangChain BaseChatModel for the configured provider."""
     provider = _llm_provider()
@@ -50,16 +81,7 @@ def build_llm(*, temperature: float | None = None, num_ctx: int | None = None):
             temperature=temperature if temperature is not None else 0.1,
         )
 
-    # Default: ollama
-    from langchain_ollama import ChatOllama
-
-    return ChatOllama(
-        model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct-q4_K_M"),
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
-        temperature=temperature if temperature is not None else 0.1,
-        num_ctx=num_ctx if num_ctx is not None else 2048,
-        num_gpu=-1,
-    )
+    return build_ollama_llm(temperature=temperature, num_ctx=num_ctx)
 
 
 def build_embeddings():

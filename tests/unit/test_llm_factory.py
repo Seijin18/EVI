@@ -53,6 +53,20 @@ def test_build_embeddings_ollama_constructs():
     fake_embed.assert_called_once()
 
 
+def test_build_background_llm_defaults_ollama():
+    """build_background_llm() uses Ollama even when EVI_LLM_PROVIDER=gemini."""
+    fake_ollama = MagicMock()
+    fake_module = MagicMock()
+    fake_module.ChatOllama = fake_ollama
+    with patch.dict(os.environ, {"EVI_LLM_PROVIDER": "gemini", "EVI_BACKGROUND_LLM_PROVIDER": "ollama"}):
+        with patch.dict("sys.modules", {"langchain_ollama": fake_module}):
+            import importlib
+            import llm as llm_mod
+            importlib.reload(llm_mod)
+            llm_mod.build_background_llm()
+    fake_ollama.assert_called_once()
+
+
 if __name__ == "__main__":
     test_build_llm_provider_env_read()
     test_build_embeddings_provider_env_read()
