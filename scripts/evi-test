@@ -4,12 +4,36 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export PYTHONPATH="${ROOT}/agent:${PYTHONPATH:-}"
 
-# Live Windmill/RAG need langchain + agent env; prefer agent-api container when up
-if [[ " $* " == *" --live-windmill "* ]] || [[ " $* " == *" --live-qdrant "* ]] || [[ " $* " == *" memory-live "* ]]; then
-  if docker compose -f "${ROOT}/docker-compose.yml" ps --status running agent-api 2>/dev/null | grep -q agent-api; then
-    exec docker compose -f "${ROOT}/docker-compose.yml" exec -T \
-      -e "EVI_REPO_ROOT=${ROOT}" \
-      agent-api python3 /app/testing/cli.py "$@"
+_agent_api_up() {
+  docker compose -f "${ROOT}/docker-compose.yml" ps --status running agent-api 2>/dev/null | grep -q agent-api
+}
+
+_run_in_agent_api() {
+  docker compose -f "${ROOT}/docker-compose.yml" exec -T \
+    -e "EVI_REPO_ROOT=${ROOT}" \
+    -e "EVI_FIXTURES_DIR=/fixtures" \
+    -e "EVI_API_URL=http://127.0.0.1:8000" \
+    agent-api python3 /app/testing/cli.py "$@"
+}
+
+feature="${1:-smoke}"
+feature="${feature//_/-}"
+
+# Live / stack tests need langchain + httpx; prefer agent-api container when up
+if _agent_api_up; then
+  use_container=false
+  if [[ "$feature" == "chat" ]] || [[ "$feature" == "memory-live" ]]; then
+    use_container=true
+  fi
+  if [[ " $* " == *" --live-windmill "* ]] || [[ " $* " == *" --live-qdrant "* ]]; then
+    use_container=true
+  fi
+  if [[ " $* " == *" --live-telegram "* ]]; then
+    use_container=true
+  fi
+  if [[ "$use_container" == true ]]; then
+    _run_in_agent_api "$@"
+    exit $?
   fi
 fi
 

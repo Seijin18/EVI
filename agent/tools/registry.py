@@ -1,7 +1,7 @@
 """Single registry for LangGraph tools — avoid drift between main.py and graph.py."""
 
 from tools.calendar_tool import list_calendar_events, schedule_event
-from tools.email_tool import delete_emails, summarize_inbox
+from tools.email_tool import delete_emails, delete_emails_by_query, summarize_inbox
 from tools.file_organizer import organize_inbox
 from tools.note_manager import save_note_manual
 from tools.rag_tool import (
@@ -31,6 +31,7 @@ def get_all_tools():
         create_task,
         summarize_inbox,
         delete_emails,
+        delete_emails_by_query,
         list_pending_commitments,
         list_scheduled_today,
         confirm_commitments,

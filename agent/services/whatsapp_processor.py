@@ -138,6 +138,14 @@ def _resolve_time(text: str) -> Optional[str]:
     return None
 
 
+_GENERIC_TITLES = frozenset({"reunião", "reuniao", "item", "reunião", "meeting", "event"})
+
+
+def _is_generic_title(title: str) -> bool:
+    t = title.strip().lower()
+    return t in _GENERIC_TITLES or len(t) < 4
+
+
 def extract_commitment(msg: IncomingMessage) -> Optional[Commitment]:
     text = msg.text.strip()
     if len(text) < 12 or _SKIP_PATTERNS.match(text):
@@ -155,6 +163,8 @@ def extract_commitment(msg: IncomingMessage) -> Optional[Commitment]:
         m = re.search(r"reuni[ãa]o\s+com\s+([^,.]+)", text, re.I)
         if m:
             title = f"Reunião com {m.group(1).strip()}".capitalize()[:60]
+        elif not (date_str or time_str):
+            return None
         else:
             title = "Reunião"
     elif _REMIND_RE.search(text):
@@ -171,6 +181,9 @@ def extract_commitment(msg: IncomingMessage) -> Optional[Commitment]:
             date_str = _next_weekday(ref, 6).strftime("%Y-%m-%d")
 
     if not (_MEETING_RE.search(text) or _REMIND_RE.search(text) or _DINNER_RE.search(text)):
+        return None
+
+    if _is_generic_title(title):
         return None
 
     return Commitment(

@@ -7,24 +7,22 @@
 
 ---
 
-## Current architecture (June 2026 — as-built)
+## Current architecture (June 2026 — EVI v3)
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| Agent | FastAPI + LangGraph ReAct (`agent/`) | `/chat`, tools, bounded memory |
-| Orchestration | **Windmill** (`windmill/f/integrations/`) | Calendar, Tasks, Gmail, Telegram bridge |
-| Messaging | Evolution API | WhatsApp webhooks → commitment queue |
-| Data | Postgres | Sessions + `pending_commitments` |
-| Vector | Qdrant | `university_notes` RAG (secondary priority) |
-| LLM | Ollama `qwen2.5:3b-instruct-q4_K_M` | Local reasoning |
+| Gateway | FastAPI `agent/main.py` + webhooks | Routes Telegram, WhatsApp control, `/chat` |
+| Runtime | LangGraph ReAct + `context_assembly` | LLM-first; workspace bootstrap + tool snapshots |
+| Workspace | `EVI_WORKSPACE/` | USER.md, AGENTS.md, MEMORY.md, skills |
+| Orchestration | **Windmill** | Gmail, Calendar, Tasks (tool hub only) |
+| Hot memory | Postgres + `session_tool_snapshots` | Turns + structured tool results |
+| Cold memory | `EVI_CONTACT_MEMORY_DIR` | profile.md, timeline.jsonl per JID |
+| Messaging ingest | Evolution filter + extract | Webhook pipeline (not chat UX) |
+| LLM | Gemini / Ollama fallback | Configurable via `EVI_LLM_PROVIDER` |
 
-**WhatsApp commitment flow (no auto-schedule on webhook):**
+**WhatsApp:** ingest → filter → extract → `pending_commitments`; control JIDs → `/chat` grafo.
 
-```
-Evolution webhook → extract + priority → Postgres pending_commitments
-       → optional Telegram digest → user reviews in /chat
-       → confirm_commitments → schedule_event (events) | create_task (tasks)
-```
+**Direct handlers:** disabled by default (`EVI_DIRECT_HANDLERS=false`); use LLM + tools.
 
 **Windmill OAuth resources:** `gcal` (Calendar), `gcloud` (Google Tasks API scope), `gmail`.  
 **Env:** `WINDMILL_*_RESOURCE`, `WINDMILL_CALENDAR_ID`, `WINDMILL_TOKEN`. See `windmill/README.md`.

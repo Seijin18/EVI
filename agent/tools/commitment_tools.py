@@ -57,7 +57,7 @@ def confirm_commitments(
     from db import init_db, list_pending_commitments, update_commitment_status
 
     init_db()
-    pending = {r["id"]: r for r in list_pending_commitments(limit=100)}
+    pending = {r["id"]: r for r in list_pending_commitments(limit=100, include_past=True)}
     results = []
     for cid in commitment_ids:
         row = pending.get(int(cid))

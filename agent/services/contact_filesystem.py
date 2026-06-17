@@ -111,3 +111,29 @@ def list_contact_dirs() -> list[Path]:
     if not base.is_dir():
         return []
     return sorted(p for p in base.iterdir() if p.is_dir())
+
+
+def read_timeline_tail(jid: str, limit: int = 5) -> list[dict[str, Any]]:
+    """Last N timeline entries for LLM extract context."""
+    if not memory_enabled() or not jid:
+        return []
+    path = contact_dir(jid) / "timeline.jsonl"
+    if not path.is_file():
+        return []
+    lines = path.read_text(encoding="utf-8").strip().splitlines()
+    entries: list[dict[str, Any]] = []
+    for line in lines[-limit:]:
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return entries
+
+
+def read_profile_excerpt(jid: str, max_chars: int = 800) -> str:
+    if not memory_enabled() or not jid:
+        return ""
+    profile = contact_dir(jid) / "profile.md"
+    if not profile.is_file():
+        return ""
+    return profile.read_text(encoding="utf-8").strip()[:max_chars]

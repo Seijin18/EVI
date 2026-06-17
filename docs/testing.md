@@ -50,7 +50,18 @@ Three tiers:
 | Knowledge graph | `./scripts/evi-test graph` | SCN-MEM-03 |
 | Memory live (stack) | `./scripts/evi-test memory-live` | SCN-MEM-02/03 live |
 
-### Unit tests (commitment review)
+### Runtime v3 / Inbox UX (Jun 2026)
+
+| Feature | Command | SCN |
+|---------|---------|-----|
+| Runtime v3 offline | `./scripts/evi-test runtime-v3` | SCN-UX-RUNTIME |
+| Inbox UX mock | `./scripts/evi-test inbox-ux` | SCN-UX-INBOX-01/02/04 |
+| Inbox UX live harness | `./scripts/evi-inbox-ux-verify.sh` | SCN-UX-INBOX live |
+| Chat invoke (unit) | `tests/unit/test_chat_invoke.py` | SCN-UX-CHAT |
+| LLM-first control (unit) | `tests/unit/test_whatsapp_control.py`, `test_telegram_handler.py` | SCN-UX-WA-CTRL-01 |
+| Evolution require_ts | `./scripts/evi-test evolution` | SCN-UX-WA-ING-01 |
+| Email messages fixture | `tests/fixtures/windmill/email_summary_messages.json` | SCN-EMAIL-04 |
+
 
 | SCN | Test file |
 |-----|-----------|
@@ -60,6 +71,8 @@ Three tiers:
 | SCN-WA-09 | `tests/unit/test_evolution_filter.py` |
 | SCN inbox priority | `tests/unit/test_commitment_priority.py` |
 | SCN-WA-16 LLM fallback | `tests/unit/test_whatsapp_llm_extract.py` |
+| SCN-UX-CHAT | `tests/unit/test_chat_invoke.py` — context + tool snapshots |
+| SCN-UX-WA-CTRL | `tests/unit/test_whatsapp_control.py` — LLM-first when `EVI_DIRECT_HANDLERS=false` |
 
 ```bash
 pytest tests/unit/test_commitment_tools.py -q
@@ -91,7 +104,7 @@ Scenario IDs are defined in `openspec/specs/*/spec.md`.
 |------|---------|---------------|
 | SCN-E2E-01 | `docker compose up -d --build` | postgres → qdrant/windmill healthy → agent-api (SCN-OPS-01) |
 | SCN-OPS-01 | `docker compose ps` | postgres, qdrant, windmill-server, agent-api show `healthy` |
-| SCN-E2E-02 | `./scripts/evi-test smoke` | 13/13 offline |
+| SCN-E2E-02 | `./scripts/evi-test smoke` | 14/14 offline |
 | SCN-E2E-03 | `export DATABASE_URL=postgresql://evi:PASS@localhost:5432/evidb` | session + commitments connect |
 | SCN-E2E-04 | Ollama running on host (not in compose) | `curl host.docker.internal:11434` from agent; chat retries until model loads |
 | SCN-E2E-05 | `./scripts/evi-test smoke --full` | chat PASS or documented skip |

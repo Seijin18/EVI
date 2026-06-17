@@ -42,6 +42,13 @@ The EVI repository MUST NOT depend on Graphiti or external episodic-memory MCP f
 - **WHEN** `.cursor/rules/evi-stack.mdc` is inspected
 - **THEN** Graphiti is explicitly excluded from project MCP
 
+### Requirement: User-level workspace memory
+The system SHALL support user-level long memory at `EVI_WORKSPACE/MEMORY.md` and daily logs at `EVI_WORKSPACE/memory/YYYY-MM-DD.md`, with memory flush before session compaction.
+
+#### Scenario: SCN-MEM-05
+- **WHEN** memory flush runs before bounded-memory trim
+- **THEN** a line is appended to the current day's memory log file
+
 ## Directory contract (Etapa 5a target)
 
 ```

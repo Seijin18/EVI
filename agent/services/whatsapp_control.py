@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, Set
 from llm import extract_llm_text
 from services.commitment_review.handler import try_direct_review
 from services.direct_email import try_direct_email
+from services.direct_handlers import direct_handlers_enabled
 from services.direct_task import try_direct_task
 from services.evolution_client import (
     format_evi_whatsapp,
@@ -39,66 +40,68 @@ def process_whatsapp_control_message(
     if is_evi_bot_message(text):
         return {"ok": True, "skipped": "evi_echo"}
 
-    direct = try_direct_review(text, confirmed_via="whatsapp")
-    if direct:
-        reply = direct
-        sent = send_whatsapp_text(jid, reply, add_prefix=True)
-        return {
-            "ok": True,
-            "response": format_evi_whatsapp(reply),
-            "session_id": session_id,
-            "whatsapp_sent": sent,
-            "review_direct": True,
-        }
+    if direct_handlers_enabled():
+        direct = try_direct_review(text, confirmed_via="whatsapp")
+        if direct:
+            reply = direct
+            sent = send_whatsapp_text(jid, reply, add_prefix=True)
+            return {
+                "ok": True,
+                "response": format_evi_whatsapp(reply),
+                "session_id": session_id,
+                "whatsapp_sent": sent,
+                "review_direct": True,
+            }
 
-    scheduled = try_direct_schedule(text)
-    if scheduled:
-        sent = send_whatsapp_text(jid, scheduled, add_prefix=True)
-        return {
-            "ok": True,
-            "response": format_evi_whatsapp(scheduled),
-            "session_id": session_id,
-            "whatsapp_sent": sent,
-            "scheduled_direct": True,
-        }
+        scheduled = try_direct_schedule(text)
+        if scheduled:
+            sent = send_whatsapp_text(jid, scheduled, add_prefix=True)
+            return {
+                "ok": True,
+                "response": format_evi_whatsapp(scheduled),
+                "session_id": session_id,
+                "whatsapp_sent": sent,
+                "scheduled_direct": True,
+            }
 
-    tasked = try_direct_task(text)
-    if tasked:
-        sent = send_whatsapp_text(jid, tasked, add_prefix=True)
-        return {
-            "ok": True,
-            "response": format_evi_whatsapp(tasked),
-            "session_id": session_id,
-            "whatsapp_sent": sent,
-            "task_direct": True,
-        }
+        tasked = try_direct_task(text)
+        if tasked:
+            sent = send_whatsapp_text(jid, tasked, add_prefix=True)
+            return {
+                "ok": True,
+                "response": format_evi_whatsapp(tasked),
+                "session_id": session_id,
+                "whatsapp_sent": sent,
+                "task_direct": True,
+            }
 
-    emailed = try_direct_email(text)
-    if emailed:
-        sent = send_whatsapp_text(jid, emailed, add_prefix=True)
-        return {
-            "ok": True,
-            "response": format_evi_whatsapp(emailed),
-            "session_id": session_id,
-            "whatsapp_sent": sent,
-            "email_direct": True,
-        }
+        emailed = try_direct_email(text)
+        if emailed:
+            sent = send_whatsapp_text(jid, emailed, add_prefix=True)
+            return {
+                "ok": True,
+                "response": format_evi_whatsapp(emailed),
+                "session_id": session_id,
+                "whatsapp_sent": sent,
+                "email_direct": True,
+            }
 
     try:
         result = invoke_chat(text, session_id)
         reply = extract_llm_text(result.get("response"))
     except Exception as exc:
         reply = f"Não consegui processar agora. Detalhe: {str(exc)[:180]}"
+        result = {}
 
     if not reply:
         reply = (
-            "Não obtive resposta do agente. Tente comandos diretos: "
-            "'criar tarefa teste', 'agende almoço amanhã 12h', "
-            "'listar compromissos pendentes'."
+            "Não obtive resposta do agente. Descreva o que precisa "
+            "(emails, compromissos, tarefas ou calendário)."
         )
 
     try:
         from services.profile_updater import extract_profile_facts, merge_profile
+
         merge_profile(jid, extract_profile_facts(text))
     except Exception:
         pass
@@ -109,4 +112,6 @@ def process_whatsapp_control_message(
         "response": format_evi_whatsapp(reply) if reply else "",
         "session_id": session_id,
         "whatsapp_sent": sent,
+        "llm": True,
+        "tools": result.get("tools") or [],
     }

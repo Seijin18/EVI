@@ -68,6 +68,15 @@ def _run_migrations() -> None:
                     ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
                 ALTER TABLE pending_commitments
                     ADD COLUMN IF NOT EXISTS confirmed_via VARCHAR(32);
+                CREATE TABLE IF NOT EXISTS session_tool_snapshots (
+                    id SERIAL PRIMARY KEY,
+                    session_id VARCHAR(128) NOT NULL,
+                    tool_name VARCHAR(64) NOT NULL,
+                    payload JSONB NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS idx_session_tool_snapshots
+                    ON session_tool_snapshots(session_id, created_at DESC);
                 """
             )
         conn.commit()
@@ -162,17 +171,26 @@ def insert_pending_commitment(
     return row[0] if row else None
 
 
-def list_pending_commitments(limit: int = 50) -> List[Dict[str, Any]]:
+def list_pending_commitments(limit: int = 50, *, include_past: bool = False) -> List[Dict[str, Any]]:
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
+            past_filter = ""
+            if not include_past:
+                past_filter = """
+                  AND NOT (
+                    (event_date IS NOT NULL AND event_date < CURRENT_DATE)
+                    OR (due_date IS NOT NULL AND due_date < CURRENT_DATE)
+                  )
                 """
+            cur.execute(
+                f"""
                 SELECT id, source, source_id, type, title,
                        event_date::text, event_time, due_date::text,
                        priority, status, raw_text, source_chat, source_label,
                        confirmed_at, confirmed_via, created_at
                 FROM pending_commitments
                 WHERE status = 'pending'
+                {past_filter}
                 ORDER BY
                     CASE priority
                         WHEN 'urgent' THEN 0
@@ -180,6 +198,7 @@ def list_pending_commitments(limit: int = 50) -> List[Dict[str, Any]]:
                         WHEN 'university' THEN 2
                         ELSE 3
                     END,
+                    COALESCE(event_date, due_date) ASC NULLS LAST,
                     created_at DESC
                 LIMIT %s
                 """,
@@ -255,6 +274,44 @@ def count_unnotified_pending() -> int:
                 """
             )
             return int(cur.fetchone()[0])
+
+
+def save_tool_snapshot(session_id: str, tool_name: str, payload: Dict[str, Any]) -> None:
+    import json
+
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO session_tool_snapshots (session_id, tool_name, payload)
+                VALUES (%s, %s, %s::jsonb)
+                """,
+                (session_id, tool_name, json.dumps(payload)),
+            )
+        conn.commit()
+
+
+def load_tool_snapshots(session_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT tool_name, payload, created_at
+                FROM session_tool_snapshots
+                WHERE session_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (session_id, limit),
+            )
+            rows = cur.fetchall()
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        if item.get("created_at"):
+            item["created_at"] = str(item["created_at"])
+        out.append(item)
+    return out
 
 
 def mark_pending_notified(ids: List[int]) -> None:

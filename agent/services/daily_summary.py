@@ -131,3 +131,31 @@ def run_daily_summaries(*, day: date | None = None) -> int:
         written += 1
         seen_jids.add(jid)
     return written
+
+
+def heartbeat_enabled() -> bool:
+    return os.getenv("EVI_HEARTBEAT_ENABLED", "false").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def read_heartbeat_checklist() -> str:
+    from services.workspace import read_bootstrap_file
+
+    return read_bootstrap_file("HEARTBEAT.md")
+
+
+def run_heartbeat_dry() -> dict[str, Any]:
+    """Return checklist + pending count without sending messages (cron stub)."""
+    out: dict[str, Any] = {"ok": True, "enabled": heartbeat_enabled()}
+    out["checklist"] = read_heartbeat_checklist()
+    try:
+        from db import count_unnotified_pending, init_db
+
+        init_db()
+        out["pending_unnotified"] = count_unnotified_pending()
+    except Exception:
+        out["pending_unnotified"] = 0
+    return out

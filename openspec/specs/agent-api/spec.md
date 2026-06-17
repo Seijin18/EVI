@@ -27,6 +27,20 @@ The system SHALL expose `POST /chat` accepting `message` and optional `session_i
 - **WHEN** valid message posted and graph initialized
 - **THEN** response includes `response` text
 
+### Requirement: Context assembly before chat
+The system SHALL assemble project context from workspace bootstrap files, session tool snapshots, and memory files before invoking the LangGraph agent.
+
+#### Scenario: SCN-RT-01
+- **WHEN** `POST /chat` runs with `session_id` set
+- **THEN** the agent system prompt includes workspace bootstrap content when files exist
+
+### Requirement: Session tool snapshots
+The system SHALL persist structured JSON results from tool calls per session in Postgres `session_tool_snapshots`.
+
+#### Scenario: SCN-RT-02
+- **WHEN** a chat turn completes with tool results
+- **THEN** snapshots are stored for follow-up turns
+
 ### Requirement: Tools dispatch
 The system SHALL expose `POST /run-task` with `task` name and `params` object.
 

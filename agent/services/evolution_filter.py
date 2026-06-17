@@ -34,6 +34,16 @@ def _parse_ts(ts: str) -> datetime | None:
         return None
 
 
+def _process_after_cutoff() -> datetime | None:
+    raw = os.getenv("EVI_WHATSAPP_PROCESS_AFTER", "").strip()
+    if not raw:
+        return None
+    try:
+        return _parse_ts(raw)
+    except Exception:
+        return None
+
+
 def _load_seen_ids(path: Path) -> Set[str]:
     if not path.exists():
         return set()
@@ -105,6 +115,11 @@ def filter_for_processing(
         "true",
         "yes",
     )
+    require_ts = os.getenv("EVI_WHATSAPP_REQUIRE_TS", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
     stats = {
         "received": len(messages),
@@ -112,6 +127,8 @@ def filter_for_processing(
         "skipped_group": 0,
         "skipped_old": 0,
         "skipped_seen": 0,
+        "skipped_no_ts": 0,
+        "skipped_watermark": 0,
         "kept": 0,
     }
     dropped: List[DroppedMessage] = []
@@ -119,8 +136,10 @@ def filter_for_processing(
         return [], stats, dropped
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_h)
+    watermark = _process_after_cutoff()
     seen_path = seen_ids_path(log_dir)
     seen = _load_seen_ids(seen_path) if dedupe else set()
+    all_received_ids: list[str] = []
 
     def _drop(msg: IncomingMessage, reason: str) -> None:
         dropped.append(
@@ -139,6 +158,8 @@ def filter_for_processing(
 
     candidates: List[IncomingMessage] = []
     for msg in messages:
+        if msg.id:
+            all_received_ids.append(msg.id)
         if evi_prefix and msg.text.strip().startswith(evi_prefix):
             stats["skipped_from_me"] += 1
             _drop(msg, "evi_echo")
@@ -152,6 +173,14 @@ def filter_for_processing(
             _drop(msg, "group")
             continue
         parsed = _parse_ts(msg.ts)
+        if require_ts and not parsed:
+            stats["skipped_no_ts"] += 1
+            _drop(msg, "no_ts")
+            continue
+        if watermark and parsed and parsed < watermark:
+            stats["skipped_watermark"] += 1
+            _drop(msg, "watermark")
+            continue
         if parsed and parsed < cutoff:
             stats["skipped_old"] += 1
             _drop(msg, "old")
@@ -171,8 +200,8 @@ def filter_for_processing(
     for msg in candidates[max_per:]:
         _drop(msg, "max_per_webhook")
 
-    if dedupe and kept:
-        seen.update(m.id for m in kept)
+    if dedupe:
+        seen.update(all_received_ids)
         _save_seen_ids(seen_path, seen)
 
     return kept, stats, dropped

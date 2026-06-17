@@ -34,6 +34,8 @@ jobs:
       - name: Tier-2 offline features
         run: |
           ./scripts/evi-test evolution
+          ./scripts/evi-test runtime-v3
+          ./scripts/evi-test inbox-ux
           EVI_CONTACT_MEMORY_DIR=$(mktemp -d) ./scripts/evi-test contact-memory
           EVI_CONTACT_MEMORY_DIR=$(mktemp -d) ./scripts/evi-test daily-summary
           ./scripts/evi-test commitments

@@ -62,6 +62,25 @@ def test_non_whitelisted_group_still_skipped(tmp_path):
     assert dropped[0]["reason"] == "group"
 
 
+def test_skips_missing_timestamp(tmp_path):
+    msg = IncomingMessage(
+        id="no-ts-1",
+        sender="5511999999999@s.whatsapp.net",
+        text="Reunião amanhã às 10h",
+        ts="",
+        is_group=False,
+    )
+    with patch.dict(
+        os.environ,
+        {"EVI_WHATSAPP_REQUIRE_TS": "true", "EVI_WHATSAPP_DEDUPE_IDS": "false"},
+        clear=True,
+    ):
+        kept, stats, dropped = filter_for_processing([msg], log_dir=tmp_path)
+    assert kept == []
+    assert stats["skipped_no_ts"] == 1
+    assert dropped[0]["reason"] == "no_ts"
+
+
 if __name__ == "__main__":
     from pathlib import Path
 

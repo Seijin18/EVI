@@ -14,12 +14,15 @@ from services.whatsapp_processor import Commitment, _parse_ref_dt
 
 _PROMPT = """Extract a calendar commitment from this WhatsApp message (Brazilian Portuguese).
 Reference date (message sent): {ref_date}
+Contact context:
+{contact_context}
 Message: {text}
 
-If there is NO schedulable commitment, reply exactly: {{"none": true}}
+If there is NO schedulable commitment (casual chat, acknowledgements, vague mentions), reply exactly: {{"none": true}}
 Otherwise reply ONLY valid JSON with keys:
-type ("event" or "task"), title (short), date (YYYY-MM-DD or null), time (HH:MM or null), due (YYYY-MM-DD or null), confidence (0.0-1.0)
+type ("event" or "task"), title (short, descriptive — not generic like "Item" or "Reunião"), date (YYYY-MM-DD or null), time (HH:MM or null), due (YYYY-MM-DD or null), confidence (0.0-1.0)
 Use the reference date to resolve relative days like "dia 12" (day of month in same month/year).
+Ignore group banter without a concrete schedule.
 """
 
 
@@ -82,7 +85,7 @@ def _normalize_llm_fields(
         return None
 
     title = str(data.get("title") or "").strip()
-    if len(title) < 3:
+    if len(title) < 3 or title.lower() in ("reunião", "reuniao", "item", "meeting", "event", "arrival"):
         return None
 
     try:
@@ -135,6 +138,25 @@ def _default_invoke(prompt: str) -> str:
     return str(response)
 
 
+def _contact_context(msg: IncomingMessage) -> str:
+    try:
+        from services.contact_filesystem import read_profile_excerpt, read_timeline_tail
+
+        jid = msg.sender or ""
+        parts: list[str] = []
+        profile = read_profile_excerpt(jid)
+        if profile:
+            parts.append(f"Profile:\n{profile}")
+        timeline = read_timeline_tail(jid, limit=3)
+        if timeline:
+            previews = [e.get("text_preview", "") for e in timeline if e.get("text_preview")]
+            if previews:
+                parts.append("Recent timeline:\n" + "\n".join(f"- {p}" for p in previews))
+        return "\n".join(parts) if parts else "(no contact memory)"
+    except Exception:
+        return "(no contact memory)"
+
+
 def try_llm_extract(
     msg: IncomingMessage,
     invoke: Callable[[str], str] | None = None,
@@ -146,6 +168,7 @@ def try_llm_extract(
     ref = _parse_ref_dt(msg.ts)
     prompt = _PROMPT.format(
         ref_date=ref.strftime("%Y-%m-%d"),
+        contact_context=_contact_context(msg),
         text=msg.text.strip(),
     )
     try:

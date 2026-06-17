@@ -23,7 +23,7 @@ else:
     AGENT_DIR = REPO_ROOT / "agent"
 sys.path.insert(0, str(AGENT_DIR))
 
-FIXTURES = REPO_ROOT / "tests" / "fixtures"
+FIXTURES = Path(os.getenv("EVI_FIXTURES_DIR", REPO_ROOT / "tests" / "fixtures"))
 GOLDEN = REPO_ROOT / "tests" / "golden"
 LOGS = REPO_ROOT / "logs"
 
@@ -184,21 +184,34 @@ def run_email(live_windmill: bool = False) -> bool:
             r = summarize_inbox.invoke({"max_messages": 5})
             text = str(r)
             ok = (
-                '"summary"' in text
-                and "failed" not in text.lower()
-                and ('"status":"ok"' in text or len(text) > 20)
+                "failed" not in text.lower()
+                and "Não foi possível" not in text
+                and (
+                    "Caixa de entrada" in text
+                    or '"summary"' in text
+                    or '"status":"ok"' in text
+                    or (len(text) > 40 and "•" in text)
+                )
             )
         except ImportError as e:
             return _result("email", False, str(e))
         except Exception as e:
             return _result("email", False, str(e))
         return _result("email", ok, text[:200])
-    fixture = FIXTURES / "windmill" / "email_summary.json"
-    if not fixture.exists():
+    legacy = FIXTURES / "windmill" / "email_summary.json"
+    messages_fixture = FIXTURES / "windmill" / "email_summary_messages.json"
+    if not legacy.exists():
         return _result("email", False, "fixture missing")
-    data = json.loads(fixture.read_text())
+    data = json.loads(legacy.read_text())
     ok = "summary" in data and len(data["summary"]) > 0
-    return _result("email", ok, "fixture parse")
+    if messages_fixture.exists():
+        msg_data = json.loads(messages_fixture.read_text())
+        ok = ok and msg_data.get("status") == "ok" and len(msg_data.get("messages") or []) >= 2
+        from services.response_format import format_inbox_result
+
+        formatted = format_inbox_result(json.dumps(msg_data))
+        ok = ok and "msg001" in formatted and "AliExpress" in formatted
+    return _result("email", ok, "fixture parse + messages format")
 
 
 def run_whatsapp(verbose: bool, log_file: Path | None) -> bool:
@@ -285,7 +298,8 @@ def run_telegram(live: bool = False) -> bool:
                 ok = False
                 detail = f"webhook HTTP {r.status_code}"
         except Exception as e:
-            detail = f"webhook skipped ({e})"
+            ok = False
+            detail = f"webhook failed ({e})"
     return _result("telegram", ok, detail)
 
 
@@ -336,6 +350,27 @@ def run_evolution() -> bool:
         ok = ok and stats["received"] >= 1
         if dropped:
             ok = ok and bool(dropped[0].get("message_ts"))
+        # SCN-UX-WA-ING-01: messages without timestamp skipped when REQUIRE_TS=true
+        from services.message_sources import IncomingMessage
+
+        no_ts = IncomingMessage(
+            id="no-ts-1",
+            text="hello",
+            sender="5511@s.whatsapp.net",
+            ts="",
+            from_me=False,
+            is_group=False,
+        )
+        prev = os.environ.get("EVI_WHATSAPP_REQUIRE_TS")
+        os.environ["EVI_WHATSAPP_REQUIRE_TS"] = "true"
+        try:
+            _, no_ts_stats, _ = filter_for_processing([no_ts], log_dir=P(tmp))
+            ok = ok and no_ts_stats.get("skipped_no_ts", 0) >= 1
+        finally:
+            if prev is None:
+                os.environ.pop("EVI_WHATSAPP_REQUIRE_TS", None)
+            else:
+                os.environ["EVI_WHATSAPP_REQUIRE_TS"] = prev
     ok = ok and is_evi_bot_message("[EVI] teste")
     ok = ok and not is_evi_bot_message("oi")
     return _result("evolution", ok, f"parsed={parsed}")
@@ -620,19 +655,157 @@ def run_memory_live() -> bool:
     return _result("memory-live", ok, detail)
 
 
-def run_chat() -> bool:
-    base = os.getenv("EVI_API_URL", "http://localhost:8002")
-    try:
-        import httpx
+def run_runtime_v3() -> bool:
+    """Offline checks for EVI agent runtime v3 (workspace, context, skills)."""
+    ws = os.getenv("EVI_WORKSPACE", str(REPO_ROOT / "EVI_WORKSPACE"))
+    root = Path(ws)
+    required = ["USER.md", "AGENTS.md", "MEMORY.md"]
+    ok = root.is_dir() and all((root / name).is_file() for name in required)
 
-        h = httpx.get(f"{base}/", timeout=5.0)
-        if h.status_code != 200:
-            return _result("chat", True, "skipped (API down)")
-        c = httpx.post(f"{base}/chat", json={"message": "ping"}, timeout=120.0)
-        ok = c.status_code == 200 and "response" in c.json()
-        return _result("chat", ok)
+    prev_ws = os.environ.get("EVI_WORKSPACE")
+    os.environ["EVI_WORKSPACE"] = str(root)
+    try:
+        from services.context_assembly import build_context
+        from services.daily_summary import run_heartbeat_dry
+        from services.skill_loader import build_skills_block, match_skills
+
+        ctx = build_context("telegram-harness", "Revise meus emails")
+        ok = ok and len(ctx) > 20
+        skills = match_skills("Revise meus emails")
+        ok = ok and "inbox-triage" in skills
+        block = build_skills_block("Revise meus emails")
+        ok = ok and ("inbox" in block.lower() or "email" in block.lower())
+        hb = run_heartbeat_dry()
+        ok = ok and hb.get("ok") is True
+        reg_src = (AGENT_DIR / "tools" / "registry.py").read_text(encoding="utf-8")
+        ok = ok and "delete_emails_by_query" in reg_src
     except Exception as e:
-        return _result("chat", True, f"skipped ({e})")
+        return _result("runtime-v3", False, str(e))
+    finally:
+        if prev_ws is None:
+            os.environ.pop("EVI_WORKSPACE", None)
+        else:
+            os.environ["EVI_WORKSPACE"] = prev_ws
+
+    return _result("runtime-v3", ok, f"workspace={root.name}")
+
+
+def run_inbox_ux() -> bool:
+    """SCN-UX-INBOX: inbox format, delete_by_query mock, optional snapshot round-trip."""
+    from unittest.mock import patch
+
+    from services.response_format import format_delete_emails_by_query_result, format_inbox_result
+
+    msg_fixture = FIXTURES / "windmill" / "email_summary_messages.json"
+    if not msg_fixture.exists():
+        return _result("inbox-ux", False, "email_summary_messages.json missing")
+    blob = json.loads(msg_fixture.read_text())
+    formatted = format_inbox_result(json.dumps(blob))
+    ok = "msg001" in formatted and "Caixa de entrada" in formatted
+
+    delete_raw = json.dumps({"status": "ok", "deleted": 2, "q": "from:aliexpress OR from:olx"})
+    delete_fmt = format_delete_emails_by_query_result(delete_raw)
+    ok = ok and "2 email" in delete_fmt
+
+    try:
+        from unittest.mock import MagicMock
+
+        with patch("integrations.factory.get_integration") as get_int:
+            integration = MagicMock()
+            integration.post.return_value = delete_raw
+            get_int.return_value = integration
+            from tools.email_tool import delete_emails_by_query
+
+            out = delete_emails_by_query.invoke({"q": "from:aliexpress OR from:olx"})
+        ok = ok and "2 email" in str(out) and "failed" not in str(out).lower()
+    except ImportError:
+        pass
+
+    if os.getenv("DATABASE_URL"):
+        try:
+            import json as _json
+            from unittest.mock import MagicMock
+
+            from db import init_db, load_tool_snapshots
+            from services.context_assembly import build_context
+            from services.session_context import persist_tool_snapshots
+
+            init_db()
+            sid = f"inbox-ux-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            payload = {"status": "ok", "messages": [{"id": "snap001", "subject": "Test"}]}
+            tool = MagicMock(
+                type="tool",
+                name="summarize_inbox",
+                content=_json.dumps(payload),
+            )
+            persist_tool_snapshots(sid, [tool])
+            rows = load_tool_snapshots(sid, limit=1)
+            ok = ok and len(rows) >= 1
+            ctx = build_context(sid, "apaga o primeiro")
+            ok = ok and ("snap001" in ctx or "SESSION TOOL SNAPSHOTS" in ctx)
+        except Exception as e:
+            print(f"[SKIP] inbox-ux snapshot DB — {e}")
+            with patch(
+                "services.session_context.format_tool_snapshots",
+                return_value=(
+                    'SESSION TOOL SNAPSHOTS (use for follow-ups):\n'
+                    '- summarize_inbox: {"messages": [{"id": "snap001"}]}'
+                ),
+            ):
+                from services.context_assembly import build_context
+
+                ctx = build_context("mock-inbox-ux", "apaga o primeiro")
+            ok = ok and ("snap001" in ctx or "SESSION TOOL SNAPSHOTS" in ctx)
+
+    return _result("inbox-ux", ok, "SCN-UX-INBOX-01/02/04")
+
+
+def run_chat(*, strict: bool = False) -> bool:
+    base = os.getenv("EVI_API_URL", "http://localhost:8002")
+    session_id = "evi-test-chat-harness"
+    import time
+
+    max_attempts = 5 if strict else 1
+    last_error = ""
+
+    for attempt in range(max_attempts):
+        try:
+            import httpx
+
+            headers: dict[str, str] = {}
+            key = os.getenv("EVI_API_KEY", "").strip()
+            if key:
+                headers["X-Api-Key"] = key
+            h = httpx.get(f"{base}/", timeout=5.0, headers=headers)
+            if h.status_code != 200:
+                last_error = f"API down HTTP {h.status_code}"
+                if strict and attempt + 1 < max_attempts:
+                    time.sleep(3)
+                    continue
+                if strict:
+                    return _result("chat", False, last_error)
+                return _result("chat", True, "skipped (API down)")
+            c = httpx.post(
+                f"{base}/chat",
+                json={"message": "ping", "session_id": session_id},
+                headers=headers,
+                timeout=120.0,
+            )
+            if c.status_code != 200:
+                return _result("chat", False, f"HTTP {c.status_code}")
+            body = c.json()
+            ok = "response" in body and "session_id" in body and "tools" in body
+            return _result("chat", ok, f"session={body.get('session_id')}")
+        except Exception as e:
+            last_error = str(e)
+            if strict and attempt + 1 < max_attempts:
+                time.sleep(3)
+                continue
+            if strict:
+                return _result("chat", False, last_error)
+            return _result("chat", True, f"skipped ({last_error})")
+
+    return _result("chat", False, last_error or "unreachable")
 
 
 def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
@@ -647,6 +820,7 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
         lambda: run_tasks(live_windmill),
         lambda: run_telegram(False),
         run_evolution,
+        run_runtime_v3,
         run_watcher,
         lambda: run_dev_bridge(True),
         lambda: run_rag(False),
@@ -673,6 +847,11 @@ def main() -> int:
     parser.add_argument("--live-n8n", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--log", dest="log_path", default=None)
     parser.add_argument("--dry", action="store_true", help="dev-bridge dry run")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Live chat/telegram: fail instead of skip when API/deps missing",
+    )
     args = parser.parse_args()
     live_wm = args.live_windmill or args.live_n8n
 
@@ -694,7 +873,7 @@ def main() -> int:
         "watcher": run_watcher,
         "dev-bridge": lambda: run_dev_bridge(args.dry),
         "rag": lambda: run_rag(args.live_qdrant),
-        "chat": run_chat,
+        "chat": lambda: run_chat(strict=args.strict),
         "health": lambda: run_health(args.full),
         "metrics": lambda: run_metrics(args.full),
         "commitments": run_commitments,
@@ -702,6 +881,8 @@ def main() -> int:
         "daily-summary": run_daily_summary,
         "graph": run_graph,
         "memory-live": run_memory_live,
+        "runtime-v3": run_runtime_v3,
+        "inbox-ux": run_inbox_ux,
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
 

@@ -161,6 +161,34 @@ def chat(
     session_id = request.session_id or x_session_id or app_state.default_session
     _hydrate_memory(session_id)
 
+    from services.context_assembly import build_context
+    from services.memory_flush import maybe_flush_before_compaction
+    from services.session_context import persist_tool_snapshots, summarize_tool_calls
+
+    extra_context = build_context(session_id, request.message)
+
+    def _on_trim() -> None:
+        msgs = app_state.memory.get_messages()
+        last_user = ""
+        last_ai = ""
+        for m in reversed(msgs):
+            if getattr(m, "type", None) == "ai" and not last_ai:
+                from llm import extract_llm_text
+
+                last_ai = extract_llm_text(getattr(m, "content", ""))
+            if getattr(m, "type", None) == "human" and not last_user:
+                last_user = str(getattr(m, "content", ""))
+            if last_user and last_ai:
+                break
+        maybe_flush_before_compaction(
+            session_id=session_id,
+            messages=msgs,
+            user_text=last_user,
+            assistant_text=last_ai,
+        )
+
+    app_state.memory.set_on_trim(_on_trim)
+
     user_message = HumanMessage(content=request.message)
     app_state.memory.add(user_message)
 
@@ -169,6 +197,7 @@ def chat(
         "task_type": "chat",
         "iterations": 0,
         "final_answer": "",
+        "extra_context": extra_context,
     }
 
     try:
@@ -185,12 +214,20 @@ def chat(
         else:
             ai_content = "The agent returned an empty response."
 
+        tool_audit = summarize_tool_calls(output_messages)
+        persist_tool_snapshots(session_id, output_messages)
+
         app_state.memory.clear()
         for msg in output_messages[-16:]:
             app_state.memory.add(msg)
 
         _persist_turn(session_id, request.message, ai_content)
-        return {"response": ai_content, "session_id": session_id}
+        return {
+            "response": ai_content,
+            "session_id": session_id,
+            "tools": tool_audit,
+            "output_messages": output_messages,
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

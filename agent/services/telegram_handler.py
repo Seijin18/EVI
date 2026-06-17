@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict
 
 from llm import extract_llm_text
+from services.direct_handlers import direct_handlers_enabled
 from services.telegram_audit import log_telegram_turn
 from services.telegram_format import format_for_telegram
 from services.commitment_review.handler import try_direct_review
@@ -70,49 +71,50 @@ def process_telegram_update(
     chat_id = message.get("chat", {}).get("id", "telegram")
     session_id = f"telegram-{chat_id}"
 
-    reviewed = try_direct_review(text, confirmed_via="telegram")
-    if reviewed:
-        return _reply_direct(
-            session_id=session_id,
-            chat_id=chat_id,
-            text=text,
-            ai_content=reviewed,
-            tools=[{"type": "direct", "tool": "commitment_review"}],
-            extra={"review_direct": True},
-        )
+    if direct_handlers_enabled():
+        reviewed = try_direct_review(text, confirmed_via="telegram")
+        if reviewed:
+            return _reply_direct(
+                session_id=session_id,
+                chat_id=chat_id,
+                text=text,
+                ai_content=reviewed,
+                tools=[{"type": "direct", "tool": "commitment_review"}],
+                extra={"review_direct": True},
+            )
 
-    direct = try_direct_schedule(text)
-    if direct:
-        return _reply_direct(
-            session_id=session_id,
-            chat_id=chat_id,
-            text=text,
-            ai_content=direct,
-            tools=[{"type": "direct", "tool": "schedule_event"}],
-            extra={"scheduled_direct": True},
-        )
+        direct = try_direct_schedule(text)
+        if direct:
+            return _reply_direct(
+                session_id=session_id,
+                chat_id=chat_id,
+                text=text,
+                ai_content=direct,
+                tools=[{"type": "direct", "tool": "schedule_event"}],
+                extra={"scheduled_direct": True},
+            )
 
-    tasked = try_direct_task(text)
-    if tasked:
-        return _reply_direct(
-            session_id=session_id,
-            chat_id=chat_id,
-            text=text,
-            ai_content=tasked,
-            tools=[{"type": "direct", "tool": "create_task"}],
-            extra={"task_direct": True},
-        )
+        tasked = try_direct_task(text)
+        if tasked:
+            return _reply_direct(
+                session_id=session_id,
+                chat_id=chat_id,
+                text=text,
+                ai_content=tasked,
+                tools=[{"type": "direct", "tool": "create_task"}],
+                extra={"task_direct": True},
+            )
 
-    emailed = try_direct_email(text)
-    if emailed:
-        return _reply_direct(
-            session_id=session_id,
-            chat_id=chat_id,
-            text=text,
-            ai_content=emailed,
-            tools=[{"type": "direct", "tool": "summarize_inbox"}],
-            extra={"email_direct": True},
-        )
+        emailed = try_direct_email(text)
+        if emailed:
+            return _reply_direct(
+                session_id=session_id,
+                chat_id=chat_id,
+                text=text,
+                ai_content=emailed,
+                tools=[{"type": "direct", "tool": "summarize_inbox"}],
+                extra={"email_direct": True},
+            )
 
     try:
         result = invoke_chat(text, session_id)
@@ -133,16 +135,19 @@ def process_telegram_update(
 
     try:
         from services.profile_updater import extract_profile_facts, merge_profile
+
         merge_profile(str(chat_id), extract_profile_facts(text))
     except Exception:
         pass
 
-    tools = result.get("tools") or result.get("output_messages") or []
+    tools = result.get("tools") or []
+    output_messages = result.get("output_messages") or []
+    audit_payload = tools if tools else output_messages
     return _reply_direct(
         session_id=session_id,
         chat_id=chat_id,
         text=text,
         ai_content=result.get("response") or "",
-        tools=tools if isinstance(tools, list) else [],
+        tools=audit_payload if isinstance(audit_payload, list) else [],
         extra={"llm": True},
     )

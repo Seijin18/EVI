@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "count": 3,
+  "summary": "3 unread emails. One mentions project deadline Friday.",
+  "messages": [
+    {
+      "id": "msg001",
+      "from": "noreply@aliexpress.com",
+      "subject": "Oferta especial AliExpress"
+    },
+    {
+      "id": "msg002",
+      "from": "alert@olx.com.br",
+      "subject": "Novo anúncio na sua região"
+    },
+    {
+      "id": "msg003",
+      "from": "boss@company.com",
+      "subject": "Project deadline Friday"
+    }
+  ]
+}

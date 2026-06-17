@@ -102,6 +102,27 @@ def format_inbox_result(raw: str) -> str:
             return "\n".join(lines)
         summary = str(blob.get("summary") or "").strip()
         if summary:
+            # Legacy Windmill summary: parse "- [id] subject — sender" lines
+            parsed_lines = []
+            for line in summary.splitlines():
+                line = line.strip()
+                if line.startswith("- ["):
+                    m = re.match(r"^- \[([^\]]+)\]\s*(.+?)(?:\s+—\s+(.+))?$", line)
+                    if m:
+                        parsed_lines.append(
+                            f"• [{m.group(1)}] {m.group(2)}"
+                            + (f"\n  De: {m.group(3)}" if m.group(3) else "")
+                        )
+                    else:
+                        parsed_lines.append(f"• {line.lstrip('- ')}")
+                elif line.startswith("- "):
+                    parsed_lines.append(f"• {line[2:]}")
+            if parsed_lines:
+                lines = [f"Caixa de entrada ({count} recentes):"] + parsed_lines
+                lines.append(
+                    "Para apagar: «apagar email <id>», delete_emails_by_query, ou peça ao assistente."
+                )
+                return "\n".join(lines)
             return summary
         return "Caixa de entrada vazia (nenhuma mensagem recente)."
 
@@ -122,6 +143,24 @@ def format_delete_emails_result(raw: str, *, count: int | None = None) -> str:
     if blob and blob.get("status") == "ok":
         n = blob.get("deleted", count or 0)
         return f"{n} email(s) movido(s) para a lixeira."
+
+    if blob and blob.get("status") == "error":
+        return f"Erro ao apagar: {str(blob.get('detail', raw))[:250]}"
+
+    return raw[:300]
+
+
+def format_delete_emails_by_query_result(raw: str) -> str:
+    if "failed" in raw.lower():
+        hint = format_windmill_oauth_error(raw, "apagar emails", "WINDMILL_GMAIL_RESOURCE")
+        return hint or f"Não foi possível apagar os emails. {raw[:300]}"
+
+    blob = _parse_json_blob(raw)
+    if blob and blob.get("status") == "ok":
+        n = blob.get("deleted", 0)
+        q = blob.get("q", "")
+        q_bit = f" (query: {q})" if q else ""
+        return f"{n} email(s) movido(s) para a lixeira{q_bit}."
 
     if blob and blob.get("status") == "error":
         return f"Erro ao apagar: {str(blob.get('detail', raw))[:250]}"

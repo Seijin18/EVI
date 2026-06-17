@@ -5,6 +5,7 @@ from langchain_core.tools import tool
 
 from integrations.factory import get_integration
 from services.response_format import (
+    format_delete_emails_by_query_result,
     format_delete_emails_result,
     format_inbox_result,
 )
@@ -50,3 +51,26 @@ def delete_emails(message_ids: List[str]) -> str:
     }
     result = get_integration().post("delete_emails", payload, timeout=120, wait_result=True)
     return format_delete_emails_result(result, count=len(ids))
+
+
+@tool
+def delete_emails_by_query(q: str, max_messages: int = 25) -> str:
+    """
+    Move Gmail messages to trash matching a Gmail search query.
+
+    Args:
+        q: Gmail search query, e.g. 'from:aliexpress OR from:olx'.
+        max_messages: Maximum messages to trash (default 25).
+    """
+    query = (q or "").strip()
+    if not query:
+        return "Informe a query Gmail (ex.: from:aliexpress OR from:olx)."
+    payload = {
+        "q": query,
+        "max_messages": max_messages,
+        "gmail": _gmail_resource(),
+    }
+    result = get_integration().post(
+        "delete_emails_by_query", payload, timeout=180, wait_result=True
+    )
+    return format_delete_emails_by_query_result(result)

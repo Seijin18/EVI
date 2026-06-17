@@ -14,6 +14,8 @@ llm = build_llm()
 
 SYSTEM_PROMPT = """You are EVI, a precise and helpful personal AI assistant for Marcos (Brazil).
 
+{project_context}
+
 {calendar_context}
 CRITICAL RULES:
 0. Reply in the same language the user writes. Default: Brazilian Portuguese (pt-BR). Never switch to English unless the user writes in English.
@@ -23,6 +25,8 @@ CRITICAL RULES:
 4. You have native access to tools. Call the appropriate tool when needed.
 5. WhatsApp commitments are queued in Postgres. Use list_pending_commitments, list_scheduled_today, then confirm_commitments (ids) to schedule events on Calendar or create Google Tasks, or dismiss_commitments when the user asks to review or skip them. For Google Calendar events already booked, use list_calendar_events.
 6. NEVER say an event was scheduled unless you called schedule_event (or confirm_commitments) in THIS turn and the tool returned success. Do not invent calendar links. Paste only the exact Link: URL from the tool result, never markdown [text](url).
+7. Gmail/inbox: summarize by category (important, promotions, social). Do NOT dump raw tool output. For bulk delete by sender use delete_emails_by_query; for follow-ups use SESSION TOOL SNAPSHOTS ids. Never ask the user for Gmail message IDs if you can query or use snapshots.
+8. When the user request is compound (e.g. list and delete promotions), call multiple tools in one turn when safe — you may issue several tool_calls before replying.
 
 Available tools: {tool_names}"""
 
@@ -34,6 +38,18 @@ class AgentState(TypedDict):
     task_type: str
     iterations: int
     final_answer: str
+    extra_context: str
+
+
+def _calendar_block() -> str:
+    now = datetime.now()
+    calendar_text = f"Today is {now.strftime('%A, %Y-%m-%d')}. Current time: {now.strftime('%H:%M:%S')}\n"
+    calendar_text += "CALENDAR LOOKUP TABLE:\n"
+    for i in range(1, 15):
+        day = now + timedelta(days=i)
+        desc = "Tomorrow" if i == 1 else "Next Week" if i >= 7 else "This Week"
+        calendar_text += f"- +{i} days ({desc}): {day.strftime('%A')} -> {day.strftime('%Y-%m-%d')}\n"
+    return calendar_text
 
 
 def agent_node(state: AgentState) -> dict:
@@ -45,17 +61,15 @@ def agent_node(state: AgentState) -> dict:
         }
 
     llm_with_tools = llm.bind_tools(tools)
-    now = datetime.now()
-    calendar_text = f"Today is {now.strftime('%A, %Y-%m-%d')}. Current time: {now.strftime('%H:%M:%S')}\n"
-    calendar_text += "CALENDAR LOOKUP TABLE:\n"
-    for i in range(1, 15):
-        day = now + timedelta(days=i)
-        desc = "Tomorrow" if i == 1 else "Next Week" if i >= 7 else "This Week"
-        calendar_text += f"- +{i} days ({desc}): {day.strftime('%A')} -> {day.strftime('%Y-%m-%d')}\n"
+    project_context = (state.get("extra_context") or "").strip()
+    if project_context:
+        project_context = project_context + "\n"
 
     system_message = SystemMessage(
         content=SYSTEM_PROMPT.format(
-            calendar_context=calendar_text, tool_names=[t.name for t in tools]
+            project_context=project_context,
+            calendar_context=_calendar_block(),
+            tool_names=[t.name for t in tools],
         )
     )
     response = llm_with_tools.invoke([system_message] + state["messages"])

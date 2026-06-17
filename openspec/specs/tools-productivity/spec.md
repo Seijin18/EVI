@@ -46,3 +46,10 @@ The productivity test harness SHALL invoke `summarize_inbox` when `--live-windmi
 #### Scenario: SCN-EMAIL-05
 - **WHEN** `./scripts/evi-test email --live-windmill` runs
 - **THEN** `summarize_inbox` is invoked and summary content is validated in the result
+
+### Requirement: Delete emails by Gmail query
+The tool `delete_emails_by_query` SHALL trash messages matching a Gmail search query via Windmill.
+
+#### Scenario: SCN-UX-INBOX-02
+- **WHEN** user asks to delete emails by sender/domain
+- **THEN** agent can call `delete_emails_by_query` without requesting message IDs
