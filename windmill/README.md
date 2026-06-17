@@ -20,7 +20,10 @@ Create workspace `evi` in Windmill UI (http://localhost:8001) or via CLI.
 |--------|---------|------------------|
 | `f/integrations/schedule_event` | Google Calendar | `WINDMILL_WEBHOOK_CALENDAR` |
 | `f/integrations/create_task` | Google Tasks | `WINDMILL_WEBHOOK_TASKS` |
+| `f/integrations/list_tasks` | List Google Tasks | `WINDMILL_WEBHOOK_LIST_TASKS` |
 | `f/integrations/summarize_inbox` | Gmail summary | `WINDMILL_WEBHOOK_EMAIL` |
+| `f/integrations/delete_emails` | Gmail trash by id | `WINDMILL_WEBHOOK_EMAIL_DELETE` |
+| `f/integrations/delete_emails_by_query` | Gmail trash by search q | `WINDMILL_WEBHOOK_EMAIL_DELETE_QUERY` |
 | `f/integrations/telegram_to_evi` | Forward Telegram → agent-api | `WINDMILL_WEBHOOK_TELEGRAM` |
 
 Expose each script as **HTTP trigger** and paste URL into `.env`.

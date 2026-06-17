@@ -31,4 +31,9 @@ schema:
       description: IANA timezone for display (e.g. America/Sao_Paulo)
       default: America/Sao_Paulo
       originalType: string
+    on_date:
+      type: string
+      description: Optional YYYY-MM-DD — list only that calendar day
+      default: ''
+      originalType: string
   required: []

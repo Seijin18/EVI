@@ -70,6 +70,30 @@ def format_task_result(title: str, raw: str) -> str:
     return f"Tarefa «{title}» — resposta: {raw[:200]}"
 
 
+def format_list_tasks_result(raw: str) -> str:
+    if "failed" in raw.lower():
+        hint = format_windmill_oauth_error(raw, "listar tarefas", "WINDMILL_GTASKS_RESOURCE")
+        return hint or f"Não foi possível listar tarefas. {raw[:300]}"
+
+    blob = _parse_json_blob(raw)
+    if blob and blob.get("status") == "error":
+        detail = str(blob.get("detail", raw))[:200]
+        return f"Erro ao listar tarefas: {detail}"
+
+    if blob and blob.get("status") == "ok":
+        tasks = blob.get("tasks") or []
+        if not tasks:
+            return "Nenhuma tarefa aberta no Google Tasks."
+        lines = [f"Tarefas abertas ({blob.get('count', len(tasks))}):"]
+        for t in tasks:
+            title = t.get("title") or "(sem título)"
+            due = t.get("due") or "sem prazo"
+            lines.append(f"• {title} — {due}")
+        return "\n".join(lines)
+
+    return f"Resposta do Google Tasks: {raw[:400]}"
+
+
 def format_inbox_result(raw: str) -> str:
     if "failed" in raw.lower():
         hint = format_windmill_oauth_error(raw, "acessar o Gmail", "WINDMILL_GMAIL_RESOURCE")

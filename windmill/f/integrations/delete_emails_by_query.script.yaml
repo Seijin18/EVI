@@ -1,0 +1,22 @@
+summary: Trash Gmail messages matching search query
+description: ''
+lock: ''
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    q:
+      type: string
+      description: Gmail search query (e.g. category:promotions OR category:social)
+    max_messages:
+      type: integer
+      description: Max messages to trash
+      default: 25
+    gmail:
+      type: string
+      description: Windmill resource path for Gmail OAuth
+      default: gmail
+      originalType: string
+  required:
+    - q

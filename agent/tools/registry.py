@@ -15,7 +15,7 @@ from tools.commitment_tools import (
     list_pending_commitments,
     list_scheduled_today,
 )
-from tools.task_tool import create_task
+from tools.task_tool import create_task, list_tasks
 from tools.graph_tool import query_conversation_graph
 
 
@@ -29,6 +29,7 @@ def get_all_tools():
         list_calendar_events,
         save_note_manual,
         create_task,
+        list_tasks,
         summarize_inbox,
         delete_emails,
         delete_emails_by_query,

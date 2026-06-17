@@ -1,0 +1,29 @@
+summary: List open Google Tasks
+description: ''
+lock: ''
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    gtasks:
+      type: string
+      description: Windmill resource path for Google Tasks OAuth
+      default: gtasks
+      originalType: string
+    tasklist_id:
+      type: string
+      description: Task list id (@default = primary)
+      default: '@default'
+      originalType: string
+    max_results:
+      type: integer
+      description: Maximum tasks to return
+      default: 25
+      originalType: integer
+    show_completed:
+      type: boolean
+      description: Include completed tasks
+      default: false
+      originalType: boolean
+  required: []

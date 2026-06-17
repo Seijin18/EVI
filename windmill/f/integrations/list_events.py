@@ -5,9 +5,33 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from typing import Any, Dict
 from zoneinfo import ZoneInfo
+
+
+def _list_window(
+    tz_name: str,
+    *,
+    days_ahead: int,
+    on_date: str | None,
+) -> tuple[str, str]:
+    """Return (timeMin, timeMax) ISO strings in local timezone."""
+    tz = ZoneInfo(tz_name)
+    now = datetime.now(tz)
+    if on_date and on_date.strip():
+        day = datetime.strptime(on_date.strip()[:10], "%Y-%m-%d").date()
+        time_min = datetime.combine(day, time.min, tzinfo=tz)
+        if day == now.date():
+            time_min = now
+        time_max = datetime.combine(day, time(23, 59, 59), tzinfo=tz)
+        return time_min.isoformat(), time_max.isoformat()
+
+    days = max(1, int(days_ahead))
+    time_min = now
+    end_day = now.date() + timedelta(days=days - 1)
+    time_max = datetime.combine(end_day, time(23, 59, 59), tzinfo=tz)
+    return time_min.isoformat(), time_max.isoformat()
 
 
 def _fetch_gcal_resource(path: str) -> Any:
@@ -105,14 +129,16 @@ def main(
     days_ahead: int = 7,
     max_results: int = 25,
     timezone: str = "America/Sao_Paulo",
+    on_date: str = "",
 ):
     token = _access_token(gcal)
     resolved_calendar = _resolve_calendar_id(token, calendar_id)
     tz_name = (timezone or "America/Sao_Paulo").strip() or "America/Sao_Paulo"
-    tz = ZoneInfo(tz_name)
-    now = datetime.now(tz)
-    time_min = now.isoformat()
-    time_max = (now + timedelta(days=max(1, int(days_ahead)))).isoformat()
+    time_min, time_max = _list_window(
+        tz_name,
+        days_ahead=days_ahead,
+        on_date=(on_date or "").strip() or None,
+    )
     params = urllib.parse.urlencode(
         {
             "timeMin": time_min,
@@ -155,6 +181,8 @@ def main(
         "action": "list_events",
         "calendar_id": resolved_calendar,
         "timezone": tz_name,
+        "on_date": (on_date or "").strip() or None,
+        "days_ahead": int(days_ahead),
         "count": len(events),
         "events": events,
     }

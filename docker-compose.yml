@@ -129,6 +129,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - WINDMILL_WEBHOOK_CALENDAR=${WINDMILL_WEBHOOK_CALENDAR}
       - WINDMILL_WEBHOOK_TASKS=${WINDMILL_WEBHOOK_TASKS}
+      - WINDMILL_WEBHOOK_LIST_TASKS=${WINDMILL_WEBHOOK_LIST_TASKS:-http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/list_tasks}
       - WINDMILL_WEBHOOK_EMAIL=${WINDMILL_WEBHOOK_EMAIL}
       - WINDMILL_WEBHOOK_EMAIL_DELETE=${WINDMILL_WEBHOOK_EMAIL_DELETE:-http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/delete_emails}
       - WINDMILL_WEBHOOK_EMAIL_DELETE_QUERY=${WINDMILL_WEBHOOK_EMAIL_DELETE_QUERY:-http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/delete_emails_by_query}

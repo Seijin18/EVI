@@ -92,20 +92,26 @@ def schedule_event(
 
 
 @tool
-def list_calendar_events(days_ahead: int = 7, limit: int = 25) -> str:
+def list_calendar_events(
+    days_ahead: int = 7,
+    limit: int = 25,
+    on_date: str = "",
+) -> str:
     """
     List upcoming Google Calendar events in EVI_TIMEZONE.
 
     Args:
-        days_ahead: Number of days ahead to search (default 7).
+        days_ahead: Calendar days to include from today (1=today only, 2=today+tomorrow, default 7).
         limit: Maximum events to return (default 25).
+        on_date: Optional YYYY-MM-DD — list only that calendar day (use CALENDAR LOOKUP TABLE for "amanhã").
     """
-    payload = _calendar_payload(
-        {
-            "days_ahead": days_ahead,
-            "max_results": limit,
-        }
-    )
+    extra: dict = {
+        "days_ahead": days_ahead,
+        "max_results": limit,
+    }
+    if (on_date or "").strip():
+        extra["on_date"] = on_date.strip()[:10]
+    payload = _calendar_payload(extra)
     result = get_integration().post("list_events", payload, timeout=120, wait_result=True)
     if "failed" in result.lower():
         return _format_windmill_error(result, "listar eventos")
@@ -123,7 +129,10 @@ def list_calendar_events(days_ahead: int = 7, limit: int = 25) -> str:
 
     events = blob.get("events") or []
     if not events:
-        return f"Nenhum evento nos próximos {days_ahead} dias."
+        od = blob.get("on_date")
+        if od:
+            return f"Nenhum evento em {od}."
+        return f"Nenhum evento nos próximos {days_ahead} dia(s) de calendário."
 
     lines = [f"Próximos eventos ({blob.get('count', len(events))}):"]
     for ev in events:
