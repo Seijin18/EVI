@@ -1,65 +1,98 @@
 ---
-description: Commits incrementais durante implementação — quando, como e o que evitar
+description: Commits incrementais — mesmo protocolo do Commit & push do chat, sem push
 alwaysApply: true
 ---
 
 # Git commits (EVI)
 
-Commite **proativamente** ao fechar um conjunto coerente de alterações. Não espere o usuário pedir se o bloco de trabalho já está verificado e isolado.
+Ao fechar um conjunto coerente de alterações, commitar **proativamente** usando o **mesmo protocolo** da ação **Commit & push** do chat — **parando antes do push**.
 
-## Quando commitar
+| Ação do usuário | Comportamento |
+|-----------------|---------------|
+| Trabalho concluído (task/change/ fix verificado) | **Commit automático** — fluxo abaixo, **sem push** |
+| "Commit & push", "Execute commit-and-push", diff-tab commit-and-push | Fluxo abaixo **+** `git push` |
 
-- **Change OpenSpec completo** — todas as tasks verificadas; preferir **1 commit por change** (`evi-*`).
-- **Task OpenSpec isolada** — task marcada `[x]` em `tasks.md`, `Verify:` passou, diff autocontido.
-- **Correção ou feature fora do OpenSpec** — bugfix, rule, doc de fila (`BACKLOG.md`/`roadmap.md`) após verify relevante.
-- **Rules / CI / docs de projeto** — conjunto relacionado (ex.: 4 rules de plan mode num único commit).
+**Regra de ouro:** commit proativo **nunca** inclui `git push`, salvo pedido explícito ou ação commit-and-push.
+
+## Quando commitar (automático)
+
+- Change ou task OpenSpec verificada (`Verify:` passou, `- [x]` em `tasks.md`).
+- Conjunto coerente de código, tests, rules ou docs (ex.: 1 change `evi-*`, ou docs BACKLOG alinhados ao change).
+- Após verify relevante; working tree estável para o escopo.
 
 ## Quando NÃO commitar
 
-- Verify falhando ou código quebrado.
-- Trabalho **no meio** de uma task (WIP).
-- **Plan mode** — só plano/artifacts; sem código de produto (salvo pedido explícito).
-- Misturar assuntos não relacionados num commit.
-- Arquivos sensíveis (`.env`, credenciais, tokens).
-- Usuário pediu para **não commitar** ou revisar antes.
+- Verify falhando, WIP ou plan mode (sem pedido de executar).
+- Mistura de assuntos não relacionados.
+- `.env`, credenciais ou segredos.
+- Usuário pediu para não commitar / revisar antes.
 
-## Fluxo (sempre nesta ordem)
+---
 
-1. `git status` + `git diff` — confirmar escopo; excluir arquivos não relacionados.
-2. `git log -3 --oneline` — alinhar estilo da mensagem ao repo.
-3. Rodar **`Verify:`** da task ou teste mínimo do change antes de commitar.
-4. `git add` só paths do conjunto atual.
-5. Commit com mensagem concisa (1–2 frases, foco no **porquê**):
+## Protocolo Commit (igual ao Commit & push, sem push)
+
+Espelha a ação **Commit & push** do Cursor. **Não pule passos.**
+
+### 1. Inspeção (em paralelo)
+
+Rodar **ao mesmo tempo**:
+
+```bash
+git status
+git diff          # staged + unstaged
+git log -3 --format='%s'
+```
+
+Se a ação vier do **diff-tab** com lista staged autoritativa: usar essa lista; **não** re-checar; commitar **só** o staged indicado.
+
+### 2. Análise
+
+- Incluir **apenas** arquivos do trabalho atual; **excluir** unrelated.
+- Avisar se o usuário pediu commit de arquivos com segredos.
+- Mensagem concisa (1–2 frases), foco no **porquê**, estilo dos commits recentes do repo.
+
+### 3. Execução (sequencial)
+
+1. Rodar **`Verify:`** da task quando existir.
+2. `git add` — só paths relacionados (ou só staged autoritativo do diff-tab).
+3. Commit via HEREDOC:
 
 ```bash
 git commit -m "$(cat <<'EOF'
-evi-confirm-all: bulk confirm/dismiss via list_pending_commitments
+Mensagem aqui.
 
 EOF
 )"
 ```
 
-6. `git status` — confirmar working tree limpo para o escopo commitado.
+4. `git status` — confirmar sucesso.
 
-## Mensagem
+### 4. Push — NÃO (commit automático)
 
-- Imperativo ou prefixo do change: `evi-daily-summary-tz-fix: ...`, `docs: mark Etapa 7 Done in BACKLOG`.
-- Uma linha de assunto; corpo opcional se houver vários itens (#19–21).
-- Não incluir paths longos nem ruído de ferramentas.
+- **Parar após o commit.** Não rodar `git push`.
+- Push **somente** se o usuário pedir explicitamente ou usar **Commit & push** / commit-and-push.
 
-## Push
+---
 
-- **Não dar push** por padrão — só se o usuário pedir ou usar ação commit-and-push.
-- Nunca `push --force` em `main`/`master` sem pedido explícito.
+## Push (só quando pedido)
+
+Quando o usuário pedir **Commit & push**:
+
+1. Concluir o protocolo Commit acima.
+2. `git push` (com `-u origin HEAD` se branch nova).
+3. Nunca `push --force` em `main`/`master` sem pedido explícito.
+
+---
 
 ## Segurança (obrigatório)
 
 - Nunca alterar `git config`.
 - Nunca `--no-verify` / `--no-gpg-sign` salvo pedido explícito.
-- Evitar `git commit --amend` salvo: hook modificou arquivos após commit seu nesta sessão, commit não foi pushed, usuário pediu amend.
-- Se hook falhar: corrigir e **novo** commit (não amend).
+- Evitar `git commit --amend` salvo: hook alterou arquivos após seu commit nesta sessão, commit **não** foi pushed, usuário pediu amend.
+- Hook falhou → corrigir e **novo** commit (não amend).
+- Nunca comandos git interativos (`-i`).
 
 ## OpenSpec
 
-- Marcar `- [x]` em `tasks.md` **antes** do commit da task.
-- Change concluído: `openspec validate <change>` antes do commit final do change (quando aplicável).
+- Marcar `- [x]` em `tasks.md` antes do commit da task.
+- Change concluído: `openspec validate <change>` quando aplicável, antes do commit final.
