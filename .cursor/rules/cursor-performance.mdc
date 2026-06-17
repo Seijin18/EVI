@@ -34,4 +34,4 @@ alwaysApply: true
 ## Escopo de mudanças
 
 - Diff mínimo; não refatore código não relacionado à solicitação.
-- Não adicione testes, docs ou commits sem o usuário pedir.
+- Não adicione testes ou docs sem necessidade; commits incrementais seguem [git-commits.mdc](./git-commits.mdc).

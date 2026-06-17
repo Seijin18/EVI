@@ -25,6 +25,7 @@ Do **not** read `personal-ai-agent-server.md`, full `Progress.md`, or unrelated 
 
 1. Run the task **`Verify:`** command (e.g. `./scripts/evi-test <feature>`).
 2. Mark `- [x]` in `tasks.md` immediately after verify passes.
+3. **Commit** the task or change per [git-commits.mdc](./git-commits.mdc) (1 commit por change quando possível).
 
 ## When the change is done
 

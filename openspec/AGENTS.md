@@ -9,6 +9,7 @@
 | `.cursor/rules/openspec-changes.mdc` | Editing `openspec/**` |
 | `.cursor/rules/codebase-memory.mdc` | Code search before grep |
 | `.cursor/rules/cursor-performance.mdc` | Token/I/O limits |
+| `.cursor/rules/git-commits.mdc` | Commits incrementais durante implementação |
 
 ## Active change
 

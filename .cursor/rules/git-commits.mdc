@@ -1,0 +1,65 @@
+---
+description: Commits incrementais durante implementação — quando, como e o que evitar
+alwaysApply: true
+---
+
+# Git commits (EVI)
+
+Commite **proativamente** ao fechar um conjunto coerente de alterações. Não espere o usuário pedir se o bloco de trabalho já está verificado e isolado.
+
+## Quando commitar
+
+- **Change OpenSpec completo** — todas as tasks verificadas; preferir **1 commit por change** (`evi-*`).
+- **Task OpenSpec isolada** — task marcada `[x]` em `tasks.md`, `Verify:` passou, diff autocontido.
+- **Correção ou feature fora do OpenSpec** — bugfix, rule, doc de fila (`BACKLOG.md`/`roadmap.md`) após verify relevante.
+- **Rules / CI / docs de projeto** — conjunto relacionado (ex.: 4 rules de plan mode num único commit).
+
+## Quando NÃO commitar
+
+- Verify falhando ou código quebrado.
+- Trabalho **no meio** de uma task (WIP).
+- **Plan mode** — só plano/artifacts; sem código de produto (salvo pedido explícito).
+- Misturar assuntos não relacionados num commit.
+- Arquivos sensíveis (`.env`, credenciais, tokens).
+- Usuário pediu para **não commitar** ou revisar antes.
+
+## Fluxo (sempre nesta ordem)
+
+1. `git status` + `git diff` — confirmar escopo; excluir arquivos não relacionados.
+2. `git log -3 --oneline` — alinhar estilo da mensagem ao repo.
+3. Rodar **`Verify:`** da task ou teste mínimo do change antes de commitar.
+4. `git add` só paths do conjunto atual.
+5. Commit com mensagem concisa (1–2 frases, foco no **porquê**):
+
+```bash
+git commit -m "$(cat <<'EOF'
+evi-confirm-all: bulk confirm/dismiss via list_pending_commitments
+
+EOF
+)"
+```
+
+6. `git status` — confirmar working tree limpo para o escopo commitado.
+
+## Mensagem
+
+- Imperativo ou prefixo do change: `evi-daily-summary-tz-fix: ...`, `docs: mark Etapa 7 Done in BACKLOG`.
+- Uma linha de assunto; corpo opcional se houver vários itens (#19–21).
+- Não incluir paths longos nem ruído de ferramentas.
+
+## Push
+
+- **Não dar push** por padrão — só se o usuário pedir ou usar ação commit-and-push.
+- Nunca `push --force` em `main`/`master` sem pedido explícito.
+
+## Segurança (obrigatório)
+
+- Nunca alterar `git config`.
+- Nunca `--no-verify` / `--no-gpg-sign` salvo pedido explícito.
+- Evitar `git commit --amend` salvo: hook modificou arquivos após commit seu nesta sessão, commit não foi pushed, usuário pediu amend.
+- Se hook falhar: corrigir e **novo** commit (não amend).
+
+## OpenSpec
+
+- Marcar `- [x]` em `tasks.md` **antes** do commit da task.
+- Change concluído: `openspec validate <change>` antes do commit final do change (quando aplicável).
