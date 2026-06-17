@@ -139,7 +139,6 @@ def filter_for_processing(
     watermark = _process_after_cutoff()
     seen_path = seen_ids_path(log_dir)
     seen = _load_seen_ids(seen_path) if dedupe else set()
-    all_received_ids: list[str] = []
 
     def _drop(msg: IncomingMessage, reason: str) -> None:
         dropped.append(
@@ -158,8 +157,6 @@ def filter_for_processing(
 
     candidates: List[IncomingMessage] = []
     for msg in messages:
-        if msg.id:
-            all_received_ids.append(msg.id)
         if evi_prefix and msg.text.strip().startswith(evi_prefix):
             stats["skipped_from_me"] += 1
             _drop(msg, "evi_echo")
@@ -201,7 +198,7 @@ def filter_for_processing(
         _drop(msg, "max_per_webhook")
 
     if dedupe:
-        seen.update(all_received_ids)
+        seen.update(m.id for m in kept if m.id)
         _save_seen_ids(seen_path, seen)
 
     return kept, stats, dropped

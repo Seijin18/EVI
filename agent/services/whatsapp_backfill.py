@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from messaging.evolution import EvolutionClient
 from services.contact_filesystem import (
@@ -42,7 +44,11 @@ class BackfillResult:
                 "(syncFullHistory=false) ou o chat ainda não foi sincronizado."
             )
         elif self.appended == 0 and not self.error:
-            parts.append("Nenhuma mensagem nova no período (ou todas filtradas).")
+            parts.append(
+                "Nenhuma mensagem nova no período "
+                f"(filtradas: {self.skipped_old} antigas, {self.skipped_dup} duplicadas, "
+                f"{self.skipped_empty} vazias)."
+            )
         return " ".join(parts)
 
 
@@ -92,6 +98,10 @@ def backfill_contact_messages(
         return result
 
     messages = parse_evolution_message_list(raw, remote_jid=jid)
+    messages.sort(
+        key=lambda m: _parse_ts(m.ts) or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
     result.fetched = len(messages)
 
     if messages and not label:
@@ -136,3 +146,93 @@ def backfill_contact_messages(
             existing_ids.add(msg.id)
 
     return result
+
+
+def backfill_from_evolution_log(
+    jid: str,
+    *,
+    label: str = "",
+    days: int = 7,
+    log_path: Path | None = None,
+) -> BackfillResult:
+    """Replay ingest lines from evolution_webhook.jsonl when Evolution cache lags."""
+    result = BackfillResult()
+    days = max(1, min(int(days), 30))
+    if not memory_enabled() or not jid:
+        result.error = "EVI_CONTACT_MEMORY_DIR não configurado"
+        return result
+
+    log_path = log_path or Path(os.getenv("EVI_LOG_DIR", "/logs")) / "evolution_webhook.jsonl"
+    if not log_path.is_file():
+        result.error = f"log não encontrado: {log_path}"
+        return result
+
+    ensure_contact(jid, label=label)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    existing_ids = timeline_source_ids(jid)
+
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("step") != "ingest":
+            continue
+        if row.get("sender") != jid:
+            continue
+        source_id = str(row.get("source_id") or "")
+        preview = (row.get("raw_preview") or "").strip()
+        if not preview:
+            continue
+        result.fetched += 1
+        ts_raw = row.get("message_ts") or row.get("ts") or ""
+        ts_dt = _parse_ts(str(ts_raw))
+        if ts_dt and ts_dt < cutoff:
+            result.skipped_old += 1
+            continue
+        if source_id and source_id in existing_ids:
+            result.skipped_dup += 1
+            continue
+        who = label or "contato"
+        if row.get("from_me"):
+            preview = f"[eu] {preview}"
+        else:
+            preview = f"[{who}] {preview}"
+        ts_iso = ts_dt.isoformat() if ts_dt else str(ts_raw)
+        if append_timeline(
+            jid,
+            source_id=source_id or f"log_{hash(preview) & 0xFFFF}",
+            text_preview=preview,
+            label=label,
+            ts=ts_iso or None,
+            backfill=True,
+        ):
+            result.appended += 1
+            if source_id:
+                existing_ids.add(source_id)
+
+    return result
+
+
+def backfill_contact_full(
+    jid: str,
+    *,
+    label: str = "",
+    days: int = 7,
+) -> BackfillResult:
+    """Evolution findMessages then webhook log fallback."""
+    api = backfill_contact_messages(jid, label=label, days=days)
+    if api.appended > 0:
+        return api
+    log = backfill_from_evolution_log(jid, label=label, days=days)
+    log.fetched += api.fetched
+    log.skipped_old += api.skipped_old
+    log.skipped_dup += api.skipped_dup
+    log.skipped_empty += api.skipped_empty
+    log.skipped_evi += api.skipped_evi
+    if api.error and not log.error:
+        log.error = api.error
+    return log

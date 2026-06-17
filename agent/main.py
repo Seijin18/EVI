@@ -449,6 +449,12 @@ def evolution_webhook(
         proc = WhatsAppProcessor(log_path=log_path)
         proc.log({"step": "filter", "event": event, **filter_stats})
         commitments = proc.process_messages(messages)
+        try:
+            from services.message_timeline import record_whatsapp_messages
+
+            record_whatsapp_messages(messages)
+        except Exception:
+            pass
         proc.flush_log()
     else:
         commitments = []

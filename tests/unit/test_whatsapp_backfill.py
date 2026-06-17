@@ -78,6 +78,43 @@ def test_backfill_dedupes():
         assert second.skipped_dup == 2
 
 
+def test_backfill_from_evolution_log():
+    import os
+    import json
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["EVI_CONTACT_MEMORY_DIR"] = tmp
+        log = Path(tmp) / "evolution_webhook.jsonl"
+        jid = "5511959875299@s.whatsapp.net"
+        log.write_text(
+            json.dumps(
+                {
+                    "step": "ingest",
+                    "source_id": "3A25B1377B627E15985C",
+                    "sender": jid,
+                    "from_me": False,
+                    "raw_preview": "Vamos marcar um vôlei para segunda feira",
+                    "message_ts": "2026-06-17T12:39:10+00:00",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        from services.whatsapp_backfill import backfill_from_evolution_log
+
+        result = backfill_from_evolution_log(
+            jid, label="PNFagundes", days=7, log_path=log
+        )
+        assert result.appended == 1
+        timeline = (
+            Path(tmp) / "contacts" / jid / "timeline.jsonl"
+        ).read_text(encoding="utf-8")
+        assert "vôlei" in timeline
+
+
 if __name__ == "__main__":
     test_parse_find_messages_fixture()
     test_backfill_appends_timeline()
