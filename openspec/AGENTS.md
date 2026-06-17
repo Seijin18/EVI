@@ -53,7 +53,8 @@ openspec validate <change>
 
 ## Do not read by default
 
-- `personal-ai-agent-server.md`, `Progress.md`, `.cursor/plans/`
+- `Progress.md` (use [`README.md`](../README.md) + specs; Progress só quando gerir etapas)
+- `.cursor/plans/`
 - `openspec/changes/archive/`
 - `agent/graph.py` when editing a single tool (use registry)
 

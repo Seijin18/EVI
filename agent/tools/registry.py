@@ -17,6 +17,11 @@ from tools.commitment_tools import (
 )
 from tools.task_tool import create_task, list_tasks
 from tools.graph_tool import query_conversation_graph
+from tools.contact_tool import (
+    get_whatsapp_contact_info,
+    learn_whatsapp_contact,
+    list_whatsapp_contacts,
+)
 
 
 def get_all_tools():
@@ -38,4 +43,7 @@ def get_all_tools():
         confirm_commitments,
         dismiss_commitments,
         query_conversation_graph,
+        list_whatsapp_contacts,
+        get_whatsapp_contact_info,
+        learn_whatsapp_contact,
     ]

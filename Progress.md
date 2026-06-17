@@ -1,47 +1,150 @@
-# EVI — Implementation status
+# EVI — Progresso de desenvolvimento
 
-> **Updated:** June 2026  
-> **Hardware:** i5-7400 · 16 GB RAM · GTX 1060 3GB  
-> **Source of truth:** [`openspec/specs/`](openspec/specs/) · **Backlog:** [`openspec/BACKLOG.md`](openspec/BACKLOG.md)  
-> **Verify:** `./scripts/evi-test smoke` · `openspec validate --specs`
+> **Atualizado:** 17 Jun 2026  
+> **README / arquitetura:** [`README.md`](README.md)  
+> **Requisitos:** [`openspec/specs/`](openspec/specs/) · **Backlog:** [`openspec/BACKLOG.md`](openspec/BACKLOG.md) · **Adiado:** [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md)  
+> **Verify:** `./scripts/evi-test smoke` (14/14) · `openspec validate --specs`
+
+---
+
+## Resumo executivo
+
+| Área | Status |
+|------|--------|
+| Core agent + Windmill | **Done** |
+| WhatsApp ingest + control | **Done** |
+| Telegram + digest | **Done** |
+| Runtime v3 (LLM-first inbox/calendar) | **Done** (Jun 2026) |
+| Memória longa (FS + Neo4j) | **Done** |
+| Ops (health, metrics, CI) | **Done** |
+| Roadmap deferido | Ver tabela abaixo |
+
+**Foco atual:** operação e polish (OAuth Windmill, E2E live); novos changes só via [`openspec/BACKLOG.md`](openspec/BACKLOG.md) quando priorizado.
+
+---
 
 ## Stack (as-built)
 
-| Layer | Component |
-|-------|-----------|
+| Camada | Componente |
+|--------|------------|
 | Agent | FastAPI + LangGraph ReAct (`agent/`) |
 | LLM | Gemini `gemini-2.5-flash` (`EVI_LLM_PROVIDER=gemini`); fallback Ollama `qwen2.5:3b-instruct-q4_K_M` |
-| Embeddings | Google `models/gemini-embedding-001` 3072 dim (`EVI_EMBED_PROVIDER=google`); fallback Ollama `nomic-embed-text` 768 dim |
-| Orchestration | Windmill (`windmill/f/integrations/`) |
-| WhatsApp | Evolution API → commitment queue |
-| Remote | Telegram webhook or polling |
-| Data | Postgres sessions + `pending_commitments` |
-| Vector | Qdrant `university_notes` (secondary) |
-| Ops | `GET /health`, `GET /metrics`, CI smoke |
+| Embeddings | Google `gemini-embedding-001` 3072d; fallback Ollama `nomic-embed-text` |
+| Orquestração | Windmill (`windmill/f/integrations/`) |
+| WhatsApp | Evolution API → fila + control chat |
+| Remote | Telegram webhook ou polling |
+| Dados | Postgres, Qdrant, contact FS, Neo4j (opcional) |
+| Runtime v3 | `EVI_WORKSPACE/`, context assembly, tool snapshots |
 
-## Completed (P0–P3 + Jun 2026)
+---
 
-- OpenSpec 7 domain specs, `evi-test` harness, smoke 13/13 offline
-- Windmill: Calendar, Tasks (`gtasks`), Gmail, `list_events`, Telegram bridge
-- WhatsApp: Evolution webhook, group whitelist, heuristic extract, Postgres queue
-- Commitment loop: list/confirm/dismiss tools, Telegram digest (SCN-WA-12)
-- Telegram: E2E reply (SCN-TG-02), direct schedule/list bypass, polling (SCN-TG-04)
-- Evolution logs: `filtered_out`, `message_ts` (SCN-WA-13..15)
-- WhatsApp control chat (`EVI_WHATSAPP_CONTROL_JIDS`), multichannel review, LLM extract fallback (SCN-WA-16)
-- n8n removed; compose healthchecks (SCN-OPS-01)
+## Matriz de features
 
-## Active series (architecture review)
+### Implementado
 
-Série jun/2026 + Etapa 4 ops **completas** — ver [`openspec/BACKLOG.md`](openspec/BACKLOG.md). Etapa 4: `/health`, `/metrics`, GitHub Actions CI, RAG live harness. Próximo: Etapa 5 memória longa (`data-long-memory`).
+| Feature | Verify / spec |
+|---------|----------------|
+| File organizer | `./scripts/evi-test file-organizer` · SCN-FO-01 |
+| RAG universidade | `./scripts/evi-test rag` · `data-rag` |
+| Calendar create/list | `./scripts/evi-test calendar-list` · `on_date` / dias calendário |
+| Tasks create/list | `./scripts/evi-test tasks` · `list_tasks` tool |
+| Gmail summarize/delete | `./scripts/evi-test email` · `inbox-ux` |
+| Commitment queue + review | `./scripts/evi-test commitments` |
+| WhatsApp Evolution pipeline | `./scripts/evi-test whatsapp` · `evolution` |
+| WhatsApp control + LLM extract | `test_whatsapp_control.py`, `test_whatsapp_llm_extract.py` |
+| Telegram E2E | `./scripts/evi-telegram-verify.sh` |
+| Contact memory + daily summary | `./scripts/evi-test contact-memory` · `daily-summary` |
+| Knowledge graph | `./scripts/evi-test graph` (Neo4j profile) |
+| Health + metrics + CI | `./scripts/evi-test health` · `.github/workflows/ci.yml` |
+| Runtime v3 + inbox UX | `./scripts/evi-test runtime-v3` · `inbox-ux` |
+| Providers modulares | `test_llm_factory.py`, `test_integration_factory.py` |
 
-## Deferred memory (Etapa 5)
+### Planejado (roadmap)
 
-[`openspec/specs/data-long-memory/spec.md`](openspec/specs/data-long-memory/spec.md) — hot layer (Postgres) done; cold FS per contact + Neo4j graph planned. See [`openspec/BACKLOG.md`](openspec/BACKLOG.md) #15–17.
+| Feature | Prioridade | Referência |
+|---------|------------|------------|
+| `list_calendars` LangGraph tool | Média | `roadmap.md` |
+| API key auth obrigatória em `/chat` | Baixa | `roadmap.md` |
+| Compose profile Ollama | Baixa | Infra |
+| MCP servers isolados | Baixa | Arquitetura |
+| Multimodal (Llava, Whisper) | Baixa | `roadmap.md` |
+| Redis cache embeddings | Baixa | Performance |
+| WhatsApp Meta/Twilio adapter | Baixa | `providers` spec |
+| Heartbeat cron em produção | Média | `EVI_HEARTBEAT_ENABLED` |
 
-## Deferred ops / other
+---
 
-[`openspec/specs/roadmap.md`](openspec/specs/roadmap.md) — Etapa 4 ops, MCP isolado, multimodal.
+## Etapas de rollout
 
-## Historical detail
+Legenda: **Done** · **—** (não iniciado / deferido)
 
-Long-form guide (legacy sections): [`personal-ai-agent-server.md`](personal-ai-agent-server.md) — prefer specs for current behavior.
+| Etapa | Tema | Status | Entregas principais |
+|-------|------|--------|---------------------|
+| P0–P3 | Foundation | **Done** | Compose, LangGraph, file organizer, RAG base |
+| 1–9 | Série WhatsApp jun/2026 | **Done** | Observability, multichannel review, control chat, list_events spec, DX OpenSpec |
+| 4 | Ops | **Done** | `/health`, `/metrics`, CI, RAG live harness |
+| 4.5 | Bugfix Telegram | **Done** | Audit/persist LLM, fixtures Windmill |
+| 5 | Memória longa | **Done** | Contact FS, daily summary, Neo4j graph |
+| 6 | Arquitetura modular | **Done** | `llm.py`, `integrations/`, `messaging/` |
+| 7 | Cobertura + DX | **Done** | +25 tests, CI extended, TZ daily summary |
+| 8 | WhatsApp productivity | **Done** | confirmar/dispensar tudo, extração expandida |
+| 9 | Memória inteligente | **Done** | Daily summary LLM, profile auto-update |
+| **10** | **Runtime v3 + inbox** | **Done** | Workspace, context assembly, delete_by_query, LLM-first control, E2E harness |
+| 11+ | Roadmap deferido | **—** | Ver matriz “Planejado” |
+
+### Série Runtime v3 (17 Jun 2026) — Done
+
+| Change | Entrega |
+|--------|---------|
+| `evi-agent-runtime-v3` | `EVI_WORKSPACE`, context assembly, memory flush, skills |
+| `evi-llm-orchestration-inbox` | `delete_emails_by_query`, session snapshots, direct handlers off |
+| `evi-whatsapp-llm-control` | evolution_filter, ingest conservador, control → grafo |
+| `evi-v3-e2e-verification` | `runtime-v3`, `inbox-ux`, CI, docs/testing |
+
+Arquivos: `openspec/changes/archive/2026-06-17-*`
+
+---
+
+## Checklist de verificação (release)
+
+```bash
+# Tier 1
+PYTHONPATH=agent python3 -m pytest tests/unit -q
+
+# Tier 2 offline
+./scripts/evi-test smoke
+
+# Tier 2 runtime v3
+./scripts/evi-test runtime-v3
+./scripts/evi-test inbox-ux
+
+# Specs
+openspec validate --specs
+
+# Live (opcional, stack + OAuth)
+./scripts/evi-telegram-verify.sh
+./scripts/evi-inbox-ux-verify.sh
+./scripts/evi-test email --live-windmill
+./scripts/evi-test calendar-list --live-windmill
+```
+
+---
+
+## Histórico / documentação legada
+
+O guia longo V2 (n8n, MCP, fases semanais) foi **substituído** por este fluxo:
+
+- **Arquitetura e features:** [`README.md`](README.md)
+- **Requisitos normativos:** [`openspec/specs/`](openspec/specs/)
+- **Testes:** [`docs/testing.md`](docs/testing.md)
+
+[`personal-ai-agent-server.md`](personal-ai-agent-server.md) permanece como stub de redirecionamento.
+
+---
+
+## Como propor próximo trabalho
+
+1. `openspec list` — preferir zero changes ativos  
+2. Ler [`openspec/BACKLOG.md`](openspec/BACKLOG.md) e [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md)  
+3. `openspec new change <nome-kebab>` → implementar → verify → archive  
+4. Atualizar **esta página** (etapa + matriz) ao arquivar change

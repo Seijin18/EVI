@@ -14,7 +14,7 @@ context: |
   Conventions: tools in agent/tools/; register in agent/tools/registry.py;
   bounded memory (8 pairs); secrets in .env only.
 
-  Source of truth: openspec/specs/ (not Progress.md nor personal-ai-agent-server.md).
+  Source of truth: openspec/specs/ (not Progress.md; overview in README.md).
   Active work: exactly one folder under openspec/changes/ — read openspec/AGENTS.md first.
 
   Verification: Tier 1 unit tests + Tier 2 ./scripts/evi-test <feature> before archive.
@@ -36,7 +36,7 @@ rules:
     - RAM impact for new containers; Windmill/Evolution ports.
     - Out of scope section required.
   apply:
-    - Do NOT read personal-ai-agent-server.md or Progress.md unless the user asks.
+    - Do NOT read Progress.md unless the user asks (use README.md + specs).
     - Do NOT read files outside the current task Files list and contextFiles from CLI.
     - Mark tasks [x] immediately after Verify passes.
     - Prefer get_code_snippet / offset+limit over full file reads.

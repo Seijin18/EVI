@@ -49,22 +49,21 @@ def _normalize_messages(data: Any) -> List[Dict[str, Any]]:
     return []
 
 
-def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
-    """Handle MESSAGES_UPSERT style payloads (Evolution v2.1–v2.3)."""
+def _records_to_messages(
+    messages: List[Dict[str, Any]],
+    *,
+    default_remote: str = "",
+) -> List[IncomingMessage]:
     results: List[IncomingMessage] = []
-
-    event = (body.get("event") or body.get("type") or "").lower()
-    if event and "message" not in event and "upsert" not in event:
-        return results
-
-    data = body.get("data") or body
-    messages = _normalize_messages(data)
-
     for idx, item in enumerate(messages):
         key = item.get("key") or {}
         msg_id = key.get("id") or item.get("id") or f"evo_{idx}"
         remote = str(
-            key.get("remoteJid") or item.get("from") or item.get("pushName") or "unknown"
+            key.get("remoteJid")
+            or item.get("remoteJid")
+            or item.get("from")
+            or default_remote
+            or "unknown"
         )
         sender = remote
         from_me = bool(key.get("fromMe") or item.get("fromMe"))
@@ -76,7 +75,7 @@ def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
         ts = str(
             item.get("messageTimestamp")
             or item.get("timestamp")
-            or body.get("date_time")
+            or item.get("createdAt")
             or ""
         )
         if ts.isdigit():
@@ -93,3 +92,45 @@ def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
             )
         )
     return results
+
+
+def _extract_message_records(data: Any) -> List[Dict[str, Any]]:
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+
+    for key in ("messages", "data"):
+        inner = data.get(key)
+        if isinstance(inner, list):
+            return [item for item in inner if isinstance(item, dict)]
+        if isinstance(inner, dict):
+            for sub in ("records", "messages"):
+                records = inner.get(sub)
+                if isinstance(records, list):
+                    return [item for item in records if isinstance(item, dict)]
+            if inner.get("key") or inner.get("messageTimestamp"):
+                return [inner]
+
+    return _normalize_messages(data)
+
+
+def parse_evolution_message_list(data: Any, *, remote_jid: str = "") -> List[IncomingMessage]:
+    """Parse Evolution findMessages / DB payloads (no webhook event envelope)."""
+    return _records_to_messages(
+        _extract_message_records(data),
+        default_remote=remote_jid,
+    )
+
+
+def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:
+    """Handle MESSAGES_UPSERT style payloads (Evolution v2.1–v2.3)."""
+    results: List[IncomingMessage] = []
+
+    event = (body.get("event") or body.get("type") or "").lower()
+    if event and "message" not in event and "upsert" not in event:
+        return results
+
+    data = body.get("data") or body
+    messages = _normalize_messages(data)
+    return _records_to_messages(messages)

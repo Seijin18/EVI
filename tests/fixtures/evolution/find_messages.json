@@ -1,0 +1,28 @@
+{
+  "messages": {
+    "total": 2,
+    "pages": 1,
+    "currentPage": 1,
+    "records": [
+      {
+        "key": {
+          "id": "hist001",
+          "remoteJid": "5516992657231@s.whatsapp.net",
+          "fromMe": false
+        },
+        "pushName": "Leozao",
+        "message": {"conversation": "Vamos marcar reunião sexta"},
+        "messageTimestamp": 1718000000
+      },
+      {
+        "key": {
+          "id": "hist002",
+          "remoteJid": "5516992657231@s.whatsapp.net",
+          "fromMe": true
+        },
+        "message": {"conversation": "Combinado, 14h"},
+        "messageTimestamp": 1718000100
+      }
+    ]
+  }
+}

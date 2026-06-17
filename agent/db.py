@@ -264,6 +264,73 @@ def list_scheduled_today(limit: int = 50) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def list_whatsapp_contact_sources(limit: int = 50) -> List[Dict[str, Any]]:
+    """Distinct WhatsApp chats with label and commitment count."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT source_chat,
+                       MAX(source_label) AS source_label,
+                       COUNT(*) AS commitment_count
+                FROM pending_commitments
+                WHERE source_chat IS NOT NULL AND source_chat <> ''
+                GROUP BY source_chat
+                ORDER BY MAX(source_label) NULLS LAST, source_chat
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def list_commitments_for_chat(jid: str, limit: int = 15) -> List[Dict[str, Any]]:
+    """Recent commitments for a WhatsApp chat (any status)."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, type, title, status,
+                       event_date::text, due_date::text,
+                       source_label, created_at
+                FROM pending_commitments
+                WHERE source_chat = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (jid, limit),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def list_commitments_for_chat_since(
+    jid: str,
+    *,
+    days: int = 30,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """Commitments for a chat created within the last N days."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, type, title, status,
+                       event_date::text, due_date::text,
+                       source_label, raw_text, created_at
+                FROM pending_commitments
+                WHERE source_chat = %s
+                  AND created_at >= NOW() - (%s || ' days')::interval
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (jid, str(int(days)), limit),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
 def count_unnotified_pending() -> int:
     with _conn() as conn:
         with conn.cursor() as cur:

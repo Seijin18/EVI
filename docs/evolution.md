@@ -95,3 +95,18 @@ Para conversar com a EVI e receber digest de pendentes **no WhatsApp** (sem ack 
 | `EVI_WHATSAPP_REPLY_PREFIX` | `[EVI] ` (padrão) |
 
 Suas mensagens no JID de controle vão para `/chat` e comandos de review (`listar pendentes`, `confirmar 1`, `agendados hoje`). Respostas da EVI saem com prefixo `[EVI]` e não reentram no pipeline de ingest.
+
+## Aprendizado sobre contato (backfill)
+
+Quando você pede *"aprenda sobre Leozao nos últimos 30 dias"*, o EVI:
+
+1. Resolve o contato por **nome ou telefone** (sem JID)
+2. Chama Evolution `POST /chat/findMessages/{instance}` para ler mensagens em cache
+3. Grava na timeline do contato (`EVI_CONTACT_MEMORY_DIR`) e sintetiza o perfil (LLM)
+
+| Variável | Padrão | Efeito |
+|----------|--------|--------|
+| `EVI_BACKFILL_MAX_MESSAGES` | 200 | Máximo de mensagens por importação |
+| `EVI_BACKFILL_INCLUDE_FROM_ME` | true | Inclui suas respostas na timeline (`[eu] ...`) |
+
+**Limite:** a Evolution só devolve o que está no **banco local** da instância. Com `syncFullHistory: false` (padrão do `setup-evolution.sh`), chats antigos podem não existir — nesse caso aumente o histórico na instância ou troque mensagens recentes com o contato para popular o cache.

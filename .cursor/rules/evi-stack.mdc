@@ -19,7 +19,7 @@ alwaysApply: true
 | Grafo ReAct | `agent/graph.py` |
 | Tools | `agent/tools/` |
 | Compose | `docker-compose.yml` |
-| Spec | `personal-ai-agent-server.md`, `Progress.md` |
+| Spec | `README.md`, `Progress.md` |
 
 ## Ao implementar
 

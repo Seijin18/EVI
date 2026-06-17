@@ -15,8 +15,9 @@ def query_conversation_graph(
     limit: int = 10,
 ) -> str:
     """
-    Query the EVI knowledge graph for contacts and commitments.
-    Requires NEO4J_URI. Filter by WhatsApp/Telegram JID when provided.
+    Query the EVI knowledge graph for contacts and commitments (Neo4j only).
+    Requires NEO4J_URI. Prefer get_whatsapp_contact_info / list_whatsapp_contacts for names.
+    Filter by WhatsApp/Telegram JID when provided.
     """
     if not graph_enabled():
         return "Graph memory disabled (set NEO4J_URI and NEO4J_PASSWORD)."
