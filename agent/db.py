@@ -89,6 +89,18 @@ def _run_migrations() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_dev_jobs_status
                     ON dev_jobs(status, created_at DESC);
+                CREATE TABLE IF NOT EXISTS whatsapp_contacts (
+                    jid VARCHAR(128) PRIMARY KEY,
+                    whatsapp_label VARCHAR(256),
+                    display_name VARCHAR(256),
+                    aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    phone VARCHAR(32),
+                    notes TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS idx_whatsapp_contacts_display
+                    ON whatsapp_contacts(display_name);
                 """
             )
         conn.commit()
@@ -289,6 +301,114 @@ def list_whatsapp_contact_sources(limit: int = 50) -> List[Dict[str, Any]]:
                 WHERE source_chat IS NOT NULL AND source_chat <> ''
                 GROUP BY source_chat
                 ORDER BY MAX(source_label) NULLS LAST, source_chat
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def upsert_whatsapp_contact(
+    jid: str,
+    *,
+    whatsapp_label: str | None = None,
+    display_name: str | None = None,
+    aliases: List[str] | None = None,
+    phone: str | None = None,
+    notes: str | None = None,
+) -> None:
+    """Insert or update a WhatsApp contact row."""
+    if not jid:
+        return
+    import json
+
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT whatsapp_label, display_name, aliases, phone, notes FROM whatsapp_contacts WHERE jid = %s",
+                (jid,),
+            )
+            row = cur.fetchone()
+            if row:
+                wl, dn, existing_aliases, ph, nt = row
+                merged_wl = whatsapp_label if whatsapp_label is not None else wl
+                merged_dn = display_name if display_name is not None else dn
+                merged_ph = phone if phone is not None else ph
+                merged_nt = notes if notes is not None else nt
+                alias_list = list(existing_aliases or [])
+                if aliases:
+                    seen = {a.casefold() for a in alias_list if isinstance(a, str)}
+                    for alias in aliases:
+                        alias = (alias or "").strip()
+                        if alias and alias.casefold() not in seen:
+                            alias_list.append(alias)
+                            seen.add(alias.casefold())
+                cur.execute(
+                    """
+                    UPDATE whatsapp_contacts
+                    SET whatsapp_label = %s,
+                        display_name = %s,
+                        aliases = %s::jsonb,
+                        phone = %s,
+                        notes = %s,
+                        updated_at = NOW()
+                    WHERE jid = %s
+                    """,
+                    (
+                        merged_wl,
+                        merged_dn,
+                        json.dumps(alias_list),
+                        merged_ph,
+                        merged_nt,
+                        jid,
+                    ),
+                )
+            else:
+                alias_list = [a.strip() for a in (aliases or []) if (a or "").strip()]
+                cur.execute(
+                    """
+                    INSERT INTO whatsapp_contacts (
+                        jid, whatsapp_label, display_name, aliases, phone, notes
+                    ) VALUES (%s, %s, %s, %s::jsonb, %s, %s)
+                    """,
+                    (
+                        jid,
+                        whatsapp_label,
+                        display_name,
+                        json.dumps(alias_list),
+                        phone,
+                        notes,
+                    ),
+                )
+        conn.commit()
+
+
+def get_whatsapp_contact(jid: str) -> Dict[str, Any] | None:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT jid, whatsapp_label, display_name, aliases, phone, notes,
+                       created_at, updated_at
+                FROM whatsapp_contacts
+                WHERE jid = %s
+                """,
+                (jid,),
+            )
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def list_whatsapp_contacts_db(limit: int = 500) -> List[Dict[str, Any]]:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT jid, whatsapp_label, display_name, aliases, phone, notes,
+                       created_at, updated_at
+                FROM whatsapp_contacts
+                ORDER BY COALESCE(display_name, whatsapp_label, jid)
                 LIMIT %s
                 """,
                 (limit,),

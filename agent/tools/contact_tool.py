@@ -6,12 +6,17 @@ from langchain_core.tools import tool
 
 from services.contact_filesystem import (
     collect_known_contacts,
+    ensure_contact,
     memory_enabled,
     read_profile_excerpt,
     read_timeline_tail,
+    resolve_contact_for_query,
     search_contacts,
 )
 from services.contact_learning import learn_contact
+from services.contact_registry import assign_contact_name, format_contact_names, sync_evolution_contacts
+from services.whatsapp_activity import list_recent_whatsapp, summarize_whatsapp
+from services.whatsapp_backfill import backfill_contact_full
 
 
 def _format_phone_hint(jid: str) -> str:
@@ -27,7 +32,18 @@ def _format_phone_hint(jid: str) -> str:
 def _format_contact_block(contact: dict) -> list[str]:
     jid = contact["jid"]
     label = contact.get("label") or jid
-    lines = [f"**{label}**"]
+    try:
+        from db import get_whatsapp_contact, init_db
+
+        init_db()
+        db_row = get_whatsapp_contact(jid)
+    except Exception:
+        db_row = None
+    title = format_contact_names(db_row or contact, label)
+    lines = [f"**{title}**"]
+    aliases = contact.get("aliases") or (db_row or {}).get("aliases") or []
+    if aliases:
+        lines.append(f"Também conhecido como: {', '.join(aliases)}")
     phone = _format_phone_hint(jid)
     if phone:
         lines.append(f"Telefone: {phone}")
@@ -67,11 +83,15 @@ def _format_contact_block(contact: dict) -> list[str]:
 
 
 @tool
-def list_whatsapp_contacts(limit: int = 25) -> str:
+def list_whatsapp_contacts(limit: int = 25, refresh_from_evolution: bool = True) -> str:
     """
     List WhatsApp contacts EVI knows about (display name, not JID).
+    Includes Evolution address book when refresh_from_evolution is true.
     Use when the user asks which contacts you have information on.
     """
+    if refresh_from_evolution:
+        sync_evolution_contacts()
+        collect_known_contacts()
     contacts = collect_known_contacts()[:limit]
     if not contacts:
         if not memory_enabled() and not _db_available():
@@ -80,7 +100,14 @@ def list_whatsapp_contacts(limit: int = 25) -> str:
 
     lines = ["Contatos WhatsApp conhecidos:"]
     for c in contacts:
-        label = c.get("label") or "?"
+        try:
+            from db import get_whatsapp_contact, init_db
+
+            init_db()
+            db_row = get_whatsapp_contact(c["jid"])
+        except Exception:
+            db_row = None
+        label = format_contact_names(db_row or c, c.get("label") or "?")
         extra = []
         if c.get("commitment_count"):
             extra.append(f"{c['commitment_count']} compromisso(s)")
@@ -107,7 +134,7 @@ def get_whatsapp_contact_info(name_or_phone: str) -> str:
     if not matches:
         return (
             f"Nenhum contato encontrado para «{query}». "
-            "Use list_whatsapp_contacts para ver nomes conhecidos."
+            "Use list_whatsapp_contacts para ver nomes conhecidos (inclui Evolution)."
         )
     if len(matches) > 1:
         lines = [f"Vários contatos correspondem a «{query}»:"]
@@ -119,7 +146,19 @@ def get_whatsapp_contact_info(name_or_phone: str) -> str:
         lines.append("Peça detalhes de um nome específico.")
         return "\n".join(lines)
 
-    return "\n".join(_format_contact_block(matches[0]))
+    match = matches[0]
+    if match.get("from_evolution") and not read_timeline_tail(match["jid"], limit=1):
+        ensure_contact(match["jid"], label=match.get("label") or query)
+        backfill_contact_full(
+            match["jid"],
+            label=match.get("label") or query,
+            days=7,
+        )
+        from services.commitment_replay import replay_commitments_from_evolution_log
+
+        replay_commitments_from_evolution_log(jid=match["jid"], days=14)
+
+    return "\n".join(_format_contact_block(match))
 
 
 @tool
@@ -134,6 +173,72 @@ def learn_whatsapp_contact(
     (e.g. "aprenda sobre Leozao nos últimos 30 dias"). fetch_messages: pull chat from Evolution first.
     """
     return learn_contact(name_or_phone, days=days, fetch_messages=fetch_messages)
+
+
+@tool
+def list_recent_whatsapp_messages(days: int = 1, limit: int = 40) -> str:
+    """
+    List recent WhatsApp messages (NOT Gmail). Use for 'últimas mensagens do WhatsApp'.
+    days=1 for today/yesterday, 7 for the past week.
+    """
+    return list_recent_whatsapp(days=days, limit=limit)
+
+
+@tool
+def summarize_whatsapp_messages(days: int = 1) -> str:
+    """
+    Summarize recent WhatsApp conversations (NOT email). Use for resumo do dia anterior,
+    resumo da semana no WhatsApp, etc. days=1 yesterday/today, 7=week.
+    """
+    return summarize_whatsapp(days=days)
+
+
+@tool
+def set_whatsapp_contact_name(
+    name_or_phone: str,
+    display_name: str,
+    also_known_as: str = "",
+) -> str:
+    """
+    Associate your preferred contact name (address book / agenda) with a WhatsApp contact.
+    Use when the user says a person's real name differs from their WhatsApp profile name
+    (e.g. «PNFagundes é Pedro Unna», «salva Leozao como Leonardo»).
+    name_or_phone: existing WhatsApp name, alias or phone to identify the contact.
+    display_name: the name the user wants to use from now on.
+    also_known_as: optional comma-separated extra aliases.
+    """
+    query = (name_or_phone or "").strip()
+    display = (display_name or "").strip()
+    if not query:
+        return "Informe o contato atual (nome WhatsApp ou telefone)."
+    if not display:
+        return "Informe o nome que deseja usar (display_name)."
+
+    resolved, err = resolve_contact_for_query(query)
+    if not resolved:
+        return err
+    jid, current_label = resolved
+    aliases = [a.strip() for a in also_known_as.split(",") if a.strip()]
+    whatsapp_label = current_label
+    if current_label.casefold() == display.casefold():
+        whatsapp_label = ""
+    elif current_label and current_label != jid:
+        if current_label.casefold() not in {display.casefold(), *(a.casefold() for a in aliases)}:
+            aliases.append(current_label)
+
+    row = assign_contact_name(
+        jid,
+        display_name=display,
+        aliases=aliases,
+        whatsapp_label=whatsapp_label or current_label,
+    )
+    ensure_contact(jid, label=display)
+    title = format_contact_names(row, display)
+    alias_bit = ""
+    alias_list = row.get("aliases") or []
+    if alias_list:
+        alias_bit = f"\nAliases: {', '.join(alias_list)}"
+    return f"Contato salvo no banco: {title}\nJID: {jid}{alias_bit}"
 
 
 def _db_available() -> bool:

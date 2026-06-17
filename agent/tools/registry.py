@@ -20,7 +20,10 @@ from tools.graph_tool import query_conversation_graph
 from tools.contact_tool import (
     get_whatsapp_contact_info,
     learn_whatsapp_contact,
+    list_recent_whatsapp_messages,
     list_whatsapp_contacts,
+    set_whatsapp_contact_name,
+    summarize_whatsapp_messages,
 )
 from tools.dev_bridge_tool import propose_dev_task_tool, status_dev_jobs_tool
 
@@ -48,6 +51,9 @@ def get_all_tools():
         list_whatsapp_contacts,
         get_whatsapp_contact_info,
         learn_whatsapp_contact,
+        set_whatsapp_contact_name,
+        list_recent_whatsapp_messages,
+        summarize_whatsapp_messages,
         propose_dev_task_tool,
         status_dev_jobs_tool,
     ]

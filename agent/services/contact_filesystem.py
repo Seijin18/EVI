@@ -57,6 +57,12 @@ def ensure_contact(jid: str, *, label: str = "") -> Path:
     timeline = root / "timeline.jsonl"
     if not timeline.exists():
         timeline.touch()
+    try:
+        from services.contact_registry import touch_contact
+
+        touch_contact(jid, whatsapp_label=label or "")
+    except Exception:
+        pass
     return root
 
 
@@ -230,6 +236,29 @@ def append_profile_section(jid: str, *, heading: str, body: str, label: str = ""
     return True
 
 
+def update_contact_label(jid: str, label: str) -> bool:
+    """Update the label field in profile.md."""
+    if not memory_enabled() or not jid or not label.strip():
+        return False
+    ensure_contact(jid, label=label)
+    profile = contact_dir(jid) / "profile.md"
+    if not profile.is_file():
+        return False
+    lines = profile.read_text(encoding="utf-8").splitlines()
+    out: list[str] = []
+    replaced = False
+    for line in lines:
+        if line.strip().lower().startswith("- **label**:"):
+            out.append(f"- **label**: {label.strip()}")
+            replaced = True
+        else:
+            out.append(line)
+    if not replaced:
+        out.insert(3, f"- **label**: {label.strip()}")
+    profile.write_text("\n".join(out).strip() + "\n", encoding="utf-8")
+    return True
+
+
 def read_profile_excerpt(jid: str, max_chars: int = 800) -> str:
     if not memory_enabled() or not jid:
         return ""
@@ -266,11 +295,9 @@ def _parse_profile(path: Path) -> tuple[str, str]:
 
 
 def _name_matches(label: str, query: str) -> bool:
-    if not label or not query:
-        return False
-    a = label.casefold().strip()
-    b = query.casefold().strip()
-    return b in a or a in b
+    from services.evolution_discovery import name_query_matches
+
+    return name_query_matches(label, query)
 
 
 def _jid_matches_digits(jid: str, query_digits: str) -> bool:
@@ -281,8 +308,25 @@ def _jid_matches_digits(jid: str, query_digits: str) -> bool:
 
 
 def collect_known_contacts() -> list[dict[str, Any]]:
-    """Merge filesystem contacts with Postgres source_chat/source_label."""
+    """Merge DB, filesystem, Postgres commitments and Evolution contacts."""
     by_jid: dict[str, dict[str, Any]] = {}
+
+    try:
+        from services.contact_registry import db_contacts_map, merge_db_fields
+
+        for jid, row in db_contacts_map().items():
+            by_jid[jid] = merge_db_fields(
+                {
+                    "jid": jid,
+                    "label": row.get("display_name") or row.get("whatsapp_label") or jid,
+                    "timeline_entries": 0,
+                    "has_profile": False,
+                    "commitment_count": 0,
+                },
+                row,
+            )
+    except Exception:
+        pass
 
     if memory_enabled():
         for path in list_contact_dirs():
@@ -292,12 +336,19 @@ def collect_known_contacts() -> list[dict[str, Any]]:
             entries = 0
             if timeline.is_file():
                 entries = sum(1 for ln in timeline.read_text(encoding="utf-8").splitlines() if ln.strip())
-            by_jid[jid] = {
-                "jid": jid,
-                "label": label,
-                "timeline_entries": entries,
-                "has_profile": profile.is_file(),
-            }
+            existing = by_jid.get(jid)
+            if existing:
+                existing["timeline_entries"] = entries
+                existing["has_profile"] = profile.is_file()
+                if label and not existing.get("display_name"):
+                    existing["label"] = label
+            else:
+                by_jid[jid] = {
+                    "jid": jid,
+                    "label": label,
+                    "timeline_entries": entries,
+                    "has_profile": profile.is_file(),
+                }
 
     try:
         from db import init_db, list_whatsapp_contact_sources
@@ -310,17 +361,58 @@ def collect_known_contacts() -> list[dict[str, Any]]:
             label = (row.get("source_label") or "").strip()
             existing = by_jid.get(jid)
             if existing:
+                if label and not existing.get("whatsapp_label"):
+                    existing["whatsapp_label"] = label
                 if label and (not existing.get("label") or existing["label"] == jid):
-                    existing["label"] = label
+                    if not existing.get("display_name"):
+                        existing["label"] = label
                 existing["commitment_count"] = row.get("commitment_count", 0)
             else:
                 by_jid[jid] = {
                     "jid": jid,
                     "label": label or jid,
+                    "whatsapp_label": label,
                     "timeline_entries": 0,
                     "has_profile": False,
                     "commitment_count": row.get("commitment_count", 0),
                 }
+    except Exception:
+        pass
+
+    try:
+        from services.contact_registry import merge_db_fields, touch_contact
+        from services.evolution_discovery import fetch_evolution_contacts
+
+        for c in fetch_evolution_contacts():
+            jid = c["jid"]
+            label = c.get("label") or jid
+            touch_contact(jid, whatsapp_label=label)
+            existing = by_jid.get(jid)
+            row = None
+            try:
+                from db import get_whatsapp_contact, init_db
+
+                init_db()
+                row = get_whatsapp_contact(jid)
+            except Exception:
+                pass
+            if existing:
+                merged = merge_db_fields(existing, row)
+                by_jid[jid] = merged
+                if label and not merged.get("whatsapp_label"):
+                    merged["whatsapp_label"] = label
+                merged["from_evolution"] = True
+            else:
+                base = {
+                    "jid": jid,
+                    "label": label,
+                    "whatsapp_label": label,
+                    "timeline_entries": 0,
+                    "has_profile": False,
+                    "commitment_count": 0,
+                    "from_evolution": True,
+                }
+                by_jid[jid] = merge_db_fields(base, row)
     except Exception:
         pass
 
@@ -339,6 +431,16 @@ def resolve_contact_for_query(query: str) -> tuple[tuple[str, str], str] | tuple
     if len(matches) == 1:
         c = matches[0]
         return (c["jid"], c.get("label") or q), ""
+    try:
+        from services.evolution_discovery import search_evolution_contacts
+
+        evo = search_evolution_contacts(q, limit=1)
+        if len(evo) == 1:
+            c = evo[0]
+            ensure_contact(c["jid"], label=c.get("label") or q)
+            return (c["jid"], c.get("label") or q), ""
+    except Exception:
+        pass
     jid = phone_to_jid(q)
     if jid:
         return (jid, q), ""
@@ -349,7 +451,7 @@ def resolve_contact_for_query(query: str) -> tuple[tuple[str, str], str] | tuple
 
 
 def search_contacts(query: str, *, limit: int = 5) -> list[dict[str, Any]]:
-    """Find contacts by display name or phone digits (no JID required from user)."""
+    """Find contacts by display name, alias, WhatsApp profile name or phone."""
     q = (query or "").strip()
     if not q:
         return []
@@ -370,8 +472,52 @@ def search_contacts(query: str, *, limit: int = 5) -> list[dict[str, Any]]:
             score = 90
         elif digits and _jid_matches_digits(jid, digits):
             score = 70
+        if not score:
+            for alias in c.get("aliases") or []:
+                if _name_matches(alias, q):
+                    score = max(score, 88)
+                    break
+            whatsapp_label = c.get("whatsapp_label") or ""
+            if whatsapp_label and _name_matches(whatsapp_label, q):
+                score = max(score, 75)
         if score:
             scored.append((score, c))
 
     scored.sort(key=lambda x: (-x[0], (x[1].get("label") or "").casefold()))
-    return [c for _, c in scored[:limit]]
+    seen_jids: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for _, c in scored:
+        jid = c.get("jid") or ""
+        if jid in seen_jids:
+            continue
+        seen_jids.add(jid)
+        out.append(c)
+        if len(out) >= limit:
+            break
+    if out:
+        return out
+
+    try:
+        from services.contact_registry import search_db_contacts
+
+        db_hits = search_db_contacts(q, limit=limit)
+        if db_hits:
+            return db_hits
+    except Exception:
+        pass
+
+    try:
+        from services.evolution_discovery import search_evolution_contacts
+
+        evo = search_evolution_contacts(q, limit=limit)
+        return [
+            {
+                **c,
+                "timeline_entries": 0,
+                "commitment_count": 0,
+                "from_evolution": True,
+            }
+            for c in evo
+        ]
+    except Exception:
+        return []
