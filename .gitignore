@@ -1,18 +1,26 @@
 # Secrets
 .env
+.env.local
+.env.*.local
 
 # Docker data — machine specific, too large
 data/
 
-# Personal files
+# Personal / local runtime
 watched_folders/
+EVI_WORKSPACE/memory/
+EVI_WORKSPACE/MEMORY.md
+EVI_WORKSPACE/USER.md
+
+# Cursor local plans (OpenSpec changes live in openspec/changes/)
+.cursor/plans/
 
 # Python
 __pycache__/
 *.pyc
 .venv/
 
-# Test logs
+# Test / audit logs
 logs/
 
 # pytest
@@ -21,6 +29,8 @@ logs/
 # Obsidian
 .obsidian/
 
-# OS
+# OS / editor
 .DS_Store
 Thumbs.db
+*~
+*.swp
