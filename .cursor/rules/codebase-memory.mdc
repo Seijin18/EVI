@@ -25,3 +25,13 @@ alwaysApply: true
 
 - `grep` recursivo no repo inteiro quando `search_graph` resolver.
 - Ler `personal-ai-agent-server.md` ou `Progress.md` inteiros sem necessidade (são longos).
+
+## Plan mode (Cursor Plan)
+
+Ao montar planos (`.cursor/plans/` ou Plan mode), **antes** de listar `Files:` nas tasks:
+
+1. `get_architecture` — escopo do domínio (ex.: WhatsApp → `agent/services/`, long memory → `contact_filesystem.py`).
+2. `search_graph` com `project=home-marshibs-Projects-EVI` — localizar símbolos e call sites.
+3. `get_code_snippet` — validar trecho real antes de incluir path no plano.
+
+Alinhar todos do plano a changes OpenSpec (`openspec list`, [`BACKLOG.md`](../../openspec/BACKLOG.md)). Ver [openspec-planning.mdc](./openspec-planning.mdc).

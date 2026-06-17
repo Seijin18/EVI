@@ -46,7 +46,9 @@ Then archive: skill `.cursor/skills/openspec-archive-change/SKILL.md` or `/opsx:
 
 ## Planning vs apply
 
-- Planning rules: [openspec-planning.mdc](./openspec-planning.mdc)
+- **Plan mode:** [openspec-planning.mdc](./openspec-planning.mdc) — `openspec list` + BACKLOG; **codebase-memory** (`get_architecture`, `search_graph`) antes de definir `Files:`/`Verify:`; não editar produto.
+- **Apply:** artifacts abaixo + implementação task a task.
+
 - Artifact format: [openspec-changes.mdc](./openspec-changes.mdc) (when under `openspec/`)
 
 ## Index

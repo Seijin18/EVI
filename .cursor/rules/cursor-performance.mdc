@@ -8,8 +8,9 @@ alwaysApply: true
 ## Antes de explorar o código
 
 1. Use **Codebase Memory** (`search_graph`, `get_architecture`, `get_code_snippet`) antes de `grep` amplo ou leitura em massa.
-2. Projeto indexado: `home-marshibs-Projects-EVI`. Reindexe só se o usuário pedir ou após mudanças estruturais grandes.
-3. `index_repository` em modo `fast` por padrão; `full` só para busca semântica (`semantic_query`).
+2. **Plan mode:** mesma ordem — grafo primeiro, depois `Files:` no plano; ver [openspec-planning.mdc](./openspec-planning.mdc).
+3. Projeto indexado: `home-marshibs-Projects-EVI`. Reindexe só se o usuário pedir ou após mudanças estruturais grandes.
+4. `index_repository` em modo `fast` por padrão; `full` só para busca semântica (`semantic_query`).
 
 ## Leitura de arquivos
 
