@@ -60,6 +60,26 @@ class EvolutionClient:
         }
         return self._post_json(f"/chat/findMessages/{instance}", payload)
 
+    def find_contacts(self, *, limit: int | None = None) -> Any:
+        _, instance, _ = self._config()
+        if not instance:
+            return None
+        max_n = limit or int(os.getenv("EVI_EVOLUTION_CONTACTS_LIMIT", "300"))
+        return self._post_json(
+            f"/chat/findContacts/{instance}",
+            {"page": 1, "offset": max_n},
+        )
+
+    def find_chats(self, *, limit: int | None = None) -> Any:
+        _, instance, _ = self._config()
+        if not instance:
+            return None
+        max_n = limit or int(os.getenv("EVI_WHATSAPP_RECENT_MAX_CHATS", "30"))
+        return self._post_json(
+            f"/chat/findChats/{instance}",
+            {"page": 1, "offset": max_n},
+        )
+
     def send_text(self, jid: str, text: str, *, add_prefix: bool = True) -> bool:
         base, instance, api_key = self._config()
         if not base or not instance or not jid:

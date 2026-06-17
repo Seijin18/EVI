@@ -110,3 +110,20 @@ Quando você pede *"aprenda sobre Leozao nos últimos 30 dias"*, o EVI:
 | `EVI_BACKFILL_INCLUDE_FROM_ME` | true | Inclui suas respostas na timeline (`[eu] ...`) |
 
 **Limite:** a Evolution só devolve o que está no **banco local** da instância. Com `syncFullHistory: false` (padrão do `setup-evolution.sh`), chats antigos podem não existir — nesse caso aumente o histórico na instância ou troque mensagens recentes com o contato para popular o cache.
+
+## Contatos e mensagens recentes (Telegram / control chat)
+
+| Tool | Uso |
+|------|-----|
+| `list_whatsapp_contacts` | Lista contatos (memória + **findContacts** Evolution) |
+| `get_whatsapp_contact_info` | Busca por nome parcial ("pedro" → Pedro Unna) |
+| `list_recent_whatsapp_messages` | Últimas mensagens WhatsApp (não e-mail) |
+| `summarize_whatsapp_messages` | Resumo do dia anterior ou da semana |
+
+| Variável | Padrão | Efeito |
+|----------|--------|--------|
+| `EVI_EVOLUTION_DISCOVER_CONTACTS` | true | Mescla agenda Evolution na lista de contatos |
+| `EVI_WHATSAPP_RECENT_MAX_CHATS` | 30 | Chats varridos para mensagens recentes |
+| `EVI_WHATSAPP_RECENT_MSG_PER_CHAT` | 15 | Mensagens por chat no resumo |
+
+Mensagens **ingeridas** pelo webhook também passam a gravar timeline (inclui participante em grupos whitelist).

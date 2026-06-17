@@ -72,6 +72,7 @@ def _records_to_messages(
         if not text.strip():
             continue
         label = str(item.get("pushName") or key.get("pushName") or "")
+        participant = str(key.get("participant") or item.get("participant") or "")
         ts = str(
             item.get("messageTimestamp")
             or item.get("timestamp")
@@ -89,6 +90,7 @@ def _records_to_messages(
                 from_me=from_me,
                 is_group=is_group,
                 label=label,
+                participant=participant,
             )
         )
     return results

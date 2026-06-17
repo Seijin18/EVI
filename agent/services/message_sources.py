@@ -18,6 +18,7 @@ class IncomingMessage:
     from_me: bool = False
     is_group: bool = False
     label: str = ""  # pushName or chat display name
+    participant: str = ""  # sender JID in group chats
 
 
 class MessageSource(ABC):
