@@ -14,7 +14,7 @@ from services.contact_filesystem import (
     read_timeline_since,
     resolve_contact_for_query,
 )
-from services.whatsapp_backfill import backfill_contact_messages
+from services.whatsapp_backfill import backfill_contact_full
 
 
 def _build_context(jid: str, label: str, days: int) -> str:
@@ -97,10 +97,15 @@ def learn_contact(
 
     backfill_note = ""
     if fetch_messages:
-        br = backfill_contact_messages(jid, label=label, days=days)
+        br = backfill_contact_full(jid, label=label, days=days)
         backfill_note = br.summary(label, days)
         if br.error and br.fetched == 0:
             backfill_note += "\n\n"
+        from services.commitment_replay import replay_commitments_from_evolution_log
+
+        replay = replay_commitments_from_evolution_log(jid=jid, days=days)
+        if replay.queued:
+            backfill_note += f"\n{replay.summary()}\n"
 
     context = _build_context(jid, label, days)
     if not context:

@@ -121,6 +121,32 @@ def test_extract_dinner_proxima_semana():
     assert c.date == "2026-06-08"
 
 
+def test_extract_volleyball_segunda():
+    msg = IncomingMessage(
+        id="w012",
+        sender="5511959875299@s.whatsapp.net",
+        text="Vamos marcar um vôlei para segunda feira\n\nQual horário vc prefere?",
+        ts="2026-06-17T12:39:10+00:00",
+        label="PNFagundes",
+    )
+    c = extract_commitment(msg)
+    assert c is not None
+    assert c.type == "event"
+    assert c.title == "Vôlei"
+    assert c.date == "2026-06-22"
+
+    msg2 = IncomingMessage(
+        id="w013",
+        sender="5511959875299@s.whatsapp.net",
+        text="Marcar para Jogar vôlei, segunda feira dia 22/06, às 17",
+        ts="2026-06-17T12:40:02+00:00",
+    )
+    c2 = extract_commitment(msg2)
+    assert c2 is not None
+    assert c2.date == "2026-06-22"
+    assert c2.time == "17:00"
+
+
 if __name__ == "__main__":
     test_extract_meeting_tomorrow()
     test_extract_task_friday()

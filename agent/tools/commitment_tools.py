@@ -21,7 +21,19 @@ def _tool_succeeded(out: str) -> bool:
 @tool
 def list_pending_commitments(limit: int = 20) -> str:
     """List pending commitments queued from WhatsApp (not yet on calendar)."""
+    import os
+
     from db import init_db, list_pending_commitments as _list
+
+    if os.getenv("EVI_COMMITMENT_REPLAY_ON_LIST", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        from services.commitment_replay import replay_commitments_from_evolution_log
+
+        days = int(os.getenv("EVI_COMMITMENT_REPLAY_DAYS", "14"))
+        replay_commitments_from_evolution_log(days=days)
 
     init_db()
     rows = _list(limit=limit)

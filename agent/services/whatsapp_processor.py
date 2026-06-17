@@ -63,6 +63,11 @@ _WEEKDAY_RE = re.compile(
 _WEEKDAY_MAP = {
     "segunda": 0, "terça": 1, "terca": 1, "quarta": 2, "quinta": 3, "sábado": 5, "sabado": 5,
 }
+_DATE_SLASH_RE = re.compile(
+    r"\b(?:dia\s+)?(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\b",
+)
+_VOLLEY_RE = re.compile(r"\bv[oô]lei\b", re.I)
+_MARCAR_RE = re.compile(r"\bmarcar\b", re.I)
 _MONTH_DAY_RE = re.compile(
     r"\b(?:dia\s+)?(\d{1,2})\s+de\s+"
     r"(jan(?:eiro)?|fev(?:ereiro)?|mar(?:ço|co)?|abr(?:il)?|mai(?:o)?|jun(?:ho)?|"
@@ -120,12 +125,32 @@ def _resolve_date(text: str, ref: datetime) -> Optional[str]:
         return _next_weekday(ref, 4).strftime("%Y-%m-%d")
     if _SUNDAY_RE.search(text):
         return _next_weekday(ref, 6).strftime("%Y-%m-%d")
+    m = _DATE_SLASH_RE.search(text)
+    if m:
+        day, month = int(m.group(1)), int(m.group(2))
+        year_s = m.group(3)
+        year = int(year_s) if year_s else ref.year
+        if year_s and len(year_s) == 2:
+            year = 2000 + int(year_s)
+        try:
+            return datetime(year, month, day, tzinfo=ref.tzinfo).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
     return None
 
 
 def _resolve_time(text: str) -> Optional[str]:
     """Return HH:MM from explicit time or period-of-day, or None."""
     m = _TIME_RE.search(text)
+    if m:
+        h, mn = int(m.group(1)), int(m.group(2) or 0)
+        return f"{h:02d}:{mn:02d}"
+    m = re.search(r"\b(?:às|as|@)\s*(\d{1,2})(?:[h:](\d{2}))?\b", text, re.I)
+    if m:
+        h, mn = int(m.group(1)), int(m.group(2) or 0)
+        if 0 <= h <= 23:
+            return f"{h:02d}:{mn:02d}"
+    m = re.search(r"\b(\d{1,2})\s*h(?:\s*(\d{2}))?\b", text, re.I)
     if m:
         h, mn = int(m.group(1)), int(m.group(2) or 0)
         return f"{h:02d}:{mn:02d}"
@@ -179,8 +204,19 @@ def extract_commitment(msg: IncomingMessage) -> Optional[Commitment]:
         title = "Jantar"
         if not date_str and _SUNDAY_RE.search(text):
             date_str = _next_weekday(ref, 6).strftime("%Y-%m-%d")
+    elif _VOLLEY_RE.search(text) or (_MARCAR_RE.search(text) and (date_str or time_str or _WEEKDAY_RE.search(text))):
+        ctype = "event"
+        title = "Vôlei" if _VOLLEY_RE.search(text) else text[:60].capitalize()
+        if not date_str:
+            date_str = _resolve_date(text, ref)
 
-    if not (_MEETING_RE.search(text) or _REMIND_RE.search(text) or _DINNER_RE.search(text)):
+    if not (
+        _MEETING_RE.search(text)
+        or _REMIND_RE.search(text)
+        or _DINNER_RE.search(text)
+        or _VOLLEY_RE.search(text)
+        or (_MARCAR_RE.search(text) and (date_str or time_str))
+    ):
         return None
 
     if _is_generic_title(title):
@@ -227,6 +263,12 @@ class WhatsAppProcessor:
         results: List[Commitment] = []
         for msg in messages:
             preview = msg.text[:80] + ("..." if len(msg.text) > 80 else "")
+            try:
+                from services.message_timeline import record_whatsapp_message
+
+                record_whatsapp_message(msg)
+            except Exception:
+                pass
             self.log(
                 {
                     "step": "ingest",
@@ -235,7 +277,9 @@ class WhatsAppProcessor:
                     "sender": msg.sender,
                     "from_me": msg.from_me,
                     "is_group": msg.is_group,
+                    "label": msg.label,
                     "raw_preview": preview,
+                    "raw_text": msg.text[:500],
                 }
             )
 
