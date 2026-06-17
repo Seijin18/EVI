@@ -42,7 +42,33 @@ def test_processes_text_and_sends():
     audit.assert_called_once()
 
 
+def test_processes_gemini_content_blocks():
+    update = {
+        "message": {
+            "text": "oi",
+            "chat": {"id": 933619568, "type": "private"},
+        }
+    }
+    gemini_response = [
+        {"type": "text", "text": "Olá! Como posso ajudar?", "extras": {"signature": "x"}},
+    ]
+
+    def fake_chat(msg, session_id):
+        return {"response": gemini_response}
+
+    with (
+        patch("services.telegram_handler.send_telegram_message", return_value=True) as send,
+        patch("services.telegram_handler._persist_turn"),
+        patch("services.telegram_handler.log_telegram_turn"),
+    ):
+        out = process_telegram_update(update, fake_chat)
+    assert out["telegram_sent"] is True
+    assert out["response"] == "Olá! Como posso ajudar?"
+    send.assert_called_once_with("Olá! Como posso ajudar?", chat_id=933619568)
+
+
 if __name__ == "__main__":
     test_skips_non_text()
     test_processes_text_and_sends()
+    test_processes_gemini_content_blocks()
     print("ok")

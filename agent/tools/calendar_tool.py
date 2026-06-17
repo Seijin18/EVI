@@ -8,6 +8,22 @@ from integrations.factory import get_integration
 from tools.calendar_time import evi_timezone, normalize_wall_clock
 
 
+def _format_windmill_error(result: str, action: str) -> str:
+    lower = result.lower()
+    if (
+        "refreshing token" in lower
+        or "invalid_" in lower
+        or ("resource" in lower and "not found" in lower)
+    ):
+        gcal = os.getenv("WINDMILL_GCAL_RESOURCE", "gcal")
+        return (
+            f"Falha ao {action}: credencial Google Calendar expirada ou recurso "
+            f"Windmill inválido ({gcal}). Reconecte o OAuth em Windmill → "
+            "Resources → Google Calendar."
+        )
+    return f"Falha ao {action}. {result[:400]}"
+
+
 def _calendar_payload(extra: dict) -> dict:
     gcal = os.getenv("WINDMILL_GCAL_RESOURCE", "gcal").strip()
     if gcal.startswith("$var:"):
@@ -52,7 +68,7 @@ def schedule_event(
     }
     result = get_integration().post("schedule_event", payload, timeout=180, wait_result=True)
     if "failed" in result.lower():
-        return f"Falha ao agendar '{title}'. {result[:400]}"
+        return _format_windmill_error(result, f"agendar '{title}'")
 
     link = ""
     try:
@@ -92,7 +108,7 @@ def list_calendar_events(days_ahead: int = 7, limit: int = 25) -> str:
     )
     result = get_integration().post("list_events", payload, timeout=120, wait_result=True)
     if "failed" in result.lower():
-        return f"Falha ao listar eventos. {result[:400]}"
+        return _format_windmill_error(result, "listar eventos")
 
     try:
         blob = json.loads(result) if result.strip().startswith("{") else None

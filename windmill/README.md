@@ -147,12 +147,49 @@ Verificação:
 ./scripts/evi-test tasks --live-windmill   # SCN-TASK-05 — cria task real
 ```
 
-## Gmail (`summarize_inbox`)
+## Gmail (`summarize_inbox`, `delete_emails`)
 
-1. Instance **Settings → OAuth** → add **gmail** (redirect `http://localhost:8001/oauth/callback/gmail`).
-2. Workspace **Resources** → connect **gmail** (path ex. `u/<user>/gmail`).
-3. `.env`: `WINDMILL_GMAIL_RESOURCE=u/<user>/gmail` no agent-api (compose já repassa).
-4. HTTP trigger do script → `WINDMILL_WEBHOOK_EMAIL`.
+**Importante:** o conector Gmail padrão do Windmill costuma pedir só `gmail.send` (enviar). Ler inbox e apagar exige escopos extras **no OAuth do Windmill**, não só no Google Cloud Console.
+
+### Configurar OAuth `gmail` no Windmill (CE self-hosted)
+
+1. **Google Cloud Console** — Gmail API habilitada; escopos no consent screen:
+   - `https://www.googleapis.com/auth/gmail.readonly` (ler)
+   - `https://www.googleapis.com/auth/gmail.modify` (ler + lixeira)
+   - Redirect: `http://localhost:8001/oauth/callback/gmail`
+2. **Windmill Instance settings → OAuth** — edite/adicione cliente **`gmail`** com `connect_config`:
+   ```json
+   "gmail": {
+     "id": "SEU_CLIENT_ID.apps.googleusercontent.com",
+     "secret": "SEU_CLIENT_SECRET",
+     "connect_config": {
+       "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+       "token_url": "https://oauth2.googleapis.com/token",
+       "scopes": [
+         "https://www.googleapis.com/auth/gmail.readonly",
+         "https://www.googleapis.com/auth/gmail.modify"
+       ],
+       "extra_params": { "access_type": "offline", "prompt": "consent" }
+     }
+   }
+   ```
+3. **Workspace `evi` → Resources** → **`my_gmail`** → **Disconnect** → **Connect** de novo.
+   Na tela Google deve aparecer permissão de **ler** e **modificar** e-mails (não só enviar).
+4. `.env`: `WINDMILL_GMAIL_RESOURCE=u/<user>/my_gmail` — compose usa `env_file: .env`.
+5. `docker compose up -d --force-recreate agent-api`
+
+Verificar escopos do token armazenado:
+
+```bash
+docker compose exec agent-api python3 -c "
+import json, os, urllib.request, urllib.parse
+path = os.environ['WINDMILL_GMAIL_RESOURCE']
+# ... (ou rode ./scripts/evi-test email --live-windmill)
+"
+./scripts/evi-test email --live-windmill
+```
+
+Comandos diretos no Telegram/WhatsApp: «verifique minha caixa de entrada do gmail», «apagar email \<id\>».
 
 Verificação:
 

@@ -38,10 +38,22 @@ def test_dismiss_ids():
 
 def test_list_pending():
     mock = MagicMock()
-    mock.invoke.return_value = '[{"id":1,"title":"Almoço"}]'
+    mock.invoke.return_value = "EVI: compromissos pendentes"
     with patch("tools.commitment_tools.list_pending_commitments", mock):
         result = try_direct_review("listar compromissos pendentes")
     mock.invoke.assert_called_once()
+    assert result is not None
+
+
+def test_revisar_compromissos_uses_pending_not_calendar():
+    pending = MagicMock()
+    pending.invoke.return_value = "EVI: compromissos pendentes"
+    calendar = MagicMock()
+    with patch("tools.commitment_tools.list_pending_commitments", pending):
+        with patch("tools.calendar_tool.list_calendar_events", calendar):
+            result = try_direct_review("Revisar compromissos")
+    pending.invoke.assert_called_once()
+    calendar.invoke.assert_not_called()
     assert result is not None
 
 
@@ -79,33 +91,32 @@ def test_no_trailing_ids_returns_none():
 
 
 def test_confirm_all_calls_confirm_with_all_ids():
-    list_mock = MagicMock()
-    list_mock.invoke.return_value = '[{"id":1},{"id":2}]'
+    list_mock = MagicMock(return_value=[{"id": 1}, {"id": 2}])
     confirm_mock = MagicMock()
     confirm_mock.invoke.return_value = "Agendados: 1, 2"
-    with patch("tools.commitment_tools.list_pending_commitments", list_mock):
-        with patch("tools.commitment_tools.confirm_commitments", confirm_mock):
-            result = try_direct_review("confirmar tudo")
+    with patch("db.list_pending_commitments", list_mock):
+        with patch("db.init_db"):
+            with patch("tools.commitment_tools.confirm_commitments", confirm_mock):
+                result = try_direct_review("confirmar tudo")
     confirm_mock.invoke.assert_called_once_with({"commitment_ids": [1, 2], "confirmed_via": "chat"})
     assert "Agendados" in result
 
 
 def test_confirm_all_no_pending():
-    list_mock = MagicMock()
-    list_mock.invoke.return_value = "No pending commitments."
-    with patch("tools.commitment_tools.list_pending_commitments", list_mock):
-        result = try_direct_review("agendar todos")
+    with patch("db.list_pending_commitments", MagicMock(return_value=[])):
+        with patch("db.init_db"):
+            result = try_direct_review("agendar todos")
     assert "Nenhum" in result
 
 
 def test_dismiss_all_calls_dismiss_with_all_ids():
-    list_mock = MagicMock()
-    list_mock.invoke.return_value = '[{"id":3}]'
+    list_mock = MagicMock(return_value=[{"id": 3}])
     dismiss_mock = MagicMock()
     dismiss_mock.invoke.return_value = "Dispensados: 3"
-    with patch("tools.commitment_tools.list_pending_commitments", list_mock):
-        with patch("tools.commitment_tools.dismiss_commitments", dismiss_mock):
-            result = try_direct_review("dispensar tudo")
+    with patch("db.list_pending_commitments", list_mock):
+        with patch("db.init_db"):
+            with patch("tools.commitment_tools.dismiss_commitments", dismiss_mock):
+                result = try_direct_review("dispensar tudo")
     dismiss_mock.invoke.assert_called_once_with({"commitment_ids": [3]})
     assert "Dispensados" in result
 

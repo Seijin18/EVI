@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from typing import List
 
 from langchain_core.tools import tool
 
+from services.commitment_review.digest import format_pending_digest
+from services.response_format import format_confirm_results
 from tools.calendar_time import iso_event_range
 from tools.calendar_tool import schedule_event
 from tools.task_tool import create_task
@@ -20,15 +21,13 @@ def _tool_succeeded(out: str) -> bool:
 @tool
 def list_pending_commitments(limit: int = 20) -> str:
     """List pending commitments queued from WhatsApp (not yet on calendar)."""
-    from db import init_db, list_pending_commitments
+    from db import init_db, list_pending_commitments as _list
 
     init_db()
-    rows = list_pending_commitments(limit=limit)
+    rows = _list(limit=limit)
     if not rows:
-        return "No pending commitments."
-    for r in rows:
-        r["created_at"] = str(r.get("created_at", ""))
-    return json.dumps(rows, ensure_ascii=False, indent=2)
+        return "Nenhum compromisso pendente."
+    return format_pending_digest(rows)
 
 
 @tool
@@ -77,7 +76,7 @@ def confirm_commitments(
                 update_commitment_status(
                     int(cid), "scheduled", confirmed_via=confirmed_via
                 )
-                results.append(f"#{cid}: {out[:120]}")
+                results.append(f"#{cid}: {out}")
             else:
                 results.append(f"#{cid}: failed — {out[:200]}")
             continue
@@ -100,7 +99,7 @@ def confirm_commitments(
             results.append(f"#{cid}: {out[:120]}")
         else:
             results.append(f"#{cid}: failed — {out[:200]}")
-    return "\n".join(results)
+    return format_confirm_results("\n".join(results))
 
 
 @tool

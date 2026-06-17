@@ -16,6 +16,10 @@ _LIST_INTENT = re.compile(
     re.I,
 )
 _PENDING = re.compile(r"\bpendente?s?\b", re.I)
+_CALENDAR_ONLY = re.compile(
+    r"\b(calend[aá]rio|agenda|evento?s?|agendamento?s?)\b",
+    re.I,
+)
 _TODAY = re.compile(r"\b(hoje|agendados?\s+hoje)\b", re.I)
 _CONFIRM_ALL = re.compile(
     r"\b(confirmar?\s+tudo|agendar?\s+todos?|confirmar?\s+todos?)\b",
@@ -40,19 +44,10 @@ def _parse_ids(group: str) -> list[int]:
 
 
 def _get_all_pending_ids() -> list[int]:
-    from tools.commitment_tools import list_pending_commitments
-    import json
+    from db import init_db, list_pending_commitments
 
-    raw = list_pending_commitments.invoke({"limit": 100})
-    if not raw or raw == "No pending commitments.":
-        return []
-    try:
-        rows = json.loads(raw)
-        if isinstance(rows, list):
-            return [r["id"] for r in rows if isinstance(r, dict) and "id" in r]
-    except (ValueError, KeyError):
-        return [int(x) for x in re.findall(r'"id":\s*(\d+)', raw)]
-    return []
+    init_db()
+    return [r["id"] for r in list_pending_commitments(limit=100)]
 
 
 def try_direct_review(text: str, *, confirmed_via: str = "chat") -> Optional[str]:
@@ -101,13 +96,12 @@ def try_direct_review(text: str, *, confirmed_via: str = "chat") -> Optional[str
 
             return list_scheduled_today.invoke({})
 
-        if _PENDING.search(stripped):
+        # "compromissos" / "pendentes" → fila Postgres; Google Calendar só se explícito
+        if _PENDING.search(stripped) or not _CALENDAR_ONLY.search(stripped):
             from tools.commitment_tools import list_pending_commitments
 
             raw = list_pending_commitments.invoke({"limit": 20})
-            if raw == "No pending commitments.":
-                return "Nenhum compromisso pendente."
-            return f"Compromissos pendentes:\n{raw}"
+            return raw
 
         from tools.calendar_tool import list_calendar_events
 

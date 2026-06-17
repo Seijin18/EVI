@@ -126,11 +126,13 @@ def _normalize_llm_fields(
 
 
 def _default_invoke(prompt: str) -> str:
-    from llm import build_llm
+    from llm import build_llm, extract_llm_text
 
     llm = build_llm(temperature=0.0, num_ctx=2048)
     response = llm.invoke(prompt)
-    return response.content if hasattr(response, "content") else str(response)
+    if hasattr(response, "content"):
+        return extract_llm_text(response.content)
+    return str(response)
 
 
 def try_llm_extract(

@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any, List
 
 
+from llm import extract_llm_text
+
+
 def _log_path() -> Path:
     base = Path(os.getenv("EVI_LOG_DIR", "/logs"))
     base.mkdir(parents=True, exist_ok=True)
@@ -44,7 +47,7 @@ def log_telegram_turn(
         "ts": datetime.now(timezone.utc).isoformat(),
         "session_id": session_id,
         "user": user_text[:2000],
-        "assistant": response_text[:2000],
+        "assistant": extract_llm_text(response_text)[:2000],
         "tools": _tool_summary(output_messages),
         "telegram_sent": telegram_sent,
     }

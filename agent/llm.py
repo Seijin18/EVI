@@ -8,6 +8,7 @@ Select via environment variables:
 from __future__ import annotations
 
 import os
+from typing import Any
 
 
 def _llm_provider() -> str:
@@ -69,7 +70,7 @@ def build_embeddings():
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
         return GoogleGenerativeAIEmbeddings(
-            model=os.getenv("GEMINI_EMBED_MODEL", "models/text-embedding-004"),
+            model=os.getenv("GEMINI_EMBED_MODEL", "models/gemini-embedding-001"),
             google_api_key=os.getenv("GEMINI_API_KEY", ""),
         )
 
@@ -88,3 +89,39 @@ def build_embeddings():
         model=os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
         base_url=os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
     )
+
+
+def _extract_gemini_text(content: Any) -> str:
+    """Gemini via LangChain returns AIMessage.content as list[{type, text, ...}]."""
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                text = block.strip()
+            elif isinstance(block, dict):
+                text = str(block.get("text") or "").strip()
+            else:
+                text = str(block).strip()
+            if text:
+                parts.append(text)
+        return "\n".join(parts)
+    return str(content or "").strip()
+
+
+def _extract_default_text(content: Any) -> str:
+    """Ollama / OpenAI / Anthropic typically return plain strings."""
+    if isinstance(content, str):
+        return content.strip()
+    if content is None:
+        return ""
+    return str(content).strip()
+
+
+def extract_llm_text(content: Any, *, provider: str | None = None) -> str:
+    """Normalize provider-specific AIMessage.content to user-facing plain text."""
+    p = (provider or _llm_provider()).strip().lower()
+    if p == "gemini":
+        return _extract_gemini_text(content)
+    return _extract_default_text(content)

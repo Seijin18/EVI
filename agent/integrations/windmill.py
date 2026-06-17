@@ -27,6 +27,10 @@ _OPERATION_MAP: dict[str, tuple[str, str]] = {
         "WINDMILL_WEBHOOK_EMAIL",
         "http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/summarize_inbox",
     ),
+    "delete_emails": (
+        "WINDMILL_WEBHOOK_EMAIL_DELETE",
+        "http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/delete_emails",
+    ),
 }
 
 

@@ -67,7 +67,7 @@ def test_llm_fallback():
     with patch("services.whatsapp_control.try_direct_review", return_value=None):
         with patch("services.whatsapp_control.try_direct_schedule", return_value=None):
             with patch("services.whatsapp_control.try_direct_task", return_value=None):
-                with patch("services.whatsapp_control.send_whatsapp_text", return_value=True):
+                with patch("services.whatsapp_control.send_whatsapp_text", return_value=True) as send:
                     result = process_whatsapp_control_message(
                         jid="5511@c.us",
                         text="como está o tempo?",
@@ -75,6 +75,28 @@ def test_llm_fallback():
                     )
     assert "LLM:" in result["response"]
     assert result["ok"] is True
+
+
+def test_llm_gemini_content_blocks():
+    gemini_response = [
+        {"type": "text", "text": "Está ensolarado.", "extras": {"signature": "x"}},
+    ]
+
+    def invoke(_text, _session):
+        return {"response": gemini_response}
+
+    with patch("services.whatsapp_control.try_direct_review", return_value=None):
+        with patch("services.whatsapp_control.try_direct_schedule", return_value=None):
+            with patch("services.whatsapp_control.try_direct_task", return_value=None):
+                with patch("services.whatsapp_control.send_whatsapp_text", return_value=True) as send:
+                    result = process_whatsapp_control_message(
+                        jid="5511@c.us",
+                        text="tempo?",
+                        invoke_chat=invoke,
+                    )
+    assert result["ok"] is True
+    send.assert_called_once()
+    assert send.call_args.args[1] == "Está ensolarado."
 
 
 def test_empty_llm_reply_returns_hint():
@@ -96,5 +118,6 @@ if __name__ == "__main__":
     test_direct_schedule_path()
     test_direct_task_path()
     test_llm_fallback()
+    test_llm_gemini_content_blocks()
     test_empty_llm_reply_returns_hint()
     print("ok")

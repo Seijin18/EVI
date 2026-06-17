@@ -14,24 +14,33 @@ from llm import build_embeddings
 QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
 COLLECTION_NAME = "university_notes"
 
-# Initialize clients
+# Embedding dimension: 768 for Ollama/nomic-embed-text; 3072 for Google gemini-embedding-001.
+# Override via EMBED_DIM env var.
+_EMBED_DIM_DEFAULTS = {"google": 3072}
+_embed_provider = os.getenv("EVI_EMBED_PROVIDER", "ollama").strip().lower()
+EMBED_DIM = int(os.getenv("EMBED_DIM") or _EMBED_DIM_DEFAULTS.get(_embed_provider, 768))
+
 qdrant_client = QdrantClient(url=QDRANT_URL)
-embeddings_model = build_embeddings()
+_vector_store: "QdrantVectorStore | None" = None
 
-# Ensure collection exists
-try:
-    if not qdrant_client.collection_exists(collection_name=COLLECTION_NAME):
-        qdrant_client.create_collection(
-            collection_name=COLLECTION_NAME,
-            vectors_config=VectorParams(size=768, distance=Distance.COSINE),
+
+def _get_vector_store() -> "QdrantVectorStore":
+    """Lazy-initialize the vector store so a missing embedding API does not crash startup."""
+    global _vector_store
+    if _vector_store is None:
+        embeddings_model = build_embeddings()
+        try:
+            if not qdrant_client.collection_exists(collection_name=COLLECTION_NAME):
+                qdrant_client.create_collection(
+                    collection_name=COLLECTION_NAME,
+                    vectors_config=VectorParams(size=EMBED_DIM, distance=Distance.COSINE),
+                )
+        except Exception:
+            pass
+        _vector_store = QdrantVectorStore(
+            client=qdrant_client, collection_name=COLLECTION_NAME, embedding=embeddings_model
         )
-except Exception:
-    pass
-
-# Create langchain Qdrant vector store wrapper for easier search
-vector_store = QdrantVectorStore(
-    client=qdrant_client, collection_name=COLLECTION_NAME, embedding=embeddings_model
-)
+    return _vector_store
 
 
 def extract_and_chunk_pdf(file_path: str) -> List[Dict[str, Any]]:
@@ -59,7 +68,7 @@ def ingest_university_pdf(file_path: str) -> str:
             return f"No text could be extracted from {file_path}"
 
         # Generate embeddings and upload
-        vector_store.add_documents(chunks)
+        _get_vector_store().add_documents(chunks)
 
         return f"Successfully ingested {len(chunks)} chunks from {os.path.basename(file_path)}."
     except Exception as e:
@@ -95,7 +104,7 @@ def query_university_notes(query: str, top_k: int = 3) -> str:
     """
     try:
         # Use langchain vector store for similarity search
-        docs = vector_store.similarity_search(query, k=top_k)
+        docs = _get_vector_store().similarity_search(query, k=top_k)
 
         if not docs:
             return "No relevant notes found for your query."

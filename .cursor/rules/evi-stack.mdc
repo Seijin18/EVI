@@ -1,12 +1,13 @@
 ---
-description: Stack e convenções do projeto EVI (agente local, sem APIs pagas)
+description: Stack e convenções do projeto EVI
 alwaysApply: true
 ---
 
 # Stack EVI
 
 - **Agente**: FastAPI + LangGraph em `agent/`; memória curta em `BoundedMemory` (`agent/memory.py`).
-- **LLM**: Ollama `qwen2.5:3b-instruct-q4_K_M` (`agent/graph.py`); `OLLAMA_BASE_URL`; não assuma OpenAI/Anthropic.
+- **LLM**: provider selecionável via `EVI_LLM_PROVIDER` (`agent/llm.py`). Configuração atual: `gemini` (`gemini-2.5-flash`). Fallback local: Ollama `qwen2.5:3b-instruct-q4_K_M`.
+- **Embeddings**: `EVI_EMBED_PROVIDER=google` → `GoogleGenerativeAIEmbeddings` (`models/gemini-embedding-001`, 3072 dim). Fallback: Ollama `nomic-embed-text` (768 dim). Dimensão auto-detectada em `rag_tool.py` por provider.
 - **Dados**: Qdrant, Postgres, Windmill, Evolution API + Redis no compose; Neo4j adiado.
 - **MCP no projeto**: apenas `codebase-memory`. Não usar Graphiti nem memória episódica externa neste repo.
 

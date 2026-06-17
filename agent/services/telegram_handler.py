@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict
 
+from llm import extract_llm_text
 from services.telegram_audit import log_telegram_turn
 from services.telegram_format import format_for_telegram
 from services.commitment_review.handler import try_direct_review
 from services.telegram_notify import send_telegram_message
+from services.direct_email import try_direct_email
 from services.direct_task import try_direct_task
 from services.telegram_schedule import try_direct_schedule
 
@@ -34,7 +36,7 @@ def _reply_direct(
     tools: list,
     extra: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    ai_content = format_for_telegram(ai_content)
+    ai_content = format_for_telegram(extract_llm_text(ai_content))
     sent = send_telegram_message(ai_content, chat_id=chat_id) if ai_content else False
     _persist_turn(session_id, text, ai_content)
     log_telegram_turn(
@@ -99,6 +101,17 @@ def process_telegram_update(
             ai_content=tasked,
             tools=[{"type": "direct", "tool": "create_task"}],
             extra={"task_direct": True},
+        )
+
+    emailed = try_direct_email(text)
+    if emailed:
+        return _reply_direct(
+            session_id=session_id,
+            chat_id=chat_id,
+            text=text,
+            ai_content=emailed,
+            tools=[{"type": "direct", "tool": "summarize_inbox"}],
+            extra={"email_direct": True},
         )
 
     try:

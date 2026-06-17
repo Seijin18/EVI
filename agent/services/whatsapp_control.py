@@ -5,7 +5,9 @@ from __future__ import annotations
 import os
 from typing import Any, Callable, Dict, Set
 
+from llm import extract_llm_text
 from services.commitment_review.handler import try_direct_review
+from services.direct_email import try_direct_email
 from services.direct_task import try_direct_task
 from services.evolution_client import (
     format_evi_whatsapp,
@@ -71,9 +73,20 @@ def process_whatsapp_control_message(
             "task_direct": True,
         }
 
+    emailed = try_direct_email(text)
+    if emailed:
+        sent = send_whatsapp_text(jid, emailed, add_prefix=True)
+        return {
+            "ok": True,
+            "response": format_evi_whatsapp(emailed),
+            "session_id": session_id,
+            "whatsapp_sent": sent,
+            "email_direct": True,
+        }
+
     try:
         result = invoke_chat(text, session_id)
-        reply = (result.get("response") or "").strip()
+        reply = extract_llm_text(result.get("response"))
     except Exception as exc:
         reply = f"Não consegui processar agora. Detalhe: {str(exc)[:180]}"
 

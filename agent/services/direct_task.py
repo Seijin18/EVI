@@ -28,9 +28,15 @@ def _parse_title(text: str) -> str:
     m = _QUOTED.search(text)
     if m:
         return m.group(1).strip()[:120]
+    if re.search(r"\b(tarefa|task)\s+de\s+teste\b", text, re.I):
+        return "Tarefa de teste"
+    if re.search(r"\bteste\b", text, re.I) and re.search(r"\b(tarefa|task)\b", text, re.I):
+        return "Tarefa de teste"
     m = _TITLE_TAIL.search(text)
     if m:
         title = m.group(1).strip(" ?.")
+        if title.lower() in ("mim", "eu", "você", "voce"):
+            return "Tarefa de teste" if re.search(r"\bteste\b", text, re.I) else "Tarefa EVI"
         if title and len(title) > 2:
             return title[:120]
     if re.search(r"\bteste\b", text, re.I):

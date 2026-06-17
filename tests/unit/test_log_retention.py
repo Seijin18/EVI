@@ -74,10 +74,45 @@ def test_trim_nonexistent_file():
     assert trim_jsonl(path) == 0
 
 
+def test_trim_max_lines_keeps_newest():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "test.jsonl"
+        _write_lines(path, [{"ts": _ts(i), "msg": f"line-{i}"} for i in range(5)])
+        removed = trim_jsonl(path, max_age_days=30, max_lines=2)
+        assert removed == 3
+        lines = path.read_text().splitlines()
+        assert len(lines) == 2
+        assert json.loads(lines[0])["msg"] == "line-3"
+        assert json.loads(lines[1])["msg"] == "line-4"
+
+
+def test_prune_harness_logs():
+    with tempfile.TemporaryDirectory() as tmp:
+        log_dir = Path(tmp)
+        old = log_dir / "whatsapp_20260101_010101.jsonl"
+        old.write_text("{}\n", encoding="utf-8")
+        old_ts = datetime.now(timezone.utc) - timedelta(days=3)
+        import os as _os
+
+        _os.utime(old, (old_ts.timestamp(), old_ts.timestamp()))
+        harness = log_dir / "harness"
+        harness.mkdir()
+        recent = harness / "whatsapp_20260617_010101.jsonl"
+        recent.write_text("{}\n", encoding="utf-8")
+        from services.log_retention import prune_harness_logs  # noqa: E402
+
+        removed = prune_harness_logs(log_dir, max_age_days=1)
+        assert removed == 1
+        assert not old.exists()
+        assert recent.exists()
+
+
 if __name__ == "__main__":
     test_trim_removes_old_entries()
     test_trim_keeps_recent_entries()
     test_trim_discards_malformed_lines()
     test_append_creates_dir_and_appends()
     test_trim_nonexistent_file()
+    test_trim_max_lines_keeps_newest()
+    test_prune_harness_logs()
     print("ok")

@@ -72,6 +72,16 @@ async def lifespan(app: FastAPI):
         from services.telegram_poller import start_poller
 
         start_poller(_telegram_invoke_chat)
+    try:
+        from pathlib import Path
+        from services.log_retention import prune_logs
+
+        prune_logs(Path(os.getenv("EVI_LOG_DIR", "/logs")))
+    except Exception:
+        pass
+    gmail_res = os.getenv("WINDMILL_GMAIL_RESOURCE", "")
+    if gmail_res:
+        print(f"EVI: WINDMILL_GMAIL_RESOURCE={gmail_res}", flush=True)
     yield
 
 
@@ -166,10 +176,12 @@ def chat(
         output_messages = result.get("messages", [])
         final_answer = result.get("final_answer", "")
 
+        from llm import extract_llm_text
+
         if final_answer:
-            ai_content = final_answer
+            ai_content = extract_llm_text(final_answer)
         elif output_messages and output_messages[-1].type == "ai":
-            ai_content = output_messages[-1].content
+            ai_content = extract_llm_text(output_messages[-1].content)
         else:
             ai_content = "The agent returned an empty response."
 
@@ -178,16 +190,6 @@ def chat(
             app_state.memory.add(msg)
 
         _persist_turn(session_id, request.message, ai_content)
-        if session_id.startswith("telegram-"):
-            from services.telegram_audit import log_telegram_turn
-
-            log_telegram_turn(
-                session_id,
-                request.message,
-                ai_content,
-                output_messages,
-                telegram_sent=bool(ai_content),
-            )
         return {"response": ai_content, "session_id": session_id}
 
     except Exception as e:
@@ -455,7 +457,13 @@ def evolution_webhook(
             {"ts": ts, "step": "queue_error", "error": str(exc)[:200]},
         )
 
-    trim_jsonl(log_path)
+    trim_jsonl(log_path, max_lines=int(os.getenv("EVI_LOG_MAX_LINES", "5000") or "5000"))
+    try:
+        from services.log_retention import prune_harness_logs
+
+        prune_harness_logs(log_dir)
+    except Exception:
+        pass
 
     observe_webhook("evolution", time.perf_counter() - _wh_start)
 

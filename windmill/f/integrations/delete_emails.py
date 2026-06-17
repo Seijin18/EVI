@@ -1,4 +1,4 @@
-"""Windmill script: summarize_inbox — Gmail via OAuth resource."""
+"""Windmill script: delete_emails — move Gmail messages to trash via OAuth resource."""
 
 import json
 import os
@@ -56,61 +56,57 @@ def _access_token(resource: Any) -> str:
     raise ValueError("No access token in gmail resource")
 
 
-def _gmail_get(token: str, path: str) -> Dict[str, Any]:
+def _gmail_post(token: str, path: str) -> Dict[str, Any]:
     url = f"https://gmail.googleapis.com/gmail/v1/users/me{path}"
     req = urllib.request.Request(
-        url, headers={"Authorization": f"Bearer {token}"}
+        url,
+        data=b"{}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        body = resp.read().decode("utf-8")
+        return json.loads(body) if body.strip() else {}
 
 
-def main(max_messages: int = 10, gmail: str = "gmail"):
-    token = _access_token(gmail)
-    limit = max(1, min(int(max_messages), 25))
-    try:
-        listing = _gmail_get(
-            token, f"/messages?maxResults={limit}&labelIds=INBOX"
-        )
-    except urllib.error.HTTPError as e:
+def main(message_ids: List[str], gmail: str = "gmail"):
+    if not message_ids:
         return {
             "status": "error",
-            "action": "summarize_inbox",
-            "http_status": e.code,
-            "detail": e.read().decode("utf-8", errors="replace")[:500],
-            "count": 0,
+            "action": "delete_emails",
+            "detail": "message_ids required",
+            "deleted": 0,
         }
-
-    ids = [m["id"] for m in listing.get("messages", []) if m.get("id")]
-    lines: List[str] = []
-    messages: List[Dict[str, str]] = []
-    for mid in ids:
-        try:
-            msg = _gmail_get(
-                token,
-                f"/messages/{mid}?format=metadata&metadataHeaders=Subject&metadataHeaders=From",
-            )
-        except urllib.error.HTTPError:
+    token = _access_token(gmail)
+    deleted = 0
+    errors: List[str] = []
+    for mid in message_ids[:25]:
+        mid = str(mid).strip()
+        if not mid:
             continue
-        headers = {
-            h["name"]: h["value"]
-            for h in msg.get("payload", {}).get("headers", [])
-            if h.get("name") in ("Subject", "From")
-        }
-        subj = headers.get("Subject", "(no subject)")
-        sender = headers.get("From", "")
-        lines.append(f"- [{mid}] {subj} — {sender}")
-        messages.append({"id": mid, "subject": subj, "from": sender})
+        try:
+            _gmail_post(token, f"/messages/{mid}/trash")
+            deleted += 1
+        except urllib.error.HTTPError as e:
+            errors.append(f"{mid}: HTTP {e.code}")
+        except Exception as exc:
+            errors.append(f"{mid}: {exc}")
 
-    summary = (
-        "No recent INBOX messages."
-        if not lines
-        else "Recent inbox:\n" + "\n".join(lines)
-    )
-    return {
+    if deleted == 0 and errors:
+        return {
+            "status": "error",
+            "action": "delete_emails",
+            "detail": "; ".join(errors)[:500],
+            "deleted": 0,
+        }
+    out: Dict[str, Any] = {
         "status": "ok",
-        "action": "summarize_inbox",
-        "summary": summary,
-        "count": len(lines),
-        "messages": messages,
+        "action": "delete_emails",
+        "deleted": deleted,
     }
+    if errors:
+        out["warnings"] = errors[:5]
+    return out

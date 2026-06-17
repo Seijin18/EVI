@@ -10,7 +10,8 @@
 | Layer | Component |
 |-------|-----------|
 | Agent | FastAPI + LangGraph ReAct (`agent/`) |
-| LLM | Ollama `qwen2.5:3b-instruct-q4_K_M` |
+| LLM | Gemini `gemini-2.5-flash` (`EVI_LLM_PROVIDER=gemini`); fallback Ollama `qwen2.5:3b-instruct-q4_K_M` |
+| Embeddings | Google `models/gemini-embedding-001` 3072 dim (`EVI_EMBED_PROVIDER=google`); fallback Ollama `nomic-embed-text` 768 dim |
 | Orchestration | Windmill (`windmill/f/integrations/`) |
 | WhatsApp | Evolution API → commitment queue |
 | Remote | Telegram webhook or polling |

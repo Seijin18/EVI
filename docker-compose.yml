@@ -113,20 +113,29 @@ services:
   agent-api:
     build: ./agent
     ports: ["8002:8000"]
+    env_file:
+      - .env
     environment:
+      - EVI_LLM_PROVIDER=${EVI_LLM_PROVIDER:-ollama}
+      - EVI_EMBED_PROVIDER=${EVI_EMBED_PROVIDER:-ollama}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - GEMINI_EMBED_MODEL=${GEMINI_EMBED_MODEL:-models/gemini-embedding-001}
+      - EMBED_DIM=${EMBED_DIM:-}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
       - QDRANT_URL=${QDRANT_URL}
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - WINDMILL_WEBHOOK_CALENDAR=${WINDMILL_WEBHOOK_CALENDAR}
       - WINDMILL_WEBHOOK_TASKS=${WINDMILL_WEBHOOK_TASKS}
       - WINDMILL_WEBHOOK_EMAIL=${WINDMILL_WEBHOOK_EMAIL}
+      - WINDMILL_WEBHOOK_EMAIL_DELETE=${WINDMILL_WEBHOOK_EMAIL_DELETE:-http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/delete_emails}
       - WINDMILL_WEBHOOK_TELEGRAM=${WINDMILL_WEBHOOK_TELEGRAM}
       - WINDMILL_TOKEN=${WINDMILL_TOKEN:-}
-      - WINDMILL_GCAL_RESOURCE=${WINDMILL_GCAL_RESOURCE:-gcal}
       - WINDMILL_CALENDAR_ID=${WINDMILL_CALENDAR_ID:-primary}
-      - WINDMILL_GTASKS_RESOURCE=${WINDMILL_GTASKS_RESOURCE:-gtasks}
-      - WINDMILL_GMAIL_RESOURCE=${WINDMILL_GMAIL_RESOURCE:-gmail}
+      # Windmill OAuth resource paths (GCAL/GTASKS/GMAIL/GCLOUD) — loaded from env_file (.env)
+      # only; do not interpolate here (shell exports would override .env).
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
       - TELEGRAM_MODE=${TELEGRAM_MODE:-}

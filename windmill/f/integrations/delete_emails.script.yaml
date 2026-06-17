@@ -1,0 +1,20 @@
+summary: Move Gmail messages to trash
+description: ''
+lock: ''
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    message_ids:
+      type: array
+      items:
+        type: string
+      description: Gmail message IDs to trash
+    gmail:
+      type: string
+      description: Windmill resource path for Gmail OAuth
+      default: gmail
+      originalType: string
+  required:
+    - message_ids

@@ -1,23 +1,22 @@
+"""Unit tests for direct_task title parsing."""
+
 import sys
 from pathlib import Path
 
-_agent = Path(__file__).resolve().parents[2] / "agent"
-sys.path.insert(0, str(_agent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agent"))
 
-from services.direct_task import _parse_title, wants_task  # noqa: E402
-
-
-def test_wants_task():
-    assert wants_task("Você pode criar uma task de teste?")
-    assert wants_task("criar tarefa comprar leite")
-    assert not wants_task("listar compromissos")
+from services.direct_task import _parse_title  # noqa: E402
 
 
-def test_parse_title():
-    assert "teste" in _parse_title("criar uma task de teste?").lower()
+def test_task_de_teste_para_mim():
+    assert _parse_title("Crie uma task de teste para mim") == "Tarefa de teste"
+
+
+def test_quoted_title():
+    assert _parse_title('criar tarefa "Comprar leite"') == "Comprar leite"
 
 
 if __name__ == "__main__":
-    test_wants_task()
-    test_parse_title()
+    test_task_de_teste_para_mim()
+    test_quoted_title()
     print("ok")

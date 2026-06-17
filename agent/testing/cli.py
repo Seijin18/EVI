@@ -33,7 +33,9 @@ def _log_path(feature: str, explicit: str | None) -> Path:
         return Path(explicit)
     LOGS.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return LOGS / f"{feature}_{ts}.jsonl"
+    harness = LOGS / "harness"
+    harness.mkdir(parents=True, exist_ok=True)
+    return harness / f"{feature}_{ts}.jsonl"
 
 
 def _result(name: str, ok: bool, detail: str = "") -> bool:

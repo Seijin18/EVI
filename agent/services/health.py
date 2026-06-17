@@ -56,7 +56,16 @@ def _check_windmill() -> dict[str, Any]:
         return {"ok": False, "detail": str(e)[:120]}
 
 
+def _active_providers() -> tuple[str, str]:
+    llm = os.getenv("EVI_LLM_PROVIDER", "ollama").strip().lower()
+    embed = os.getenv("EVI_EMBED_PROVIDER", "ollama").strip().lower()
+    return llm, embed
+
+
 def _check_ollama() -> dict[str, Any]:
+    llm, embed = _active_providers()
+    if llm != "ollama" and embed != "ollama":
+        return {"ok": True, "detail": "skipped (EVI_*_PROVIDER not ollama)"}
     base = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434").rstrip("/")
     try:
         import httpx
@@ -69,6 +78,16 @@ def _check_ollama() -> dict[str, Any]:
         return {"ok": False, "detail": str(e)[:120]}
 
 
+def _check_gemini() -> dict[str, Any]:
+    llm, embed = _active_providers()
+    if llm != "gemini" and embed != "google":
+        return {"ok": True, "detail": "skipped (EVI_*_PROVIDER not gemini/google)"}
+    key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not key:
+        return {"ok": False, "detail": "GEMINI_API_KEY missing"}
+    return {"ok": True, "detail": "api key configured"}
+
+
 def _check_graph(graph_ready: bool) -> dict[str, Any]:
     if graph_ready:
         return {"ok": True, "detail": "initialized"}
@@ -76,6 +95,7 @@ def _check_graph(graph_ready: bool) -> dict[str, Any]:
 
 
 def run_health_checks(*, graph_ready: bool = True) -> dict[str, Any]:
+    llm, embed = _active_providers()
     checks = {
         "graph": _check_graph(graph_ready),
         "postgres": _check_postgres(),
@@ -83,6 +103,8 @@ def run_health_checks(*, graph_ready: bool = True) -> dict[str, Any]:
         "windmill": _check_windmill(),
         "ollama": _check_ollama(),
     }
+    if llm == "gemini" or embed == "google":
+        checks["gemini"] = _check_gemini()
     evaluated = [c for c in checks.values() if not str(c.get("detail", "")).startswith("skipped")]
     if not evaluated:
         status = "ok"
