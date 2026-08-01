@@ -1,20 +1,24 @@
 """Unit tests for commitment review tools (SCN-CHAT-03/04)."""
 
-import json
 import sys
 import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 _agent = Path("/app")
 if not _agent.is_dir():
     _agent = Path(__file__).resolve().parents[2] / "agent"
 sys.path.insert(0, str(_agent))
 
-# Stub db before commitment_tools imports psycopg2 transitively
+# Stub db before commitment_tools imports psycopg2 transitively. Real "db" is
+# restored in the module-teardown fixture below so later test modules that
+# import the real agent/db.py don't see this stub's limited surface.
+_real_db_module = sys.modules.get("db")
 _db = types.ModuleType("db")
 _db.init_db = lambda: None
-_db.list_pending_commitments = lambda limit=20: []
+_db.list_pending_commitments = lambda limit=20, include_past=False: []
 _db.update_commitment_status = lambda cid, status: True
 sys.modules["db"] = _db
 
@@ -25,14 +29,24 @@ from tools.commitment_tools import (  # noqa: E402
 )
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _restore_real_db_module():
+    """Undo the sys.modules["db"] stub after this module's tests finish."""
+    yield
+    if _real_db_module is not None:
+        sys.modules["db"] = _real_db_module
+    else:
+        sys.modules.pop("db", None)
+
+
 def test_list_pending_empty():
-    _db.list_pending_commitments = lambda limit=20: []
+    _db.list_pending_commitments = lambda limit=20, include_past=False: []
     out = list_pending_commitments.invoke({"limit": 5})
-    assert out == "No pending commitments."
+    assert out == "Nenhum compromisso pendente."
 
 
-def test_list_pending_returns_json():
-    _db.list_pending_commitments = lambda limit=20: [
+def test_list_pending_returns_digest():
+    _db.list_pending_commitments = lambda limit=20, include_past=False: [
         {
             "id": 1,
             "title": "Reunião",
@@ -42,12 +56,12 @@ def test_list_pending_returns_json():
         }
     ]
     out = list_pending_commitments.invoke({})
-    data = json.loads(out)
-    assert data[0]["title"] == "Reunião"
+    assert "Reunião" in out
+    assert "[1]" in out
 
 
 def test_confirm_event_calls_schedule():
-    _db.list_pending_commitments = lambda limit=100: [
+    _db.list_pending_commitments = lambda limit=100, include_past=False: [
         {
             "id": 2,
             "type": "event",
@@ -71,7 +85,7 @@ def test_confirm_event_calls_schedule():
 
 
 def test_confirm_task_calls_create_task():
-    _db.list_pending_commitments = lambda limit=100: [
+    _db.list_pending_commitments = lambda limit=100, include_past=False: [
         {
             "id": 3,
             "type": "task",
@@ -103,7 +117,7 @@ def test_dismiss_commitments():
 
 if __name__ == "__main__":
     test_list_pending_empty()
-    test_list_pending_returns_json()
+    test_list_pending_returns_digest()
     test_confirm_event_calls_schedule()
     test_confirm_task_calls_create_task()
     test_dismiss_commitments()

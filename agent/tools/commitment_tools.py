@@ -15,7 +15,8 @@ from tools.task_tool import create_task
 
 def _tool_succeeded(out: str) -> bool:
     low = out.lower()
-    return "created" in low or "criado" in low
+    # "criad" stem matches both "criado" (Evento criado) and "criada" (Tarefa criada).
+    return "created" in low or "criad" in low
 
 
 @tool
