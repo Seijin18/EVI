@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
-from services.daily_summary import heartbeat_enabled, read_heartbeat_checklist, run_heartbeat_dry
+from services.daily_summary import heartbeat_enabled, run_heartbeat_dry
 from services.whatsapp_control import parse_control_jids
 
 
@@ -55,8 +54,6 @@ def run_heartbeat(*, dry: bool = False) -> dict[str, Any]:
 
 def _contacts_needing_synthesis(*, days: int = 7) -> list[str]:
     try:
-        from datetime import datetime, timedelta, timezone
-
         from services.contact_filesystem import (
             collect_known_contacts,
             memory_enabled,
@@ -65,7 +62,6 @@ def _contacts_needing_synthesis(*, days: int = 7) -> list[str]:
 
         if not memory_enabled():
             return []
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         stale: list[str] = []
         for c in collect_known_contacts():
             jid = c.get("jid") or ""

@@ -125,7 +125,7 @@ def test_llm_gemini_content_blocks():
     def invoke(_text, _session):
         return {"response": gemini_response}
 
-    with _DIRECT_OFF:
+    with _DIRECT_OFF, patch.dict(os.environ, {"EVI_LLM_PROVIDER": "gemini"}):
         with patch("services.whatsapp_control.send_whatsapp_text", return_value=True) as send:
             result = process_whatsapp_control_message(
                 jid="5511@c.us",

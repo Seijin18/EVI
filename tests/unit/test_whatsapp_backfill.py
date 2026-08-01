@@ -2,7 +2,7 @@ import json
 import os
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -96,7 +96,9 @@ def test_backfill_from_evolution_log():
                     "sender": jid,
                     "from_me": False,
                     "raw_preview": "Vamos marcar um vôlei para segunda feira",
-                    "message_ts": "2026-06-17T12:39:10+00:00",
+                    "message_ts": (
+                        datetime.now(timezone.utc) - timedelta(days=1)
+                    ).isoformat(),
                 },
                 ensure_ascii=False,
             )

@@ -119,7 +119,7 @@ def test_processes_gemini_content_blocks():
     def fake_chat(msg, session_id):
         return {"response": gemini_response}
 
-    with _DIRECT_OFF:
+    with _DIRECT_OFF, patch.dict(os.environ, {"EVI_LLM_PROVIDER": "gemini"}):
         with (
             patch("services.telegram_handler.send_telegram_message", return_value=True) as send,
             patch("services.telegram_handler._persist_turn"),

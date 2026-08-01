@@ -43,7 +43,7 @@ def test_list_tasks_invoke_mock():
             "count": 1,
         }
     )
-    with patch("integrations.factory.get_integration") as get_int:
+    with patch("tools.task_tool.get_integration") as get_int:
         get_int.return_value.post.return_value = payload
         out = list_tasks.invoke({"max_results": 10})
     assert "Test" in str(out)

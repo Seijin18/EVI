@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 
 from services.contact_filesystem import collect_known_contacts, memory_enabled, memory_root
 
@@ -56,9 +54,9 @@ def _last_synthesis_heading(jid: str) -> str:
 
 def contact_memory_health() -> dict[str, object]:
     enabled = memory_enabled()
-    out: dict[str, object] = {"enabled": enabled, "ok": enabled}
+    out: dict[str, object] = {"enabled": enabled, "ok": True}
     if not enabled:
-        out["detail"] = "EVI_CONTACT_MEMORY_DIR unset"
+        out["detail"] = "skipped (EVI_CONTACT_MEMORY_DIR unset)"
         return out
     try:
         root = memory_root()
