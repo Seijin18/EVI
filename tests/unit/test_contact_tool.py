@@ -94,16 +94,16 @@ def test_learn_contact_with_mock_llm():
             commitment_id=3,
             label="Leozao",
         )
-        with patch("llm.build_llm") as mock_llm:
+        with patch("llm.build_background_llm") as mock_llm:
             mock_llm.return_value.invoke.return_value.content = "Leozao trabalha no projeto X."
             from services.contact_learning import learn_contact  # noqa: E402
 
-            out = learn_contact("Leozao", days=30)
+            out = learn_contact("Leozao", days=30, fetch_messages=False)
         assert "Leozao" in out
         assert "Perfil atualizado" in out
         profile = (Path(tmp) / "contacts" / jid / "profile.md").read_text(encoding="utf-8")
         assert "Síntese" in profile
-        assert "projeto X" in profile.lower()
+        assert "projeto x" in profile.lower()
 
 
 if __name__ == "__main__":

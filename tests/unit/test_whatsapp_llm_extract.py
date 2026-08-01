@@ -22,9 +22,20 @@ W005 = IncomingMessage(
     ts="2026-06-03T11:00:00",
 )
 
+# Heuristic date/time patterns improved after this test was written (W005 is
+# now caught by the heuristic itself — see test_llm_extract_w005_scn_wa_16).
+# This message has no date/time cues at all, so it still defeats the
+# heuristic and exercises the LLM-fallback path.
+W006_NO_DATE_CUES = IncomingMessage(
+    id="w006",
+    sender="Ana",
+    text="Aquele assunto que a gente comentou ontem ainda está de pé?",
+    ts="2026-06-03T11:00:00",
+)
 
-def test_heuristic_misses_w005():
-    assert extract_commitment(W005) is None
+
+def test_heuristic_misses_w006():
+    assert extract_commitment(W006_NO_DATE_CUES) is None
 
 
 def test_llm_extract_w005_scn_wa_16():
@@ -52,22 +63,22 @@ def test_llm_extract_w005_scn_wa_16():
 def test_fallback_uses_llm_when_heuristic_fails():
     mock_json = json.dumps(
         {
-            "type": "event",
-            "title": "Consulta com dentista",
-            "date": "2026-06-12",
-            "time": "10:00",
-            "confidence": 0.9,
+            "type": "task",
+            "title": "Assunto pendente com Ana",
+            "date": None,
+            "time": None,
+            "confidence": 0.7,
         }
     )
 
     with patch.dict(os.environ, {"EVI_WHATSAPP_LLM_EXTRACT": "true"}):
         c, method = extract_commitment_with_fallback(
-            W005, invoke=lambda _p: mock_json
+            W006_NO_DATE_CUES, invoke=lambda _p: mock_json
         )
 
     assert method == "llm"
     assert c is not None
-    assert c.source_id == "w005"
+    assert c.source_id == "w006"
 
 
 def test_llm_disabled_by_default():
@@ -76,7 +87,7 @@ def test_llm_disabled_by_default():
 
 
 if __name__ == "__main__":
-    test_heuristic_misses_w005()
+    test_heuristic_misses_w006()
     test_llm_extract_w005_scn_wa_16()
     test_fallback_uses_llm_when_heuristic_fails()
     test_llm_disabled_by_default()

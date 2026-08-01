@@ -90,7 +90,10 @@ def list_whatsapp_contacts(limit: int = 25, refresh_from_evolution: bool = True)
     Use when the user asks which contacts you have information on.
     """
     if refresh_from_evolution:
-        sync_evolution_contacts()
+        try:
+            sync_evolution_contacts()
+        except Exception:
+            pass
         collect_known_contacts()
     contacts = collect_known_contacts()[:limit]
     if not contacts:

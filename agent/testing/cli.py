@@ -717,7 +717,10 @@ def run_runtime_v3() -> bool:
     """Offline checks for EVI agent runtime v3 (workspace, context, skills)."""
     ws = os.getenv("EVI_WORKSPACE", str(REPO_ROOT / "EVI_WORKSPACE"))
     root = Path(ws)
-    required = ["USER.md", "AGENTS.md", "MEMORY.md"]
+    # USER.md / MEMORY.md are gitignored personal state (optional at runtime —
+    # see services/workspace.py bootstrap file handling); only AGENTS.md is
+    # guaranteed to exist in a fresh checkout.
+    required = ["AGENTS.md"]
     ok = root.is_dir() and all((root / name).is_file() for name in required)
 
     prev_ws = os.environ.get("EVI_WORKSPACE")

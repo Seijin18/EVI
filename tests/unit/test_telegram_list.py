@@ -30,7 +30,7 @@ def test_direct_list_calls_calendar_tool():
 
 def test_direct_list_pending():
     with patch("tools.commitment_tools.list_pending_commitments") as mock:
-        mock.invoke.return_value = "No pending commitments."
+        mock.invoke.return_value = "Nenhum compromisso pendente."
         out = try_direct_list("Listar compromissos pendentes")
     assert out and "Nenhum" in out
 

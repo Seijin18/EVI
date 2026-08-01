@@ -16,17 +16,21 @@ from services.session_context import (  # noqa: E402
 
 def test_summarize_tool_calls():
     ai = MagicMock(type="ai", tool_calls=[{"name": "summarize_inbox"}])
-    tool = MagicMock(type="tool", name="summarize_inbox", content='{"status":"ok"}')
+    tool = MagicMock(type="tool", content='{"status":"ok"}')
+    tool.name = "summarize_inbox"  # "name" is a reserved MagicMock() kwarg
     summary = summarize_tool_calls([ai, tool])
-    assert any(s.get("tool") == "summarize_inbox" for s in summary)
+    assert any(
+        s.get("tool") == "summarize_inbox" and s.get("kind") == "result"
+        for s in summary
+    )
 
 
 def test_persist_tool_snapshots_parses_json():
     tool = MagicMock(
         type="tool",
-        name="summarize_inbox",
         content=json.dumps({"status": "ok", "messages": [{"id": "abc"}]}),
     )
+    tool.name = "summarize_inbox"  # "name" is a reserved MagicMock() kwarg
     with patch("db.init_db"), patch("db.save_tool_snapshot") as save:
         saved = persist_tool_snapshots("telegram-1", [tool])
     assert len(saved) == 1

@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 _agent = Path(__file__).resolve().parents[2] / "agent"
@@ -28,7 +29,9 @@ def test_replay_queues_volleyball(tmp_path, monkeypatch):
                 "sender": jid,
                 "from_me": False,
                 "raw_preview": "Marcar para Jogar vôlei, segunda feira dia 22/06, às 17",
-                "message_ts": "2026-06-17T12:40:02+00:00",
+                "message_ts": (
+                    datetime.now(timezone.utc) - timedelta(days=2)
+                ).isoformat(),
                 "label": "PNFagundes",
             },
             ensure_ascii=False,
