@@ -107,11 +107,11 @@ Spec: [`openspec/specs/providers/spec.md`](specs/providers/spec.md)
 
 ## Etapa 12 — gap analysis vs. proposta original (1 Ago 2026)
 
-Nenhum item priorizado ainda — registrados em [`openspec/specs/roadmap.md`](specs/roadmap.md#etapa-12--gap-analysis-vs-proposta-original-1-ago-2026) após comparação com a proposta original do EVI e o anúncio do Gemini Spark (Google I/O 2026).
+Registrados em [`openspec/specs/roadmap.md`](specs/roadmap.md#etapa-12--gap-analysis-vs-proposta-original-1-ago-2026) após comparação com a proposta original do EVI e o anúncio do Gemini Spark (Google I/O 2026).
 
 | # | Item | Status | Notas |
 |---|------|--------|-------|
 | 31 | Web search tool | Backlog | Backend plugável (Tavily/SerpAPI/Brave); gap apontado pelo usuário |
 | 32 | Gmail proactive background triage | Backlog | Estende `heartbeat.py`/cron pra Gmail, hoje só cobre WhatsApp |
 | 33 | Skill auto-generation from behavior | Backlog | Inspirado no Gemini Spark; depende dos itens 31/32 primeiro |
-| 34 | Tool subsetting by channel/intent | Backlog | Corrige o maior desperdício de tokens hoje (`bind_tools` sempre com as ~25 tools); não é MCP — ver nota no roadmap |
+| 34 | `evi-tool-routing` | **Proposed** | Change aberta em `openspec/changes/evi-tool-routing/` — heurística regex + fallback opcional `build_background_llm()`; ainda não implementada (esta é a change ativa atual) |
