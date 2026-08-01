@@ -75,13 +75,24 @@
 |------|--------|
 | Generic pluggable CLI backend (Claude Code default) + approve/apply bug fix | `evi-dev-bridge-multi-cli` (archived 2026-08-01) — see `specs/dev-bridge/spec.md` |
 
+## Etapa 12 — gap analysis vs. proposta original (1 Ago 2026)
+
+Levantado ao comparar o EVI com a proposta original (background + ativo) e com o anúncio do Gemini Spark (Google I/O 2026). Nenhum item abaixo tem change aberta ainda — registrar aqui até ser priorizado.
+
+| Item | Type | Notes |
+|------|------|-------|
+| Web search tool | Feature | Backend plugável (Tavily/SerpAPI/Brave), mesmo padrão de `agent/integrations/`; registrar em `tools/registry.py` só quando `EVI_WEB_SEARCH_ENABLED=true`. Gap identificado pelo usuário — hoje o EVI só sabe o que está em RAG ou no treino do LLM |
+| Gmail proactive background triage | Feature | Estender `heartbeat.py`/cron Windmill pra rodar `summarize_inbox` periodicamente e notificar o control chat só quando houver algo importante — mesmo padrão já usado pra `pending_commitments`. Fecha o gap real: hoje `daily_summary.py`/`heartbeat.py` só olham WhatsApp, nunca Gmail, apesar da proposta original pedir "processar mensagens e emails em background" |
+| Skill auto-generation from behavior | Feature | Inspirado no "ghostwriter skill" do Gemini Spark (gera skill reutilizável a partir dos últimos N emails/mensagens do usuário). Depende de `EVI_WORKSPACE/skills/` já existente como formato; maior risco/esforço dos três, fazer depois dos outros dois |
+| Tool subsetting by channel/intent | Performance | `agent/graph.py` faz `bind_tools()` com as ~25 tools em toda chamada, em todo canal, independente de intenção — maior desperdício de tokens hoje. Resolver com lógica condicional (mesmo padrão de `match_skills`/`EVI_DEV_BRIDGE_ENABLED`), não com MCP — MCP é protocolo de transporte/descoberta, não reduz tokens enviados ao LLM, que precisa do schema completo de qualquer tool exposta independente de onde ela é implementada |
+
 ## Other deferred
 
 | Item | Type | Notes |
 |------|------|-------|
 | `/chat` + `/run-task` API key auth | Security | Backward-compat; noop se `EVI_API_KEY` não configurado |
 | Compose Ollama profile | Infrastructure | Profile `ollama` para stack completamente self-contained |
-| MCP isolated servers | Architecture | After 3+ stable tools need isolated restart |
+| MCP isolated servers | Architecture | After 3+ stable tools need isolated restart — isolamento de processo, não relacionado a custo de tokens (ver Etapa 12) |
 | Llava + Whisper | Feature | Multimodal remote |
 | Redis embedding cache | Performance | Optional |
 | WhatsApp live adapter | Integration | Meta / Twilio — facilitado pelo `BaseMessagingClient` |
