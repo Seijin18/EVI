@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 
 from services.contact_filesystem import collect_known_contacts, memory_enabled, memory_root
 
