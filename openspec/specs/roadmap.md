@@ -60,11 +60,25 @@
 | Daily summary with LLM | `evi-daily-summary-llm` |
 | Profile.md auto-update | `evi-profile-auto-update` |
 
+## Etapa 10 — autonomy + contact memory (Done — 17 Jun 2026)
+
+| Item | Change |
+|------|--------|
+| Contact learning by name + Evolution backfill/discovery/registry | `evi-contact-learning` (archived 2026-06-17) |
+| `list_calendars` LangGraph tool | Shipped with commit `bd012bf` — no longer deferred |
+| Heartbeat + background LLM tiers | `services/heartbeat.py`, `build_background_llm()` |
+| Session lane queue + slash commands | `services/session_lane.py`, `services/chat_commands.py` |
+
+## Etapa 11 — dev bridge multi-CLI (Done — 1 Ago 2026)
+
+| Item | Change |
+|------|--------|
+| Generic pluggable CLI backend (Claude Code default) + approve/apply bug fix | `evi-dev-bridge-multi-cli` (archived 2026-08-01) — see `specs/dev-bridge/spec.md` |
+
 ## Other deferred
 
 | Item | Type | Notes |
 |------|------|-------|
-| `list_calendars` LangGraph tool | Feature | Windmill script exists; precisa de registry entry |
 | `/chat` + `/run-task` API key auth | Security | Backward-compat; noop se `EVI_API_KEY` não configurado |
 | Compose Ollama profile | Infrastructure | Profile `ollama` para stack completamente self-contained |
 | MCP isolated servers | Architecture | After 3+ stable tools need isolated restart |

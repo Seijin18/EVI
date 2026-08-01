@@ -33,6 +33,7 @@ Implement **one change at a time**. Read only `contextFiles` from apply instruct
 | Long memory | `specs/data-long-memory/spec.md` | `contact_filesystem.py`, `daily_summary.py`, `graph_tool.py` |
 | WhatsApp | `specs/messaging-whatsapp/spec.md` | `agent/services/whatsapp_processor.py` |
 | Remote | `specs/remote-access/spec.md` | `agent/auth.py`, webhooks |
+| Dev bridge | `specs/dev-bridge/spec.md` | `agent/services/dev_bridge.py`, `agent/devcli/` |
 | Testing | `specs/testing/spec.md` | `scripts/evi-test`, `tests/` |
 | Roadmap (deferred) | `specs/roadmap.md` | — |
 

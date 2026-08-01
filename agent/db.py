@@ -89,6 +89,17 @@ def _run_migrations() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_dev_jobs_status
                     ON dev_jobs(status, created_at DESC);
+                ALTER TABLE dev_jobs
+                    ADD COLUMN IF NOT EXISTS backend VARCHAR(32) DEFAULT '';
+                ALTER TABLE dev_jobs
+                    ADD COLUMN IF NOT EXISTS mode VARCHAR(16) DEFAULT '';
+                ALTER TABLE dev_jobs
+                    ADD COLUMN IF NOT EXISTS branch VARCHAR(128) DEFAULT '';
+                CREATE TABLE IF NOT EXISTS dev_bridge_state (
+                    key VARCHAR(64) PRIMARY KEY,
+                    value VARCHAR(64) NOT NULL,
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
                 CREATE TABLE IF NOT EXISTS whatsapp_contacts (
                     jid VARCHAR(128) PRIMARY KEY,
                     whatsapp_label VARCHAR(256),
@@ -529,17 +540,19 @@ def mark_pending_notified(ids: List[int]) -> None:
         conn.commit()
 
 
-def create_dev_job(job_id: str, description: str, *, requested_by: str = "") -> None:
+def create_dev_job(
+    job_id: str, description: str, *, requested_by: str = "", backend: str = ""
+) -> None:
     init_db()
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO dev_jobs (job_id, description, requested_by)
-                VALUES (%s, %s, %s)
+                INSERT INTO dev_jobs (job_id, description, requested_by, backend)
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (job_id) DO NOTHING
                 """,
-                (job_id, description, requested_by),
+                (job_id, description, requested_by, backend),
             )
         conn.commit()
 
@@ -559,6 +572,8 @@ def update_dev_job(
     status: str,
     result_summary: str = "",
     log_path: str = "",
+    mode: str = "",
+    branch: str = "",
 ) -> None:
     init_db()
     with _conn() as conn:
@@ -569,10 +584,12 @@ def update_dev_job(
                 SET status = %s,
                     result_summary = COALESCE(NULLIF(%s, ''), result_summary),
                     log_path = COALESCE(NULLIF(%s, ''), log_path),
+                    mode = COALESCE(NULLIF(%s, ''), mode),
+                    branch = COALESCE(NULLIF(%s, ''), branch),
                     updated_at = NOW()
                 WHERE job_id = %s
                 """,
-                (status, result_summary, log_path, job_id),
+                (status, result_summary, log_path, mode, branch, job_id),
             )
         conn.commit()
 
@@ -583,7 +600,8 @@ def list_dev_jobs(*, limit: int = 10) -> List[Dict[str, Any]]:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT job_id, description, status, requested_by, created_at
+                SELECT job_id, description, status, requested_by, backend, mode,
+                       branch, created_at
                 FROM dev_jobs
                 ORDER BY created_at DESC
                 LIMIT %s
@@ -592,3 +610,30 @@ def list_dev_jobs(*, limit: int = 10) -> List[Dict[str, Any]]:
             )
             rows = cur.fetchall()
     return [dict(r) for r in rows]
+
+
+def get_dev_bridge_setting(key: str, default: str = "") -> str:
+    init_db()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT value FROM dev_bridge_state WHERE key = %s", (key,)
+            )
+            row = cur.fetchone()
+    return row[0] if row else default
+
+
+def set_dev_bridge_setting(key: str, value: str) -> None:
+    init_db()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO dev_bridge_state (key, value, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (key) DO UPDATE
+                SET value = EXCLUDED.value, updated_at = NOW()
+                """,
+                (key, value),
+            )
+        conn.commit()

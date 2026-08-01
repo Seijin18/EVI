@@ -88,4 +88,19 @@ Spec: [`openspec/specs/providers/spec.md`](specs/providers/spec.md)
 | 24 | `evi-daily-summary-llm` | Done | `_llm_summarize()` quando `EVI_DAILY_SUMMARY_LLM=true`; commit `6635c94` |
 | 25 | `evi-profile-auto-update` | Done | `profile_updater.py`; integrado em `whatsapp_control` + `telegram_handler`; commit `6635c94` |
 
-**Deferred (roadmap):** `list_calendars` tool, `/chat`+`/run-task` auth, Compose Ollama profile, Redis cache, MCP isolation, WhatsApp Meta/Twilio adapter — ver [`openspec/specs/roadmap.md`](specs/roadmap.md)
+**Deferred (roadmap):** `/chat`+`/run-task` auth obrigatória, Compose Ollama profile, Redis cache, MCP isolation, WhatsApp Meta/Twilio adapter — ver [`openspec/specs/roadmap.md`](specs/roadmap.md)
+
+## Etapa 10 — autonomia + memória de contatos (17 Jun 2026)
+
+| # | Change | Status | Notas |
+|---|--------|--------|-------|
+| 26 | `evi-contact-learning` | Done | Arquivado 2026-06-17; contact tools, backfill, discovery, registro Postgres, replay de commitments — spec `data-long-memory` SCN-MEM-06..10 |
+| 27 | `list_calendars` LangGraph tool | Done | Registrado em `agent/tools/calendar_tool.py`/`registry.py` junto do commit `bd012bf` |
+| 28 | Heartbeat + background LLM tiers | Done | `services/heartbeat.py`, `build_background_llm()`; commit `bd012bf` |
+| 29 | Session lane queue + slash commands | Done | `services/session_lane.py`, `services/chat_commands.py`; commit `bd012bf` |
+
+## Etapa 11 — dev bridge multi-CLI (1 Ago 2026)
+
+| # | Change | Status | Notas |
+|---|--------|--------|-------|
+| 30 | `evi-dev-bridge-multi-cli` | Done | Arquivado 2026-08-01; corrige bug approve=plan (nunca aplicava mudanças), generaliza para `agent/devcli/` (Claude Code CLI default), spec nova `dev-bridge` |

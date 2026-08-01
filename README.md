@@ -163,6 +163,12 @@ Verificação live: [`docs/testing.md`](docs/testing.md) · `./scripts/evi-teleg
 - CI GitHub Actions (pytest + smoke)
 - Retenção JSONL de logs
 
+### Dev bridge
+- `dev: <descrição>` / `dev approve <id>` no chat de controle → executa CLI de código em modo `apply`, commit em branch `dev/job-*` (nunca merge automático)
+- Backend plugável via `EVI_DEV_CLI` (default `claude`); novos CLIs = novo módulo em `agent/devcli/`
+- `dev mode plan|default` alterna preview síncrono; `dev status`/`dev jobs` lista histórico
+- Desligado por padrão (`EVI_DEV_BRIDGE_ENABLED=false`); spec: `openspec/specs/dev-bridge/spec.md`
+
 ---
 
 ## Features planejadas
@@ -171,7 +177,6 @@ Ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md). Resumo:
 
 | Item | Tipo | Notas |
 |------|------|-------|
-| `list_calendars` tool | Feature | Script Windmill existe; falta registry |
 | Auth `/chat` + `/run-task` | Segurança | `EVI_API_KEY` opcional |
 | Compose profile Ollama | Infra | Stack 100% containerizada |
 | MCP servers isolados | Arquitetura | Após estabilizar mais tools |
