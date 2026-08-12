@@ -3,9 +3,7 @@
 ## Purpose
 
 Define phased long-term memory for EVI: hot Postgres, cold per-contact filesystem, and optional Neo4j knowledge graph (compose profile `graph`).
-
 ## Requirements
-
 ### Requirement: Hot memory layer
 The system SHALL persist recent chat turns in Postgres `messages` and structured commitments in `pending_commitments` including `source_chat`, `source_label`, and `raw_text`.
 
@@ -83,6 +81,15 @@ The system SHALL be able to replay `evolution_webhook.jsonl` ingest lines to bac
 #### Scenario: SCN-MEM-10
 - **WHEN** `tests/unit/test_commitment_replay.py` runs
 - **THEN** commitments extracted from replayed ingest lines are queued without duplicating already-processed messages
+
+### Requirement: Heartbeat staleness compares dates
+`_contacts_needing_synthesis` SHALL determine whether a contact needs re-synthesis by parsing the date out of the `## Síntese (YYYY-MM-DD, …)` heading and comparing it to the newest timeline timestamp as dates. Comparing a timestamp against a raw markdown slice is not permitted — `'2' > '#'` makes it unconditionally true, which flagged every contact with a recent timeline. A profile whose heading cannot be parsed SHALL be treated as stale, since a false "needs synthesis" is noise while a false "already synthesised" hides real work.
+
+#### Scenario: SCN-MEM-11
+- **GIVEN** a contact whose profile carries `## Síntese (2026-08-12, últimos 7 dias)` and whose newest timeline entry is from 2026-08-10
+- **WHEN** `run_heartbeat` evaluates staleness
+- **THEN** the contact is NOT reported as needing synthesis
+- **AND** the same contact with a timeline entry from 2026-08-13 IS reported
 
 ## Directory contract (Etapa 5a target)
 

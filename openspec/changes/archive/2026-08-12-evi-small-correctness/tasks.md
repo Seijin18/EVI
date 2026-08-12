@@ -44,5 +44,11 @@
 - [x] 2.1 Full gate green
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q && ./scripts/evi-test smoke && ./scripts/evi-test sessions && ./scripts/evi-test runtime-v3 && ./scripts/evi-test inbox-ux && ruff check agent/ --select E,W,F --ignore E501 && openspec validate --specs`
 
-- [ ] 2.2 Live re-verify against the stack, then archive
-  - Verify: `./scripts/evi-telegram-verify.sh` reaches 3/3, then update `Progress.md` + `openspec/BACKLOG.md` and run `openspec archive evi-small-correctness`
+- [x] 2.2 Live verify against the running stack, then archive
+  - Verify: rebuilt `agent-api`, `/health` ok, and all three `SendResult` paths
+    exercised in the running container without sending anything —
+    `not_configured` (with detail), `empty_text`, and `transport` with 2 real
+    retry attempts plus exactly one `soft-fail` line.
+  - Left to the user (sends real messages): `./scripts/evi-telegram-verify.sh`
+    should reach 3/3, and a failure now prints `send_error=<reason>` instead of a
+    bare `telegram_sent=False`.

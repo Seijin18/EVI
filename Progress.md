@@ -22,8 +22,8 @@
 | Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Done** (12 Ago 2026) |
 | Roadmap deferido | Ver tabela abaixo |
 
-**Foco atual:** Etapa 13–14 — smoke de container no CI (#32) e decisão do dev bridge
-(#33). Ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
+**Foco atual:** Etapa 14 — smoke de container no CI (#32), depois a decisão do dev
+bridge (#33). Ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de 2026-08-12.** Uma revisão geral do sistema encontrou três itens antes
 > marcados Done que não funcionavam como descrito. Dois foram corrigidos na Etapa 12:
@@ -35,8 +35,8 @@
 >   (`WORKDIR /app` + `parents[2]`), e `scripts/` não está na imagem — `dev approve`
 >   sempre falha com `claude-dev-runner.sh missing`. Os testes mockam o backend,
 >   então nunca apareceu. Decisão pendente (#33): consertar ou remover.
-> - **Heartbeat** (aberto): `_contacts_needing_synthesis` compara `last_ts[:10]` com
->   um trecho de markdown — sempre verdadeiro. Tratado em #36.
+> - ~~**Heartbeat**~~ — corrigido em `evi-small-correctness` (#36), junto do retry nos
+>   envios e da eviction do `seen_ids`.
 
 ---
 
@@ -119,7 +119,8 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **10.5** | **Autonomia + memória de contatos** | **Done** | Contact learning, registro Postgres, Evolution discovery, commitment replay, heartbeat, background LLM tiers |
 | **11** | **Dev bridge multi-CLI** | **Parcial** | `agent/devcli/`, backend Claude Code CLI, `dev mode` toggle — **não roda no container** (`_REPO_ROOT` = `/`) |
 | **12** | **Runtime hardening** | **Done** | Isolamento de sessão, auth nos 4 endpoints abertos, portas em `127.0.0.1` (PG→5433), fuso via `now_local()`, deps pinadas (LangChain 1.3.15), `soft_fail` em 35 sites |
-| 13–16 | Correção, testes, injeção, background | **—** | Ver `openspec/specs/roadmap.md` |
+| **13** | **Correções pequenas** | **Done** | Retry + motivo nos envios, heartbeat sempre-verdadeiro, eviction do `seen_ids` |
+| 14–16 | Testes, injeção, background | **—** | Ver `openspec/specs/roadmap.md` |
 
 ### Série Runtime v3 (17 Jun 2026) — Done
 

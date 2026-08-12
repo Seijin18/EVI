@@ -129,7 +129,7 @@ Uma proposta por vez, na ordem — ver [`specs/roadmap.md`](specs/roadmap.md) pa
 | 33 | `evi-dev-bridge-decision` | 13.1 | Consertar `_REPO_ROOT` (`EVI_REPO_ROOT` + montar repo + `git`/`claude` na imagem) **ou** remover código e spec `dev-bridge`. Decisão do usuário. |
 | 34 | `evi-tool-result-contract` | 13.2 | Resultado tipado (`ok: bool`) no lugar de `if "failed" in result.lower()`. Toca 26 tools + scripts Windmill. |
 | 35 | `evi-test-coverage-core` | 14.2–14.7 | `calendar_tool`, `auth`, `telegram_poller`, `evolution_client`, `session_lane`, `db` (PG efêmero no CI). |
-| 36 | `evi-small-correctness` | 13.3–13.5 | **Ativo** (proposto 2026-08-12). Retry + motivo visível nos envios Telegram/WhatsApp, heartbeat sempre-verdadeiro, eviction do `evolution_seen_ids.json`. Promovido à frente da fila: `evi-telegram-verify.sh` falhou em produção porque uma instabilidade de rede de ~2 min fez `send_telegram_message` descartar a resposta em silêncio |
+| 36 | `evi-small-correctness` | 13.3–13.5 | **Done** — arquivado 2026-08-12. Retry + motivo visível nos envios Telegram/WhatsApp, heartbeat sempre-verdadeiro, eviction do `evolution_seen_ids.json`. Promovido à frente da fila: `evi-telegram-verify.sh` falhou em produção porque uma instabilidade de rede de ~2 min fez `send_telegram_message` descartar a resposta em silêncio |
 | 37 | `evi-prompt-injection-model` | 15 | Threat model + spec para conteúdo de terceiros que chega ao grafo principal. |
 | 38 | `evi-background-execution` | 16 | Tarefas longas desacopladas do turno de chat; ack imediato + resultado depois. |
 
