@@ -12,6 +12,8 @@ from llm import build_embeddings
 
 # Configuration
 QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
+# Set when the Qdrant container runs with QDRANT__SERVICE__API_KEY.
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "").strip() or None
 COLLECTION_NAME = "university_notes"
 
 # Embedding dimension: 768 for Ollama/nomic-embed-text; 3072 for Google gemini-embedding-001.
@@ -20,7 +22,7 @@ _EMBED_DIM_DEFAULTS = {"google": 3072}
 _embed_provider = os.getenv("EVI_EMBED_PROVIDER", "ollama").strip().lower()
 EMBED_DIM = int(os.getenv("EMBED_DIM") or _EMBED_DIM_DEFAULTS.get(_embed_provider, 768))
 
-qdrant_client = QdrantClient(url=QDRANT_URL)
+qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 _vector_store: "QdrantVectorStore | None" = None
 
 

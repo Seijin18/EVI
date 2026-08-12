@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, HTTPException, Header
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
-from auth import verify_api_key
+from auth import require_api_key_configured, verify_api_key
 from graph import build_agent_graph
 from services.session_memory import drop_session_memory, get_session_memory
 from tools.note_manager import build_auto_insight, save_note_manual
@@ -102,6 +102,7 @@ def _telegram_invoke_chat(message: str, session_id: str) -> Dict[str, Any]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    require_api_key_configured()
     app_state.graph = build_agent_graph(AVAILABLE_TOOLS)
     if os.getenv("DATABASE_URL"):
         try:
@@ -190,7 +191,7 @@ def metrics():
 
 
 @app.get("/tools")
-def list_tools():
+def list_tools(_: None = Depends(verify_api_key)):
     return {"tools": [t.name for t in AVAILABLE_TOOLS]}
 
 
@@ -198,6 +199,7 @@ def list_tools():
 def reset_memory(
     request: Optional[ResetRequest] = None,
     x_session_id: Optional[str] = Header(default=None),
+    _: None = Depends(verify_api_key),
 ):
     session_id = (
         (request.session_id if request else None)
@@ -284,7 +286,7 @@ def _chat_impl(request: ChatRequest, session_id: str) -> Dict[str, Any]:
 
 
 @app.post("/note")
-def save_note(request: NoteRequest):
+def save_note(request: NoteRequest, _: None = Depends(verify_api_key)):
     try:
         path = save_note_manual.invoke(
             {
@@ -300,7 +302,7 @@ def save_note(request: NoteRequest):
 
 
 @app.post("/insight")
-def generate_insight(request: InsightRequest):
+def generate_insight(request: InsightRequest, _: None = Depends(verify_api_key)):
     session_id = request.session_id or app_state.default_session
     turns = []
     for msg in get_session_memory(session_id).get_messages():

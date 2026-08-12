@@ -15,12 +15,12 @@
   - Files: `agent/testing/cli.py`, `tests/unit/test_session_memory.py`, `tests/unit/test_chat_invoke.py`, `.github/workflows/ci.yml`, `docs/testing.md`
   - Verify: `./scripts/evi-test sessions && ./scripts/evi-test smoke`
 
-- [ ] 1.4 Auth on `/note`, `/insight`, `/reset`, `/tools` + `EVI_REQUIRE_API_KEY`
+- [x] 1.4 Auth on `/note`, `/insight`, `/reset`, `/tools` + `EVI_REQUIRE_API_KEY`
   - SCN-AUTH-02, SCN-AUTH-03
   - Files: `agent/main.py`, `agent/auth.py`, `.env.example`, `tests/unit/test_auth_required.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_auth_required.py -q`
 
-- [ ] 1.5 Bind data services to `127.0.0.1`; Postgres host port → 5433; Qdrant API key
+- [x] 1.5 Bind data services to `127.0.0.1`; Postgres host port → 5433; Qdrant API key
   - SCN-OPS-04
   - Files: `docker-compose.yml`, `.env.example`, `docs/testing.md`
   - Verify: `docker compose config | grep -E '127\.0\.0\.1|published'` then `./scripts/evi-test health`

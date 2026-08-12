@@ -506,7 +506,9 @@ def run_rag(live_qdrant: bool) -> bool:
         try:
             import httpx
 
-            r = httpx.get(f"{qdrant_url}/collections", timeout=5.0)
+            qdrant_key = os.getenv("QDRANT_API_KEY", "").strip()
+            headers = {"api-key": qdrant_key} if qdrant_key else {}
+            r = httpx.get(f"{qdrant_url}/collections", timeout=5.0, headers=headers)
             if r.status_code >= 500:
                 return _result("rag", False, "qdrant down")
         except Exception as e:

@@ -29,7 +29,11 @@ def _check_qdrant() -> dict[str, Any]:
     try:
         import httpx
 
-        r = httpx.get(f"{url.rstrip('/')}/collections", timeout=_CHECK_TIMEOUT)
+        key = os.getenv("QDRANT_API_KEY", "").strip()
+        headers = {"api-key": key} if key else {}
+        r = httpx.get(
+            f"{url.rstrip('/')}/collections", timeout=_CHECK_TIMEOUT, headers=headers
+        )
         if r.status_code < 500:
             return {"ok": True, "detail": f"http {r.status_code}"}
         return {"ok": False, "detail": f"http {r.status_code}"}
