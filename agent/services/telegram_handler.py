@@ -83,19 +83,6 @@ def process_telegram_update(
     chat_id = message.get("chat", {}).get("id", "telegram")
     session_id = f"telegram-{chat_id}"
 
-    from services.dev_bridge import try_dev_command
-
-    dev_reply = try_dev_command(text)
-    if dev_reply:
-        return _reply_direct(
-            session_id=session_id,
-            chat_id=chat_id,
-            text=text,
-            ai_content=dev_reply,
-            tools=[{"type": "direct", "tool": "dev_bridge"}],
-            extra={"dev_bridge": True},
-        )
-
     from services.chat_commands import try_chat_command
 
     cmd_reply = try_chat_command(

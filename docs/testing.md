@@ -108,7 +108,7 @@ Scenario IDs are defined in `openspec/specs/*/spec.md`.
 |------|---------|---------------|
 | SCN-E2E-01 | `docker compose up -d --build` | postgres → qdrant/windmill healthy → agent-api (SCN-OPS-01) |
 | SCN-OPS-01 | `docker compose ps` | postgres, qdrant, windmill-server, agent-api show `healthy` |
-| SCN-E2E-02 | `./scripts/evi-test smoke` | 14/14 offline |
+| SCN-E2E-02 | `./scripts/evi-test smoke` | 13/13 offline |
 | SCN-E2E-03 | `export DATABASE_URL=postgresql://evi:PASS@localhost:5433/evidb` | session + commitments connect (host port 5433) |
 | SCN-E2E-04 | Ollama running on host (not in compose) | `curl host.docker.internal:11434` from agent; chat retries until model loads |
 | SCN-E2E-05 | `./scripts/evi-test smoke --full` | chat PASS or documented skip |

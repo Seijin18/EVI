@@ -89,7 +89,7 @@ The project SHALL document Docker+Ollama validation steps in docs/testing.md.
 
 #### Scenario: SCN-E2E-02
 - **WHEN** offline smoke runs after a change
-- **THEN** result is 14/14 PASS or skips documented
+- **THEN** result is 13/13 PASS or skips documented — the `dev-bridge` entry was removed with the feature it exercised
 
 ### Requirement: Windmill live traceability
 docs/testing.md SHALL map Windmill live scenarios to evi-test commands.

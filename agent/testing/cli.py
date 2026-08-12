@@ -19,7 +19,7 @@ if (_agent_candidate / "main.py").is_file():
     AGENT_DIR = _agent_candidate
     _default_root = _agent_candidate.parent
     # In the image AGENT_DIR is /app, so .parent is "/" — the same overshoot that
-    # left dev_bridge unable to find its scripts. Fall back to /app itself, which
+    # left the removed dev bridge unable to find its scripts. Fall back to /app,
     # at least exists; the wrapper injects EVI_REPO_ROOT for the real repo path.
     if _default_root == Path("/"):
         _default_root = _agent_candidate
@@ -522,17 +522,6 @@ def run_evolution() -> bool:
     return _result("evolution", ok, f"parsed={parsed}")
 
 
-def run_dev_bridge(dry: bool) -> bool:
-    copilot = REPO_ROOT / "scripts" / "copilot-dev-runner.sh"
-    cursor = REPO_ROOT / "scripts" / "cursor-dev-runner.sh"
-    ok = copilot.exists() and os.access(copilot, os.X_OK)
-    ok = ok and cursor.is_file() and os.access(cursor, os.X_OK)
-    ok = ok and (AGENT_DIR / "services" / "dev_bridge.py").is_file()
-    if dry and ok:
-        return _result("dev-bridge", True, "scripts + dev_bridge.py (dry)")
-    return _result("dev-bridge", ok)
-
-
 def _ensure_rag_fixture_pdf() -> Path:
     pdf = FIXTURES / "rag" / "sample.pdf"
     if pdf.is_file():
@@ -1031,7 +1020,6 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
         run_evolution,
         run_runtime_v3,
         run_watcher,
-        lambda: run_dev_bridge(True),
         lambda: run_rag(False),
     ]
     if full:
@@ -1055,7 +1043,6 @@ def main() -> int:
     parser.add_argument("--live-telegram", action="store_true")
     parser.add_argument("--live-n8n", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--log", dest="log_path", default=None)
-    parser.add_argument("--dry", action="store_true", help="dev-bridge dry run")
     parser.add_argument(
         "--strict",
         action="store_true",
@@ -1082,7 +1069,6 @@ def main() -> int:
         "session": run_session,
         "telegram": lambda: run_telegram(args.live_telegram),
         "watcher": run_watcher,
-        "dev-bridge": lambda: run_dev_bridge(args.dry),
         "rag": lambda: run_rag(args.live_qdrant),
         "chat": lambda: run_chat(strict=args.strict),
         "health": lambda: run_health(args.full),

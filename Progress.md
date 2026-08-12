@@ -3,7 +3,7 @@
 > **Atualizado:** 1 Ago 2026  
 > **README / arquitetura:** [`README.md`](README.md)  
 > **Requisitos:** [`openspec/specs/`](openspec/specs/) · **Backlog:** [`openspec/BACKLOG.md`](openspec/BACKLOG.md) · **Adiado:** [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md)  
-> **Verify:** `./scripts/evi-test smoke` (14/14) · `openspec validate --specs`
+> **Verify:** `./scripts/evi-test smoke` (13/13) · `openspec validate --specs`
 
 ---
 
@@ -18,12 +18,12 @@
 | Memória longa (FS + Neo4j + registro Postgres de contatos) | **Done** |
 | Ops (health, metrics, CI) | **Done** |
 | Autonomia (heartbeat, background LLM, session lane) | **Done** (17 Jun 2026) |
-| Dev bridge multi-CLI (WhatsApp/Telegram → Claude Code CLI) | **Quebrado no container** — ver nota abaixo |
+| Dev bridge multi-CLI | **Removido** (12 Ago 2026) — nunca rodou no container |
 | Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Done** (12 Ago 2026) |
 | Roadmap deferido | Ver tabela abaixo |
 
-**Foco atual:** #33 — decisão do dev bridge (consertar ou remover). O container
-smoke agora expõe o defeito como `[KNOWN]` a cada execução. Ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
+**Foco atual:** #34 (contrato de tools) e #35 (cobertura). Fora da fila numerada,
+o import de agenda por vCard resolve os contatos que aparecem só como número. Ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de 2026-08-12.** Uma revisão geral do sistema encontrou três itens antes
 > marcados Done que não funcionavam como descrito. Dois foram corrigidos na Etapa 12:
@@ -31,10 +31,11 @@ smoke agora expõe o defeito como `[KNOWN]` a cada execução. Ver [`openspec/sp
 >   `_calendar_block()` e `iso_event_range()`.
 > - ~~**Memória global entre sessões** e `EVI_API_KEY` vazio com quatro endpoints sem
 >   `Depends`~~ — corrigidos.
-> - **Dev bridge** (aberto): `_REPO_ROOT` resolve para `/` dentro do container
->   (`WORKDIR /app` + `parents[2]`), e `scripts/` não está na imagem — `dev approve`
->   sempre falha com `claude-dev-runner.sh missing`. Os testes mockam o backend,
->   então nunca apareceu. Decisão pendente (#33): consertar ou remover.
+> - ~~**Dev bridge**~~ — **removido** em `evi-remove-dev-bridge` (#33). `_REPO_ROOT`
+>   resolvia para `/` no container e `scripts/` não estava na imagem, então
+>   `dev approve` nunca funcionou. Consertar exigiria montar o repo em escrita e
+>   instalar um CLI de edição de código, com a fronteira de confiança sendo um JID
+>   de WhatsApp. Use `ssh`.
 > - ~~**Heartbeat**~~ — corrigido em `evi-small-correctness` (#36), junto do retry nos
 >   envios e da eviction do `seen_ids`.
 
@@ -79,20 +80,17 @@ smoke agora expõe o defeito como `[KNOWN]` a cada execução. Ver [`openspec/sp
 | Commitment replay do ingest log | `test_commitment_replay.py` |
 | Heartbeat + background LLM tiers | `services/heartbeat.py`, `build_background_llm()` |
 | `list_calendars` LangGraph tool | `agent/tools/calendar_tool.py` |
-| Dev bridge multi-CLI (Claude Code CLI) | `test_dev_bridge.py`, `test_devcli_*.py` · `dev-bridge` |
 
 ### Planejado (roadmap reordenado em 12 Ago 2026)
 
 | Feature | Prioridade | Referência |
 |---------|------------|------------|
-| Dev bridge: consertar ou remover | **Alta** | roadmap 13.1 · BACKLOG #33 |
 | Contrato estruturado de tools | Média | roadmap 13.2 · BACKLOG #34 |
 | Cobertura: calendar_tool, auth, poller, db | Média | roadmap 14.2–14.7 · BACKLOG #35 |
 | Threat model de prompt injection | Média | roadmap 15 · BACKLOG #37 |
 | Execução em background | Média | roadmap 16 · BACKLOG #38 |
 | Compose profile Ollama | Baixa | Infra |
 | WhatsApp Meta/Twilio adapter | Baixa | `providers` spec |
-| Dev bridge: backends Cursor/Copilot | Baixa | depende de #33 |
 
 **Cortados:** MCP servers isolados, multimodal (Llava/Whisper — incompatível com
 GTX 1060 3 GB), cache Redis de embeddings. Motivos em `openspec/specs/roadmap.md`.
@@ -116,7 +114,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | 9 | Memória inteligente | **Done** | Daily summary LLM, profile auto-update |
 | **10** | **Runtime v3 + inbox** | **Done** | Workspace, context assembly, delete_by_query, LLM-first control, E2E harness |
 | **10.5** | **Autonomia + memória de contatos** | **Done** | Contact learning, registro Postgres, Evolution discovery, commitment replay, heartbeat, background LLM tiers |
-| **11** | **Dev bridge multi-CLI** | **Parcial** | `agent/devcli/`, backend Claude Code CLI, `dev mode` toggle — **não roda no container** (`_REPO_ROOT` = `/`) |
+| **11** | **Dev bridge multi-CLI** | **Revertida** | Removida em 12 Ago 2026 (`evi-remove-dev-bridge`): nunca executou no container (`_REPO_ROOT` = `/`) e o custo de segurança de consertar não se justificava |
 | **12** | **Runtime hardening** | **Done** | Isolamento de sessão, auth nos 4 endpoints abertos, portas em `127.0.0.1` (PG→5433), fuso via `now_local()`, deps pinadas (LangChain 1.3.15), `soft_fail` em 35 sites |
 | **13** | **Correções pequenas** | **Done** | Retry + motivo nos envios, heartbeat sempre-verdadeiro, eviction do `seen_ids` |
 | **14.1** | **Container smoke no CI** | **Done** | Job `container`, `evi-test container`, guarda de isolamento de volumes |

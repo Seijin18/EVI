@@ -103,7 +103,7 @@ Ollama roda **no host** (não no compose) — `OLLAMA_BASE_URL=http://host.docke
 ```bash
 cp .env.example .env          # editar tokens OAuth, Telegram, Gemini
 docker compose up -d --build
-./scripts/evi-test smoke        # 14/14 offline
+./scripts/evi-test smoke        # 13/13 offline
 ./scripts/evi-test smoke --full # inclui /chat se API up
 ```
 
@@ -164,14 +164,9 @@ Verificação live: [`docs/testing.md`](docs/testing.md) · `./scripts/evi-teleg
 
 ### Ops
 - `GET /health`, `GET /metrics` (Prometheus)
-- CI GitHub Actions (pytest + smoke)
+- CI GitHub Actions (pytest + smoke + container smoke)
+- Auth por `X-Api-Key` em todas as rotas mutantes; serviços de dados em `127.0.0.1`
 - Retenção JSONL de logs
-
-### Dev bridge
-- `dev: <descrição>` / `dev approve <id>` no chat de controle → executa CLI de código em modo `apply`, commit em branch `dev/job-*` (nunca merge automático)
-- Backend plugável via `EVI_DEV_CLI` (default `claude`); novos CLIs = novo módulo em `agent/devcli/`
-- `dev mode plan|default` alterna preview síncrono; `dev status`/`dev jobs` lista histórico
-- Desligado por padrão (`EVI_DEV_BRIDGE_ENABLED=false`); spec: `openspec/specs/dev-bridge/spec.md`
 
 ---
 
@@ -181,13 +176,16 @@ Ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md). Resumo:
 
 | Item | Tipo | Notas |
 |------|------|-------|
-| Auth `/chat` + `/run-task` | Segurança | `EVI_API_KEY` opcional |
+| Contrato estruturado de tools | Arquitetura | Substituir `if "failed" in result` — BACKLOG #34 |
+| Cobertura: calendar_tool, auth, poller, db | Testes | BACKLOG #35 |
+| Threat model de prompt injection | Segurança | BACKLOG #37 |
+| Execução em background | Runtime | Tarefas longas fora do turno de chat — BACKLOG #38 |
+| Import de agenda (vCard) | Memória | ~1000 contatos aparecem só como número |
 | Compose profile Ollama | Infra | Stack 100% containerizada |
-| MCP servers isolados | Arquitetura | Após estabilizar mais tools |
-| Llava + Whisper | Multimodal | Visão e áudio remotos |
-| Cache Redis embeddings | Performance | Opcional |
-| Adapter WhatsApp Meta/Twilio | Integração | Via `BaseMessagingClient` |
 | Heartbeat cron produção | Runtime v3 | `EVI_HEARTBEAT_ENABLED` |
+
+**Removido:** dev bridge (execução remota de código) — nunca funcionou no
+container e o custo de segurança não se justificava; use `ssh`.
 
 ---
 

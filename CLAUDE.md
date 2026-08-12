@@ -22,7 +22,7 @@ Este projeto usa OpenSpec (`openspec/`). CLI instalado: `openspec`.
   `Verify:` (comando `./scripts/evi-test <feature>`).
 - Ao arquivar, atualizar [`openspec/BACKLOG.md`](openspec/BACKLOG.md) e
   [`Progress.md`](Progress.md) (etapa + matriz de features).
-- `openspec validate --specs` deve passar (10 specs) antes de fechar um change.
+- `openspec validate --specs` deve passar (9 specs) antes de fechar um change.
 
 Fonte de verdade é `openspec/specs/`, **não** `Progress.md` nem `README.md` —
 esses são resumo/overview e podem estar defasados.
@@ -71,7 +71,7 @@ seguinte (ler um arquivo antes de editar — use `Read`).
   [`agent/tools/registry.py`](agent/tools/registry.py) (registro único —
   `main.py` e `graph.py` consomem `get_all_tools()`).
 - Serviços em `agent/services/`; providers plugáveis em `agent/llm.py`,
-  `agent/integrations/`, `agent/messaging/`, `agent/devcli/`.
+  `agent/integrations/`, `agent/messaging/`.
 - Segredos só em `.env` (gitignored). Nunca commitar `.env`, `data/`,
   `logs/`, `EVI_WORKSPACE/MEMORY.md`, `EVI_WORKSPACE/USER.md`.
 - Memória de chat é limitada (`BoundedMemory`, 8 pares) — não assumir histórico longo.
@@ -81,14 +81,15 @@ seguinte (ler um arquivo antes de editar — use `Read`).
 ## Verificação
 
 ```bash
-PYTHONPATH=agent python3 -m pytest tests/unit -q   # Tier 1 (~190 testes)
+PYTHONPATH=agent python3 -m pytest tests/unit -q   # Tier 1 (~280 testes)
 ./scripts/evi-test smoke                            # Tier 2 offline
 ./scripts/evi-test runtime-v3 && ./scripts/evi-test inbox-ux
 openspec validate --specs
 ruff check agent/ --select E,W,F --ignore E501      # mesmo gate do CI
 ```
 
-CI (`.github/workflows/ci.yml`) roda ruff + unit + smoke + tier-2 offline.
+CI (`.github/workflows/ci.yml`) roda ruff + unit + smoke + tier-2 offline, e um
+job `container` separado com `./scripts/evi-container-smoke.sh`.
 Não fechar um change com CI vermelho.
 
 ## Commits

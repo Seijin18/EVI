@@ -2,8 +2,9 @@
 
 Two shipped with a green pipeline and motivated this module:
 
-* `dev_bridge._REPO_ROOT = Path(__file__).resolve().parents[2]` resolves to `/`
-  inside the image (`WORKDIR /app`), so `dev approve` never worked there.
+* `dev_bridge._REPO_ROOT = Path(__file__).resolve().parents[2]` resolved to `/`
+  inside the image (`WORKDIR /app`), so `dev approve` never worked there — the
+  feature was removed rather than fixed, but the check that found it stays.
 * `QDRANT__SERVICE__API_KEY=""` made Qdrant 401 everything, while `/health`
   still reported `"status": "ok"` because its rule was `status_code < 500`.
 
@@ -139,19 +140,11 @@ def check_path_constants(constants: dict[str, Path]) -> list[str]:
 def run_in_image_checks() -> list[str]:
     """Checks that only mean anything inside the built image."""
     constants = resolve_path_constants(
-        ["services", "tools", "devcli", "messaging", "integrations", "testing"]
+        ["services", "tools", "messaging", "integrations", "testing"]
     )
-    problems = check_path_constants(constants)
-
-    # Known exception until BACKLOG #33 decides fix-or-remove for the dev bridge.
-    # Listed explicitly so the exemption is visible, not silently absent.
-    known = ("services.dev_bridge.", "devcli.claude_backend.")
-    remaining, exempt = [], []
-    for p in problems:
-        (exempt if p.startswith(known) else remaining).append(p)
-    for p in exempt:
-        print(f"[KNOWN] {p} (BACKLOG #33)")
-    return remaining
+    # No exemptions: the dev bridge, the only module that ever needed one, was
+    # removed. A stale allow-list is how a real defect gets silently excused.
+    return check_path_constants(constants)
 
 
 def check_boot_logs(logs: str) -> list[str]:

@@ -2,7 +2,8 @@
 # Container smoke — asserts what only exists once the system is built and wired.
 #
 # Catches the class of defect the unit suite cannot see, e.g.:
-#   - dev_bridge._REPO_ROOT resolving to "/" inside the image (six weeks unnoticed)
+#   - dev_bridge._REPO_ROOT resolving to "/" inside the image (six weeks unnoticed,
+#     feature since removed — the check stays)
 #   - QDRANT__SERVICE__API_KEY="" turning on auth and 401ing everything, while
 #     /health still reported "ok"
 #

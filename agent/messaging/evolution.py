@@ -70,7 +70,7 @@ class EvolutionClient:
         _, instance, _ = self._config()
         if not instance:
             return None
-        max_n = limit or int(os.getenv("EVI_EVOLUTION_CONTACTS_LIMIT", "300"))
+        max_n = limit or int(os.getenv("EVI_EVOLUTION_CONTACTS_LIMIT", "3000"))
         return self._post_json(
             f"/chat/findContacts/{instance}",
             {"page": 1, "offset": max_n},

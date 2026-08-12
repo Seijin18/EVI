@@ -44,20 +44,6 @@ def process_whatsapp_control_message(
     if is_evi_bot_message(text):
         return {"ok": True, "skipped": "evi_echo"}
 
-    from services.dev_bridge import try_dev_command
-
-    dev_reply = try_dev_command(text)
-    if dev_reply:
-        sent, send_error = send_outcome(send_whatsapp_text(jid, dev_reply, add_prefix=True))
-        return {
-            "ok": True,
-            "response": format_evi_whatsapp(dev_reply),
-            "session_id": session_id,
-            "whatsapp_sent": sent,
-            **({"send_error": send_error} if send_error else {}),
-            "dev_bridge": True,
-        }
-
     from services.chat_commands import try_chat_command
 
     cmd_reply = try_chat_command(

@@ -77,29 +77,6 @@ def _run_migrations() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_session_tool_snapshots
                     ON session_tool_snapshots(session_id, created_at DESC);
-                CREATE TABLE IF NOT EXISTS dev_jobs (
-                    job_id VARCHAR(16) PRIMARY KEY,
-                    description TEXT NOT NULL,
-                    status VARCHAR(16) NOT NULL DEFAULT 'pending',
-                    requested_by VARCHAR(128) DEFAULT '',
-                    result_summary TEXT,
-                    log_path TEXT,
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ DEFAULT NOW()
-                );
-                CREATE INDEX IF NOT EXISTS idx_dev_jobs_status
-                    ON dev_jobs(status, created_at DESC);
-                ALTER TABLE dev_jobs
-                    ADD COLUMN IF NOT EXISTS backend VARCHAR(32) DEFAULT '';
-                ALTER TABLE dev_jobs
-                    ADD COLUMN IF NOT EXISTS mode VARCHAR(16) DEFAULT '';
-                ALTER TABLE dev_jobs
-                    ADD COLUMN IF NOT EXISTS branch VARCHAR(128) DEFAULT '';
-                CREATE TABLE IF NOT EXISTS dev_bridge_state (
-                    key VARCHAR(64) PRIMARY KEY,
-                    value VARCHAR(64) NOT NULL,
-                    updated_at TIMESTAMPTZ DEFAULT NOW()
-                );
                 CREATE TABLE IF NOT EXISTS whatsapp_contacts (
                     jid VARCHAR(128) PRIMARY KEY,
                     whatsapp_label VARCHAR(256),
@@ -539,101 +516,9 @@ def mark_pending_notified(ids: List[int]) -> None:
             )
         conn.commit()
 
-
-def create_dev_job(
-    job_id: str, description: str, *, requested_by: str = "", backend: str = ""
-) -> None:
-    init_db()
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO dev_jobs (job_id, description, requested_by, backend)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (job_id) DO NOTHING
-                """,
-                (job_id, description, requested_by, backend),
-            )
-        conn.commit()
-
-
-def get_dev_job(job_id: str) -> Dict[str, Any] | None:
-    init_db()
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM dev_jobs WHERE job_id = %s", (job_id,))
-            row = cur.fetchone()
-    return dict(row) if row else None
-
-
-def update_dev_job(
-    job_id: str,
-    *,
-    status: str,
-    result_summary: str = "",
-    log_path: str = "",
-    mode: str = "",
-    branch: str = "",
-) -> None:
-    init_db()
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE dev_jobs
-                SET status = %s,
-                    result_summary = COALESCE(NULLIF(%s, ''), result_summary),
-                    log_path = COALESCE(NULLIF(%s, ''), log_path),
-                    mode = COALESCE(NULLIF(%s, ''), mode),
-                    branch = COALESCE(NULLIF(%s, ''), branch),
-                    updated_at = NOW()
-                WHERE job_id = %s
-                """,
-                (status, result_summary, log_path, mode, branch, job_id),
-            )
-        conn.commit()
-
-
-def list_dev_jobs(*, limit: int = 10) -> List[Dict[str, Any]]:
-    init_db()
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                """
-                SELECT job_id, description, status, requested_by, backend, mode,
-                       branch, created_at
-                FROM dev_jobs
-                ORDER BY created_at DESC
-                LIMIT %s
-                """,
-                (limit,),
-            )
-            rows = cur.fetchall()
-    return [dict(r) for r in rows]
-
-
-def get_dev_bridge_setting(key: str, default: str = "") -> str:
-    init_db()
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT value FROM dev_bridge_state WHERE key = %s", (key,)
-            )
-            row = cur.fetchone()
-    return row[0] if row else default
-
-
-def set_dev_bridge_setting(key: str, value: str) -> None:
-    init_db()
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO dev_bridge_state (key, value, updated_at)
-                VALUES (%s, %s, NOW())
-                ON CONFLICT (key) DO UPDATE
-                SET value = EXCLUDED.value, updated_at = NOW()
-                """,
-                (key, value),
-            )
-        conn.commit()
+# Removed with the dev bridge (2026-08-12): create_dev_job, get_dev_job,
+# update_dev_job, list_dev_jobs, get_dev_bridge_setting, set_dev_bridge_setting.
+# Existing databases keep empty `dev_jobs` and `dev_bridge_state` tables — a
+# DROP in _run_migrations() would run on every startup of every install, and
+# tidiness is not worth a destructive automatic statement. Drop by hand if you
+# want them gone:  DROP TABLE IF EXISTS dev_jobs, dev_bridge_state;
