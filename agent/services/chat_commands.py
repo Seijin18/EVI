@@ -20,8 +20,9 @@ def _status_text() -> str:
 
         init_db()
         pending = count_unnotified_pending()
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("chat_commands._status_text", exc)
     mem = "on" if os.getenv("EVI_CONTACT_MEMORY_DIR", "").strip() else "off"
     hb = "on" if os.getenv("EVI_HEARTBEAT_ENABLED", "").lower() in ("1", "true", "yes") else "off"
     ok = checks.get("ok", False)

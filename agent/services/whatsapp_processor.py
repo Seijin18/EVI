@@ -267,8 +267,9 @@ class WhatsAppProcessor:
                 from services.message_timeline import record_whatsapp_message
 
                 record_whatsapp_message(msg)
-            except Exception:
-                pass
+            except Exception as exc:
+                from services.soft_fail import soft_fail
+                soft_fail("whatsapp_processor.process_messages", exc)
             self.log(
                 {
                     "step": "ingest",

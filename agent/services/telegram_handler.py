@@ -24,8 +24,9 @@ def _persist_turn(session_id: str, user_text: str, assistant_text: str) -> None:
         init_db()
         save_message(session_id, "user", user_text)
         save_message(session_id, "assistant", assistant_text)
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("telegram_handler._persist_turn", exc)
 
 
 def _reply_direct(
@@ -171,8 +172,9 @@ def process_telegram_update(
         from services.profile_updater import extract_profile_facts, merge_profile
 
         merge_profile(str(chat_id), extract_profile_facts(text))
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("telegram_handler.process_telegram_update", exc)
 
     tools = result.get("tools") or []
     output_messages = result.get("output_messages") or []

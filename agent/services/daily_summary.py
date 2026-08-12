@@ -47,13 +47,13 @@ def _scheduled_today_rows() -> list[dict[str, Any]]:
 
 
 def _llm_summarize(raw_md: str) -> str:
-    from llm import build_background_llm, extract_llm_text
+    from llm import background_provider, build_background_llm, extract_llm_text
 
     prompt = f"Gere um resumo diário conciso em português a partir deste contexto:\n\n{raw_md}"
     try:
         resp = build_background_llm(temperature=0.3).invoke(prompt)
         if hasattr(resp, "content"):
-            return extract_llm_text(resp.content)
+            return extract_llm_text(resp.content, provider=background_provider())
         return str(resp)
     except Exception:
         return raw_md

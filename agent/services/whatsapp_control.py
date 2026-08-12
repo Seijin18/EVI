@@ -137,8 +137,9 @@ def process_whatsapp_control_message(
         from services.profile_updater import extract_profile_facts, merge_profile
 
         merge_profile(jid, extract_profile_facts(text))
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("whatsapp_control.process_whatsapp_control_message", exc)
 
     sent = send_whatsapp_text(jid, reply, add_prefix=True)
     return {

@@ -120,8 +120,9 @@ def assign_contact_name(
     )
     try:
         update_contact_label(jid, display_name)
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("contact_registry.assign_contact_name", exc)
     if wa_label:
         upsert_whatsapp_contact(jid, whatsapp_label=wa_label)
     return get_whatsapp_contact(jid) or {"jid": jid, "display_name": display_name}

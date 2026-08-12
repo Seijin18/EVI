@@ -1,6 +1,6 @@
 # /home/marshibs/Projects/EVI/agent/graph.py
 import operator
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import SystemMessage
@@ -8,6 +8,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from llm import build_llm
+from tools.calendar_time import now_local
 from tools.registry import get_all_tools
 
 llm = build_llm()
@@ -44,7 +45,9 @@ class AgentState(TypedDict):
 
 
 def _calendar_block() -> str:
-    now = datetime.now()
+    # Must be EVI_TIMEZONE, not the container clock: rule 3 of the system prompt
+    # tells the model to answer date questions from this block verbatim.
+    now = now_local()
     calendar_text = f"Today is {now.strftime('%A, %Y-%m-%d')}. Current time: {now.strftime('%H:%M:%S')}\n"
     calendar_text += "CALENDAR LOOKUP TABLE:\n"
     for i in range(1, 15):

@@ -67,6 +67,67 @@ def test_build_background_llm_defaults_ollama():
     fake_ollama.assert_called_once()
 
 
+def test_build_background_llm_does_not_mutate_env():
+    """SCN-PROV-04 — a background build must be invisible to a concurrent /chat."""
+    fake_gemini = MagicMock()
+    fake_module = MagicMock()
+    fake_module.ChatGoogleGenerativeAI = fake_gemini
+    env = {"EVI_LLM_PROVIDER": "ollama", "EVI_BACKGROUND_LLM_PROVIDER": "gemini"}
+
+    with patch.dict(os.environ, env):
+        with patch.dict("sys.modules", {"langchain_google_genai": fake_module}):
+            import importlib
+            import llm as llm_mod
+            importlib.reload(llm_mod)
+
+            seen = []
+            original = llm_mod._llm_provider
+
+            def _spy():
+                value = original()
+                seen.append(value)
+                return value
+
+            llm_mod._llm_provider = _spy
+            try:
+                llm_mod.build_background_llm()
+                during = os.environ["EVI_LLM_PROVIDER"]
+            finally:
+                llm_mod._llm_provider = original
+
+    fake_gemini.assert_called_once()
+    assert during == "ollama"
+    assert os.environ.get("EVI_LLM_PROVIDER") != "gemini"
+    # The chat provider must never have been consulted for a background build.
+    assert seen == []
+
+
+def test_build_llm_explicit_provider_beats_env():
+    fake_gemini = MagicMock()
+    fake_module = MagicMock()
+    fake_module.ChatGoogleGenerativeAI = fake_gemini
+    with patch.dict(os.environ, {"EVI_LLM_PROVIDER": "ollama"}):
+        with patch.dict("sys.modules", {"langchain_google_genai": fake_module}):
+            import importlib
+            import llm as llm_mod
+            importlib.reload(llm_mod)
+            llm_mod.build_llm(provider="gemini")
+    fake_gemini.assert_called_once()
+
+
+def test_background_provider_resolution():
+    import llm as llm_mod
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("EVI_BACKGROUND_LLM_PROVIDER", None)
+        assert llm_mod.background_provider() == "ollama"
+    with patch.dict(os.environ, {"EVI_BACKGROUND_LLM_PROVIDER": "gemini"}):
+        assert llm_mod.background_provider() == "gemini"
+    # Unknown values fall back to Ollama rather than exploding at call time.
+    with patch.dict(os.environ, {"EVI_BACKGROUND_LLM_PROVIDER": "nonsense"}):
+        assert llm_mod.background_provider() == "ollama"
+
+
 if __name__ == "__main__":
     test_build_llm_provider_env_read()
     test_build_embeddings_provider_env_read()

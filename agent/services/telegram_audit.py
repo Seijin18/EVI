@@ -58,5 +58,6 @@ def log_telegram_turn(
         from services.log_retention import trim_jsonl
 
         trim_jsonl(path)
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("telegram_audit.log_telegram_turn", exc)

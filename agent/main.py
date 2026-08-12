@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from auth import require_api_key_configured, verify_api_key
 from graph import build_agent_graph
 from services.session_memory import drop_session_memory, get_session_memory
+from services.soft_fail import soft_fail
 from tools.note_manager import build_auto_insight, save_note_manual
 from tools.registry import get_all_tools
 
@@ -32,8 +33,8 @@ def _persist_turn(session_id: str, user_text: str, assistant_text: str) -> None:
 
         save_message(session_id, "user", user_text)
         save_message(session_id, "assistant", assistant_text)
-    except Exception:
-        pass
+    except Exception as exc:
+        soft_fail("main.persist_turn", exc)
 
 
 def _hydrate_memory(session_id: str) -> None:
@@ -50,8 +51,8 @@ def _hydrate_memory(session_id: str) -> None:
                 memory.add(HumanMessage(content=row["content"]))
             else:
                 memory.add(AIMessage(content=row["content"]))
-    except Exception:
-        pass
+    except Exception as exc:
+        soft_fail("main.hydrate_memory", exc)
 
 
 def _last_turn_texts(messages: list) -> tuple[str, str]:
@@ -109,8 +110,8 @@ async def lifespan(app: FastAPI):
             from db import init_db
 
             init_db()
-        except Exception:
-            pass
+        except Exception as exc:
+            soft_fail("main.lifespan.init_db", exc)
     if os.getenv("TELEGRAM_MODE", "").strip().lower() == "polling":
         from services.telegram_poller import start_poller
 
@@ -124,8 +125,8 @@ async def lifespan(app: FastAPI):
         from services.log_retention import prune_logs
 
         prune_logs(Path(os.getenv("EVI_LOG_DIR", "/logs")))
-    except Exception:
-        pass
+    except Exception as exc:
+        soft_fail("main.lifespan.prune_logs", exc)
     gmail_res = os.getenv("WINDMILL_GMAIL_RESOURCE", "")
     if gmail_res:
         print(f"EVI: WINDMILL_GMAIL_RESOURCE={gmail_res}", flush=True)
@@ -315,8 +316,8 @@ def generate_insight(request: InsightRequest, _: None = Depends(verify_api_key))
 
             for row in load_recent_messages(session_id, limit=8):
                 turns.append({"role": row["role"], "content": row["content"]})
-        except Exception:
-            pass
+        except Exception as exc:
+            soft_fail("main.insight.load_recent_messages", exc)
     try:
         path = build_auto_insight(turns, session_id=session_id)
         return {"path": path, "status": "created"}
@@ -462,8 +463,8 @@ def evolution_webhook(
             from services.message_timeline import record_whatsapp_messages
 
             record_whatsapp_messages(messages)
-        except Exception:
-            pass
+        except Exception as exc:
+            soft_fail("main.evolution_webhook.record_timeline", exc)
         proc.flush_log()
     else:
         commitments = []
@@ -515,8 +516,8 @@ def evolution_webhook(
                         commitment_id=row_id,
                         label=raw.label if raw else "",
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    soft_fail("main.evolution_webhook.ingest_commitment", exc)
                 try:
                     from services.graph_sync import sync_commitment
 
@@ -528,16 +529,16 @@ def evolution_webhook(
                         status="pending",
                         label=raw.label if raw else "",
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    soft_fail("main.evolution_webhook.graph_sync", exc)
                 try:
                     from services.commitment_capture_notify import (
                         notify_commitment_captured,
                     )
 
                     notify_commitment_captured(row_id, c.title, c.type)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    soft_fail("main.evolution_webhook.capture_notify", exc)
         try:
             from services.commitment_review import maybe_notify_new_pending
 
@@ -564,8 +565,8 @@ def evolution_webhook(
         from services.log_retention import prune_harness_logs
 
         prune_harness_logs(log_dir)
-    except Exception:
-        pass
+    except Exception as exc:
+        soft_fail("main.evolution_webhook.prune_harness_logs", exc)
 
     observe_webhook("evolution", time.perf_counter() - _wh_start)
 

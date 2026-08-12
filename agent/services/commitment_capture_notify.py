@@ -35,5 +35,6 @@ def notify_commitment_captured(
     for jid in jids:
         try:
             send_whatsapp_text(jid, text, add_prefix=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            from services.soft_fail import soft_fail
+            soft_fail("commitment_capture_notify.notify_commitment_captured", exc)

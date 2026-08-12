@@ -67,8 +67,9 @@ def _queue_commitment(msg: IncomingMessage, commitment: Commitment) -> bool:
             commitment_id=row_id,
             label=msg.label,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("commitment_replay._queue_commitment", exc)
     try:
         from services.graph_sync import sync_commitment
 
@@ -80,14 +81,16 @@ def _queue_commitment(msg: IncomingMessage, commitment: Commitment) -> bool:
             status="pending",
             label=msg.label,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("commitment_replay._queue_commitment", exc)
     try:
         from services.commitment_capture_notify import notify_commitment_captured
 
         notify_commitment_captured(row_id, commitment.title, commitment.type)
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("commitment_replay._queue_commitment", exc)
     return True
 
 
@@ -164,7 +167,8 @@ def replay_commitments_from_evolution_log(
             pending = list_pending_commitments(limit=100)
             ids = [p["id"] for p in pending[-result.queued :]]
             maybe_notify_new_pending(ids, ["normal"] * len(ids))
-        except Exception:
-            pass
+        except Exception as exc:
+            from services.soft_fail import soft_fail
+            soft_fail("commitment_replay.replay_commitments_from_evolution_log", exc)
 
     return result

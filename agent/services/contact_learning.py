@@ -47,8 +47,9 @@ def _build_context(jid: str, label: str, days: int) -> str:
                 raw = (r.get("raw_text") or "")[:200]
                 parts.append(f"- [{r.get('id')}] ({status}) {title}: {raw}")
             parts.append("")
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("contact_learning._build_context", exc)
 
     existing = read_profile_excerpt(jid, max_chars=1500)
     if existing:
@@ -62,7 +63,7 @@ def _build_context(jid: str, label: str, days: int) -> str:
 
 
 def _llm_synthesize(context: str, label: str, days: int) -> str:
-    from llm import build_background_llm, extract_llm_text
+    from llm import background_provider, build_background_llm, extract_llm_text
 
     prompt = f"""Você é o EVI. Com base APENAS no contexto abaixo, escreva uma síntese em português sobre o contato «{label}» nos últimos {days} dias.
 
@@ -78,7 +79,7 @@ Contexto:
 {context[:12000]}"""
     resp = build_background_llm(temperature=0.3).invoke(prompt)
     if hasattr(resp, "content"):
-        return extract_llm_text(resp.content).strip()
+        return extract_llm_text(resp.content, provider=background_provider()).strip()
     return str(resp).strip()
 
 

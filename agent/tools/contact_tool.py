@@ -76,8 +76,9 @@ def _format_contact_block(contact: dict) -> list[str]:
                 title = r.get("title") or "(sem título)"
                 cid = r.get("id")
                 lines.append(f"- [{cid}] ({status}) {title}")
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("contact_tool._format_contact_block", exc)
 
     return lines
 
@@ -92,8 +93,9 @@ def list_whatsapp_contacts(limit: int = 25, refresh_from_evolution: bool = True)
     if refresh_from_evolution:
         try:
             sync_evolution_contacts()
-        except Exception:
-            pass
+        except Exception as exc:
+            from services.soft_fail import soft_fail
+            soft_fail("contact_tool.list_whatsapp_contacts", exc)
         collect_known_contacts()
     contacts = collect_known_contacts()[:limit]
     if not contacts:

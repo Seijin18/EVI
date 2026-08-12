@@ -61,8 +61,9 @@ def ensure_contact(jid: str, *, label: str = "") -> Path:
         from services.contact_registry import touch_contact
 
         touch_contact(jid, whatsapp_label=label or "")
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("contact_filesystem.ensure_contact", exc)
     return root
 
 
@@ -325,8 +326,9 @@ def collect_known_contacts() -> list[dict[str, Any]]:
                 },
                 row,
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("contact_filesystem.collect_known_contacts", exc)
 
     if memory_enabled():
         for path in list_contact_dirs():
@@ -376,8 +378,9 @@ def collect_known_contacts() -> list[dict[str, Any]]:
                     "has_profile": False,
                     "commitment_count": row.get("commitment_count", 0),
                 }
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("contact_filesystem.collect_known_contacts", exc)
 
     try:
         from services.contact_registry import merge_db_fields, touch_contact
@@ -394,8 +397,9 @@ def collect_known_contacts() -> list[dict[str, Any]]:
 
                 init_db()
                 row = get_whatsapp_contact(jid)
-            except Exception:
-                pass
+            except Exception as exc:
+                from services.soft_fail import soft_fail
+                soft_fail("contact_filesystem.collect_known_contacts", exc)
             if existing:
                 merged = merge_db_fields(existing, row)
                 by_jid[jid] = merged
@@ -413,8 +417,9 @@ def collect_known_contacts() -> list[dict[str, Any]]:
                     "from_evolution": True,
                 }
                 by_jid[jid] = merge_db_fields(base, row)
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("contact_filesystem.collect_known_contacts", exc)
 
     return sorted(by_jid.values(), key=lambda c: (c.get("label") or c["jid"]).casefold())
 
@@ -439,8 +444,9 @@ def resolve_contact_for_query(query: str) -> tuple[tuple[str, str], str] | tuple
             c = evo[0]
             ensure_contact(c["jid"], label=c.get("label") or q)
             return (c["jid"], c.get("label") or q), ""
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("contact_filesystem.resolve_contact_for_query", exc)
     jid = phone_to_jid(q)
     if jid:
         return (jid, q), ""
@@ -503,8 +509,9 @@ def search_contacts(query: str, *, limit: int = 5) -> list[dict[str, Any]]:
         db_hits = search_db_contacts(q, limit=limit)
         if db_hits:
             return db_hits
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("contact_filesystem.search_contacts", exc)
 
     try:
         from services.evolution_discovery import search_evolution_contacts

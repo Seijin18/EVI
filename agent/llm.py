@@ -32,27 +32,32 @@ def build_ollama_llm(*, temperature: float | None = None, num_ctx: int | None = 
     )
 
 
-def build_background_llm(*, temperature: float | None = None, num_ctx: int | None = None):
-    """Background/cron LLM — Ollama unless EVI_BACKGROUND_LLM_PROVIDER overrides chat provider."""
+def background_provider() -> str:
+    """Provider used by cron/background work. Ollama unless explicitly overridden."""
     override = os.getenv("EVI_BACKGROUND_LLM_PROVIDER", "ollama").strip().lower()
-    if override == "ollama":
+    return override if override in ("gemini", "openai", "anthropic") else "ollama"
+
+
+def build_background_llm(*, temperature: float | None = None, num_ctx: int | None = None):
+    """Background/cron LLM — Ollama unless EVI_BACKGROUND_LLM_PROVIDER overrides it.
+
+    Passes the provider explicitly instead of swapping EVI_LLM_PROVIDER in
+    os.environ around the call, which raced with concurrent /chat turns.
+    """
+    provider = background_provider()
+    if provider == "ollama":
         return build_ollama_llm(temperature=temperature, num_ctx=num_ctx)
-    if override in ("gemini", "openai", "anthropic"):
-        prev = os.environ.get("EVI_LLM_PROVIDER")
-        os.environ["EVI_LLM_PROVIDER"] = override
-        try:
-            return build_llm(temperature=temperature, num_ctx=num_ctx)
-        finally:
-            if prev is None:
-                os.environ.pop("EVI_LLM_PROVIDER", None)
-            else:
-                os.environ["EVI_LLM_PROVIDER"] = prev
-    return build_ollama_llm(temperature=temperature, num_ctx=num_ctx)
+    return build_llm(provider=provider, temperature=temperature, num_ctx=num_ctx)
 
 
-def build_llm(*, temperature: float | None = None, num_ctx: int | None = None):
-    """Return a LangChain BaseChatModel for the configured provider."""
-    provider = _llm_provider()
+def build_llm(
+    *,
+    provider: str | None = None,
+    temperature: float | None = None,
+    num_ctx: int | None = None,
+):
+    """Return a LangChain BaseChatModel. An explicit `provider` wins over env."""
+    provider = (provider or "").strip().lower() or _llm_provider()
 
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI

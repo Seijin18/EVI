@@ -37,8 +37,9 @@ def _get_vector_store() -> "QdrantVectorStore":
                     collection_name=COLLECTION_NAME,
                     vectors_config=VectorParams(size=EMBED_DIM, distance=Distance.COSINE),
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            from services.soft_fail import soft_fail
+            soft_fail("rag_tool._get_vector_store", exc)
         _vector_store = QdrantVectorStore(
             client=qdrant_client, collection_name=COLLECTION_NAME, embedding=embeddings_model
         )

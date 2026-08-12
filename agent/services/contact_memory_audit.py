@@ -47,8 +47,9 @@ def _last_synthesis_heading(jid: str) -> str:
         for line in profile.read_text(encoding="utf-8").splitlines():
             if line.startswith("## Síntese ("):
                 return line[3:].strip()
-    except Exception:
-        pass
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("contact_memory_audit._last_synthesis_heading", exc)
     return ""
 
 

@@ -26,7 +26,7 @@
   - Verify: `docker compose config | grep -E '127\.0\.0\.1|published'` then `./scripts/evi-test health`
   - Note: host 5432 is occupied by an unrelated `whatbot-db-1` container; container-internal port stays 5432.
 
-- [ ] 1.6 Timezone-aware calendar block and event range
+- [x] 1.6 Timezone-aware calendar block and event range
   - SCN-CAL-07
   - Files: `agent/tools/calendar_time.py`, `agent/graph.py`, `docker-compose.yml`, `tests/unit/test_calendar_block_tz.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_calendar_block_tz.py -q`
@@ -36,22 +36,22 @@
   - Files: `agent/requirements.txt`, `agent/Dockerfile`, `requirements-dev.txt`
   - Verify: `docker compose build agent-api && ./scripts/evi-test smoke`
 
-- [ ] 1.8 `build_background_llm` without `os.environ` mutation
+- [x] 1.8 `build_background_llm` without `os.environ` mutation
   - SCN-PROV-04
   - Files: `agent/llm.py`, `agent/services/daily_summary.py`, `agent/services/whatsapp_llm_extract.py`, `agent/services/contact_learning.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_llm_factory.py -q`
 
-- [ ] 1.9a `soft_fail` helper + `agent/main.py` (10 silent sites)
+- [x] 1.9a `soft_fail` helper + `agent/main.py` (10 silent sites)
   - SCN-OPS-06
   - Files: `agent/services/soft_fail.py`, `agent/main.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q` (no behaviour change)
 
-- [ ] 1.9b Silent sites in contact memory and commitment replay
+- [x] 1.9b Silent sites in contact memory and commitment replay
   - SCN-OPS-06
   - Files: `agent/services/contact_filesystem.py` (7), `agent/services/commitment_replay.py` (4)
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`
 
-- [ ] 1.9c Remaining silent sites (9 modules, 1–2 each)
+- [x] 1.9c Remaining silent sites (9 modules, 1–2 each)
   - SCN-OPS-06
   - Files: `agent/tools/contact_tool.py`, `agent/services/telegram_handler.py`, `agent/services/whatsapp_control.py`, `agent/services/session_context.py`, `agent/services/chat_commands.py` (+ `rag_tool`, `whatsapp_processor`, `telegram_audit`, `contact_registry`, `contact_memory_audit`, `contact_learning`, `commitment_capture_notify` — 1 site each)
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q` + `grep -rzoP "except Exception:\s*\n\s*pass" agent/ | wc -l` is 0

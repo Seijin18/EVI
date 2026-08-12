@@ -69,8 +69,9 @@ def persist_tool_snapshots(session_id: str, output_messages: list[Any]) -> list[
         try:
             save_tool_snapshot(session_id, name, payload)
             saved.append({"tool": name, "preview": raw[:200]})
-        except Exception:
-            pass
+        except Exception as exc:
+            from services.soft_fail import soft_fail
+            soft_fail("session_context.persist_tool_snapshots", exc)
     return saved
 
 
