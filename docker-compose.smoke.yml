@@ -24,6 +24,15 @@ services:
     volumes: !override
       - smoke-qdrant:/qdrant/storage
   agent-api:
+    # CRITICAL — env_file. The base file loads the developer's `.env`, which the
+    # compose project name does not isolate either. Two consequences, both seen
+    # on 2026-08-12: in CI there is no `.env`, so `docker compose config` fails
+    # outright and the smoke never ran; locally the smoke inherited the real
+    # GEMINI_API_KEY / TELEGRAM_BOT_TOKEN / EVOLUTION_API_KEY plus
+    # TELEGRAM_MODE=polling, and started a SECOND poller against the real bot —
+    # 25 `HTTP Error 409: Conflict` in the dev agent-api log.
+    # The smoke supplies its own environment; it must never read `.env`.
+    env_file: !reset []
     ports: !override
       - "127.0.0.1::8000"
     volumes: !override

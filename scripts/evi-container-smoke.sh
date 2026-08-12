@@ -23,7 +23,14 @@ FAILED=0
 pass() { echo "[PASS] $1"; }
 fail() { echo "[FAIL] $1"; FAILED=1; }
 
-dc() { docker compose -p "$PROJECT" -f docker-compose.yml -f docker-compose.smoke.yml "$@"; }
+# --env-file /dev/null: Compose reads ./.env for ${VAR} interpolation too, which
+# is a SEPARATE channel from a service's `env_file`. Resetting env_file alone
+# still let WINDMILL_TOKEN and NEO4J_PASSWORD through, because the base file
+# interpolates them. This closes the fourth and last way out of the project.
+dc() {
+  docker compose -p "$PROJECT" --env-file /dev/null \
+    -f docker-compose.yml -f docker-compose.smoke.yml "$@"
+}
 
 cleanup() {
   echo "==> Derrubando stack de smoke..."
@@ -39,6 +46,10 @@ export QDRANT_URL=http://qdrant:6333
 export OLLAMA_BASE_URL=http://127.0.0.1:1
 export EVI_TIMEZONE=America/Sao_Paulo
 export EVI_CONTACT_MEMORY_DIR=/data/contact_memory
+# Explicitly empty: even if the env isolation regresses, the smoke must never
+# start a Telegram poller against the real bot (that is what caused the 409s).
+export TELEGRAM_MODE= TELEGRAM_BOT_TOKEN= TELEGRAM_CHAT_ID=
+export EVI_WHATSAPP_CONTROL_JIDS= EVOLUTION_API_KEY= GEMINI_API_KEY=
 
 # Guard, learned the hard way on 2026-08-12: a bind mount ignores the compose
 # project name, so `-p evi-smoke` alone does NOT isolate anything. Running this
@@ -64,13 +75,33 @@ for name, svc in (cfg.get("services") or {}).items():
         src = vol.get("source", "")
         if "/data/" in src or src.endswith("/data"):
             offenders.append(f"{name}: {src} -> {vol.get('target')}")
+# env_file is the third way the base compose reaches outside the project. Do NOT
+# check for the `env_file` key: `docker compose config` resolves it into
+# `environment` and drops the key, so that check silently always passes — worse
+# than no check. Assert the consequence instead: no real credential may appear
+# in the smoke's resolved environment.
+_SECRETS = (
+    "TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY", "EVOLUTION_API_KEY",
+    "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "WINDMILL_TOKEN",
+    "EVI_WHATSAPP_CONTROL_JIDS", "TELEGRAM_CHAT_ID", "NEO4J_PASSWORD",
+)
+for name, svc in (cfg.get("services") or {}).items():
+    env = svc.get("environment") or {}
+    for key in _SECRETS:
+        if (env.get(key) or "").strip():
+            offenders.append(f"{name}: {key} tem valor real (o .env de dev vazou)")
+    # A live poller would fight the real bot for getUpdates (the 409s of 12/08).
+    if (env.get("TELEGRAM_MODE") or "").strip():
+        offenders.append(f"{name}: TELEGRAM_MODE={env['TELEGRAM_MODE']!r} iniciaria um poller")
+
 if offenders:
-    print("[FAIL] ISOLAMENTO: o smoke montaria dados de dev em escrita:")
+    print("[FAIL] ISOLAMENTO: o smoke alcançaria estado de dev:")
     for o in offenders:
         print(f"         {o}")
-    print("       Abortando — use docker-compose.smoke.yml com volumes nomeados.")
+    print("       Abortando — docker-compose.smoke.yml deve usar volumes nomeados")
+    print("       e `env_file: !reset []`.")
     sys.exit(1)
-print("[PASS] nenhum bind mount de ./data em escrita")
+print("[PASS] sem bind mount de ./data em escrita e sem env_file herdado")
 PY
 
 echo "==> 1/7 Build da imagem..."
