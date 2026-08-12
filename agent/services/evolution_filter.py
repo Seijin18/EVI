@@ -6,7 +6,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, TypedDict
+from typing import Dict, Iterable, List, Tuple, TypedDict
 
 from services.message_sources import IncomingMessage
 
@@ -21,6 +21,36 @@ class DroppedMessage(TypedDict):
     reason: str
 
 _MAX_SEEN_IDS = 5000
+
+
+class SeenIds:
+    """Insertion-ordered set of message ids (dict keys preserve order)."""
+
+    __slots__ = ("_ids",)
+
+    def __init__(self, ids: "Iterable[str] | None" = None):
+        self._ids: Dict[str, None] = {}
+        for i in ids or ():
+            self._ids[i] = None
+
+    def __contains__(self, msg_id: object) -> bool:
+        return msg_id in self._ids
+
+    def __len__(self) -> int:
+        return len(self._ids)
+
+    def add(self, msg_id: str) -> None:
+        """Add or refresh an id, moving it to the newest position."""
+        self._ids.pop(msg_id, None)
+        self._ids[msg_id] = None
+
+    def update(self, ids: "Iterable[str]") -> None:
+        for i in ids:
+            self.add(i)
+
+    def newest(self, limit: int) -> list[str]:
+        """The `limit` most recently added ids, oldest first."""
+        return list(self._ids)[-limit:]
 
 
 def _parse_ts(ts: str) -> datetime | None:
@@ -44,22 +74,25 @@ def _process_after_cutoff() -> datetime | None:
         return None
 
 
-def _load_seen_ids(path: Path) -> Set[str]:
+def _load_seen_ids(path: Path) -> "SeenIds":
+    """Insertion-ordered id set. On-disk format is an unchanged JSON array."""
     if not path.exists():
-        return set()
+        return SeenIds()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(data, list):
-            return set(data[-_MAX_SEEN_IDS:])
+            return SeenIds(str(x) for x in data[-_MAX_SEEN_IDS:])
     except (json.JSONDecodeError, OSError):
         pass
-    return set()
+    return SeenIds()
 
 
-def _save_seen_ids(path: Path, seen: Set[str]) -> None:
+def _save_seen_ids(path: Path, seen: "SeenIds") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    trimmed = list(seen)[-_MAX_SEEN_IDS:]
-    path.write_text(json.dumps(trimmed), encoding="utf-8")
+    # Trim from the front: a `set` has no order, so the old
+    # `list(seen)[-_MAX_SEEN_IDS:]` could evict a just-seen id and keep an
+    # ancient one, letting a duplicate back through.
+    path.write_text(json.dumps(seen.newest(_MAX_SEEN_IDS)), encoding="utf-8")
 
 
 def seen_ids_path(log_dir: Path | None = None) -> Path:
@@ -84,7 +117,7 @@ def claim_message_id(msg_id: str, *, log_dir: Path | None = None) -> bool:
     return True
 
 
-def _parse_group_whitelist() -> Set[str]:
+def _parse_group_whitelist() -> set[str]:
     raw = os.getenv("EVI_WHATSAPP_GROUP_WHITELIST", "").strip()
     if not raw:
         return set()
@@ -138,7 +171,7 @@ def filter_for_processing(
     cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_h)
     watermark = _process_after_cutoff()
     seen_path = seen_ids_path(log_dir)
-    seen = _load_seen_ids(seen_path) if dedupe else set()
+    seen = _load_seen_ids(seen_path) if dedupe else SeenIds()
 
     def _drop(msg: IncomingMessage, reason: str) -> None:
         dropped.append(

@@ -10,6 +10,7 @@ from services.commitment_review.handler import try_direct_review
 from services.direct_email import try_direct_email
 from services.direct_handlers import direct_handlers_enabled
 from services.direct_task import try_direct_task
+from services.send_result import send_outcome
 from services.evolution_client import (
     format_evi_whatsapp,
     is_evi_bot_message,
@@ -47,12 +48,13 @@ def process_whatsapp_control_message(
 
     dev_reply = try_dev_command(text)
     if dev_reply:
-        sent = send_whatsapp_text(jid, dev_reply, add_prefix=True)
+        sent, send_error = send_outcome(send_whatsapp_text(jid, dev_reply, add_prefix=True))
         return {
             "ok": True,
             "response": format_evi_whatsapp(dev_reply),
             "session_id": session_id,
             "whatsapp_sent": sent,
+            **({"send_error": send_error} if send_error else {}),
             "dev_bridge": True,
         }
 
@@ -65,12 +67,13 @@ def process_whatsapp_control_message(
         on_compact=(lambda: compact_session(session_id)) if compact_session else None,
     )
     if cmd_reply:
-        sent = send_whatsapp_text(jid, cmd_reply, add_prefix=True)
+        sent, send_error = send_outcome(send_whatsapp_text(jid, cmd_reply, add_prefix=True))
         return {
             "ok": True,
             "response": format_evi_whatsapp(cmd_reply),
             "session_id": session_id,
             "whatsapp_sent": sent,
+            **({"send_error": send_error} if send_error else {}),
             "chat_command": True,
         }
 
@@ -78,45 +81,49 @@ def process_whatsapp_control_message(
         direct = try_direct_review(text, confirmed_via="whatsapp")
         if direct:
             reply = direct
-            sent = send_whatsapp_text(jid, reply, add_prefix=True)
+            sent, send_error = send_outcome(send_whatsapp_text(jid, reply, add_prefix=True))
             return {
                 "ok": True,
                 "response": format_evi_whatsapp(reply),
                 "session_id": session_id,
                 "whatsapp_sent": sent,
+                **({"send_error": send_error} if send_error else {}),
                 "review_direct": True,
             }
 
         scheduled = try_direct_schedule(text)
         if scheduled:
-            sent = send_whatsapp_text(jid, scheduled, add_prefix=True)
+            sent, send_error = send_outcome(send_whatsapp_text(jid, scheduled, add_prefix=True))
             return {
                 "ok": True,
                 "response": format_evi_whatsapp(scheduled),
                 "session_id": session_id,
                 "whatsapp_sent": sent,
+                **({"send_error": send_error} if send_error else {}),
                 "scheduled_direct": True,
             }
 
         tasked = try_direct_task(text)
         if tasked:
-            sent = send_whatsapp_text(jid, tasked, add_prefix=True)
+            sent, send_error = send_outcome(send_whatsapp_text(jid, tasked, add_prefix=True))
             return {
                 "ok": True,
                 "response": format_evi_whatsapp(tasked),
                 "session_id": session_id,
                 "whatsapp_sent": sent,
+                **({"send_error": send_error} if send_error else {}),
                 "task_direct": True,
             }
 
         emailed = try_direct_email(text)
         if emailed:
-            sent = send_whatsapp_text(jid, emailed, add_prefix=True)
+            sent, send_error = send_outcome(send_whatsapp_text(jid, emailed, add_prefix=True))
             return {
                 "ok": True,
                 "response": format_evi_whatsapp(emailed),
                 "session_id": session_id,
                 "whatsapp_sent": sent,
+                **({"send_error": send_error} if send_error else {}),
                 "email_direct": True,
             }
 
@@ -141,12 +148,13 @@ def process_whatsapp_control_message(
         from services.soft_fail import soft_fail
         soft_fail("whatsapp_control.process_whatsapp_control_message", exc)
 
-    sent = send_whatsapp_text(jid, reply, add_prefix=True)
+    sent, send_error = send_outcome(send_whatsapp_text(jid, reply, add_prefix=True))
     return {
         "ok": True,
         "response": format_evi_whatsapp(reply) if reply else "",
         "session_id": session_id,
         "whatsapp_sent": sent,
+        **({"send_error": send_error} if send_error else {}),
         "llm": True,
         "tools": result.get("tools") or [],
     }

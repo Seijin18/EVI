@@ -5,9 +5,15 @@ from __future__ import annotations
 import json
 import os
 import re
-import urllib.error
 import urllib.request
 from typing import Any
+
+from services.send_result import (
+    EMPTY_TEXT,
+    NOT_CONFIGURED,
+    SendResult,
+    post_with_retry,
+)
 
 _EVI_PREFIX = re.compile(r"^\[EVI\]\s*", re.I)
 
@@ -80,10 +86,20 @@ class EvolutionClient:
             {"page": 1, "offset": max_n},
         )
 
-    def send_text(self, jid: str, text: str, *, add_prefix: bool = True) -> bool:
+    def send_text(self, jid: str, text: str, *, add_prefix: bool = True) -> SendResult:
+        """Deliver a WhatsApp reply. Truthy on success; never raises.
+
+        Same contract as the Telegram sender — see services/send_result.py.
+        """
         base, instance, api_key = self._config()
         if not base or not instance or not jid:
-            return False
+            missing = "EVOLUTION_SERVER_URL" if not base else (
+                "EVOLUTION_INSTANCE_NAME" if not instance else "jid"
+            )
+            return SendResult.fail(NOT_CONFIGURED, detail=f"missing {missing}")
+        if not (text or "").strip():
+            return SendResult.fail(EMPTY_TEXT)
+
         number = jid.split("@")[0]
         payload = {
             "number": number,
@@ -95,11 +111,7 @@ class EvolutionClient:
         if api_key:
             headers["apikey"] = api_key
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                return 200 <= resp.status < 300
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError):
-            return False
+        return post_with_retry(req, timeout=20, context="evolution.send_text")
 
     def is_bot_message(self, text: str) -> bool:
         body = text.strip()

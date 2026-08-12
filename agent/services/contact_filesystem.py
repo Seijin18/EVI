@@ -269,6 +269,32 @@ def read_profile_excerpt(jid: str, max_chars: int = 800) -> str:
     return profile.read_text(encoding="utf-8").strip()[:max_chars]
 
 
+_SYNTHESIS_HEADING = re.compile(r"^##\s*Síntese\s*\((\d{4}-\d{2}-\d{2})")
+
+
+def last_synthesis_date(jid: str) -> str:
+    """Date of the newest `## Síntese (YYYY-MM-DD, …)` heading, or "".
+
+    Callers compare this to a timeline timestamp as an ISO date. Comparing
+    against the raw heading text is always true (`'2' > '#'`), which is what
+    made the heartbeat flag every contact.
+    """
+    if not memory_enabled() or not jid:
+        return ""
+    profile = contact_dir(jid) / "profile.md"
+    if not profile.is_file():
+        return ""
+    newest = ""
+    try:
+        for line in profile.read_text(encoding="utf-8").splitlines():
+            m = _SYNTHESIS_HEADING.match(line.strip())
+            if m and m.group(1) > newest:
+                newest = m.group(1)
+    except OSError:
+        return ""
+    return newest
+
+
 def _digits_only(value: str) -> str:
     return re.sub(r"\D", "", value or "")
 

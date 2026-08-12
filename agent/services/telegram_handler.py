@@ -38,8 +38,13 @@ def _reply_direct(
     tools: list,
     extra: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
+    from services.send_result import EMPTY_TEXT, send_outcome
+
     ai_content = format_for_telegram(extract_llm_text(ai_content))
-    sent = send_telegram_message(ai_content, chat_id=chat_id) if ai_content else False
+    result = send_telegram_message(ai_content, chat_id=chat_id) if ai_content else False
+    sent, reason = send_outcome(result)
+    if not ai_content:
+        reason = EMPTY_TEXT
     _persist_turn(session_id, text, ai_content)
     log_telegram_turn(
         session_id,
@@ -54,6 +59,9 @@ def _reply_direct(
         "session_id": session_id,
         "telegram_sent": sent,
     }
+    if reason:
+        # Why the reply was dropped — telegram_sent alone said nothing.
+        out["send_error"] = reason
     if extra:
         out.update(extra)
     return out

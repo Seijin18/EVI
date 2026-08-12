@@ -56,6 +56,7 @@ def _contacts_needing_synthesis(*, days: int = 7) -> list[str]:
     try:
         from services.contact_filesystem import (
             collect_known_contacts,
+            last_synthesis_date,
             memory_enabled,
             read_timeline_since,
         )
@@ -69,26 +70,18 @@ def _contacts_needing_synthesis(*, days: int = 7) -> list[str]:
             recent = read_timeline_since(jid, days=days)
             if not recent:
                 continue
-            profile_path = None
-            try:
-                from services.contact_filesystem import contact_dir
-
-                profile_path = contact_dir(jid) / "profile.md"
-            except Exception:
+            last_ts = (recent[-1].get("ts") or "")[:10]
+            if not last_ts:
                 continue
-            if not profile_path or not profile_path.is_file():
+            # Both sides are ISO dates, so lexicographic order is chronological.
+            # A missing or unparseable heading yields "", and last_ts > "" flags
+            # it: a false "needs synthesis" is noise, a false "already done"
+            # hides real work.
+            if last_ts > last_synthesis_date(jid):
                 stale.append(label)
-                continue
-            text = profile_path.read_text(encoding="utf-8")
-            if "## Síntese (" not in text:
-                stale.append(label)
-                continue
-            # crude: if newest timeline ts is after any synthesis section, flag
-            last_ts = recent[-1].get("ts") or ""
-            if last_ts and "Síntese (" in text:
-                idx = text.rfind("## Síntese (")
-                if idx >= 0 and last_ts[:10] > text[idx : idx + 40]:
-                    stale.append(label)
         return stale
-    except Exception:
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+
+        soft_fail("heartbeat._contacts_needing_synthesis", exc)
         return []

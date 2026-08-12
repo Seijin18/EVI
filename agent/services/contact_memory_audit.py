@@ -38,15 +38,20 @@ def format_memory_audit(*, limit: int = 15) -> str:
 
 
 def _last_synthesis_heading(jid: str) -> str:
+    """Newest synthesis heading, e.g. `Síntese (2026-08-12, últimos 7 dias)`."""
     try:
-        from services.contact_filesystem import contact_dir
+        from services.contact_filesystem import contact_dir, last_synthesis_date
 
+        newest = last_synthesis_date(jid)
+        if not newest:
+            return ""
         profile = contact_dir(jid) / "profile.md"
         if not profile.is_file():
             return ""
         for line in profile.read_text(encoding="utf-8").splitlines():
-            if line.startswith("## Síntese ("):
-                return line[3:].strip()
+            stripped = line.strip()
+            if stripped.startswith(f"## Síntese ({newest}"):
+                return stripped[3:].strip()
     except Exception as exc:
         from services.soft_fail import soft_fail
         soft_fail("contact_memory_audit._last_synthesis_heading", exc)

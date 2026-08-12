@@ -387,7 +387,18 @@ def run_telegram(live: bool = False) -> bool:
 
     from services.telegram_notify import send_telegram_message
 
-    ok = ok and send_telegram_message("EVI: teste live sendMessage (SCN-TG-02)")
+    send_res = send_telegram_message("EVI: teste live sendMessage (SCN-TG-02)")
+    ok = ok and bool(send_res)
+    if not ok:
+        why = getattr(send_res, "reason", "") or "unknown"
+        attempts = getattr(send_res, "attempts", 0)
+        extra = getattr(send_res, "detail", "")
+        return _result(
+            "telegram",
+            False,
+            f"sendMessage failed: {why} after {attempts} attempt(s)"
+            + (f" — {extra}" if extra else ""),
+        )
     detail = "live sendMessage"
     if ok:
         base = os.getenv("EVI_API_URL", "http://localhost:8002")
@@ -408,6 +419,10 @@ def run_telegram(live: bool = False) -> bool:
                 body = r.json()
                 ok = ok and body.get("telegram_sent") is True
                 detail = f"webhook telegram_sent={body.get('telegram_sent')}"
+                if not ok:
+                    # `telegram_sent=False` alone never said whether it was the
+                    # network, the token or the chat id.
+                    detail += f" send_error={body.get('send_error') or 'unreported'}"
             else:
                 ok = False
                 detail = f"webhook HTTP {r.status_code}"

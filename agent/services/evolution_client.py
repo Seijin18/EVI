@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from messaging.evolution import EvolutionClient as _EvolutionClient, reply_prefix
+from services.send_result import SendResult
 
 _client = _EvolutionClient()
 
@@ -15,7 +16,7 @@ def format_evi_whatsapp(text: str) -> str:
     return _client.format_reply(text)
 
 
-def send_whatsapp_text(jid: str, text: str, *, add_prefix: bool = True) -> bool:
+def send_whatsapp_text(jid: str, text: str, *, add_prefix: bool = True) -> SendResult:
     return _client.send_text(jid, text, add_prefix=add_prefix)
 
 
