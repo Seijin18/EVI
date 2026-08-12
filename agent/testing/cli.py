@@ -132,7 +132,13 @@ def run_sessions() -> bool:
         _reset()
 
         def _fake_invoke(state):
-            return {"messages": [AIMessage(content="ok")], "final_answer": "ok"}
+            # AgentState accumulates messages via operator.add, so a real graph
+            # returns the input messages plus its reply. Echo that shape —
+            # returning only the reply would drop the turn under test.
+            return {
+                "messages": list(state["messages"]) + [AIMessage(content="ok")],
+                "final_answer": "ok",
+            }
 
         main.app_state.graph = MagicMock()
         main.app_state.graph.invoke.side_effect = _fake_invoke
@@ -142,13 +148,26 @@ def run_sessions() -> bool:
             client = TestClient(main.app)
             client.post("/chat", json={"message": "sou A", "session_id": "http-A"})
             client.post("/chat", json={"message": "sou B", "session_id": "http-B"})
-            a_http = main.get_session_memory("http-A").get_messages()
-        route_ok = any("sou A" in str(getattr(m, "content", m)) for m in a_http)
-        route_ok = route_ok and not any(
-            "sou B" in str(getattr(m, "content", m)) for m in a_http
-        )
-        if not route_ok:
-            return _result("sessions", False, "/chat leaked between sessions")
+            a_http = [
+                str(getattr(m, "content", m))
+                for m in main.get_session_memory("http-A").get_messages()
+            ]
+            b_http = [
+                str(getattr(m, "content", m))
+                for m in main.get_session_memory("http-B").get_messages()
+            ]
+
+        # The invariant is containment, in both directions.
+        leaked = any("sou B" in c for c in a_http) or any("sou A" in c for c in b_http)
+        if leaked:
+            return _result(
+                "sessions", False, f"/chat leaked: A={a_http} B={b_http}"
+            )
+        # And each session must still hold its own turn.
+        if not any("sou A" in c for c in a_http) or not any("sou B" in c for c in b_http):
+            return _result(
+                "sessions", False, f"/chat lost the turn: A={a_http} B={b_http}"
+            )
         detail += " + /chat route"
         _reset()
     except ImportError:

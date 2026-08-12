@@ -62,9 +62,9 @@
 
 ## 2. Close-out
 
-- [ ] 2.1 Full gate green
+- [x] 2.1 Full gate green
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q && ./scripts/evi-test smoke && ./scripts/evi-test sessions && ./scripts/evi-test runtime-v3 && ./scripts/evi-test inbox-ux && ruff check agent/ --select E,W,F --ignore E501 && openspec validate --specs`
 
-- [ ] 2.2 Update `Progress.md` (Etapa 12) and `openspec/BACKLOG.md`, then `openspec archive evi-runtime-hardening`
+- [x] 2.2 Update `Progress.md` (Etapa 12) and `openspec/BACKLOG.md`, then `openspec archive evi-runtime-hardening`
   - Files: `Progress.md`, `openspec/BACKLOG.md`
   - Verify: `openspec list` empty
