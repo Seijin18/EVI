@@ -88,7 +88,9 @@ Spec: [`openspec/specs/providers/spec.md`](specs/providers/spec.md)
 | 24 | `evi-daily-summary-llm` | Done | `_llm_summarize()` quando `EVI_DAILY_SUMMARY_LLM=true`; commit `6635c94` |
 | 25 | `evi-profile-auto-update` | Done | `profile_updater.py`; integrado em `whatsapp_control` + `telegram_handler`; commit `6635c94` |
 
-**Deferred (roadmap):** `/chat`+`/run-task` auth obrigatória, Compose Ollama profile, Redis cache, MCP isolation, WhatsApp Meta/Twilio adapter — ver [`openspec/specs/roadmap.md`](specs/roadmap.md)
+**Deferred (roadmap):** Compose Ollama profile, adapter WhatsApp Meta/Twilio, pool de
+conexões Postgres, gating de tools — ver [`specs/roadmap.md`](specs/roadmap.md).
+Auth deixou de ser deferida: virou parte do #31 (Etapa 12).
 
 ## Etapa 10 — autonomia + memória de contatos (17 Jun 2026)
 
@@ -104,3 +106,32 @@ Spec: [`openspec/specs/providers/spec.md`](specs/providers/spec.md)
 | # | Change | Status | Notas |
 |---|--------|--------|-------|
 | 30 | `evi-dev-bridge-multi-cli` | Done | Arquivado 2026-08-01; corrige bug approve=plan (nunca aplicava mudanças), generaliza para `agent/devcli/` (Claude Code CLI default), spec nova `dev-bridge` |
+
+## Etapa 12 — runtime hardening (12 Ago 2026)
+
+Revisão geral do sistema em 2026-08-12 encontrou três itens marcados **Done** que
+não funcionam como descrito (dev bridge no container, fuso na tabela de datas,
+comparação do heartbeat) e a base sem isolamento de sessão nem auth efetiva.
+Roadmap reordenado: [`specs/roadmap.md`](specs/roadmap.md). Nada de feature nova
+antes do #31.
+
+| # | Change | Status | Notas |
+|---|--------|--------|-------|
+| 31 | `evi-runtime-hardening` | **Ativo** | Isolamento de sessão, auth nos 4 endpoints sem `Depends`, serviços de dados fora de `0.0.0.0`, fuso em `_calendar_block`, pin de deps, `build_background_llm` sem mutar env, log nos `except: pass` |
+
+## Fila de propostas (pós-#31)
+
+Uma proposta por vez, na ordem — ver [`specs/roadmap.md`](specs/roadmap.md) para o porquê.
+
+| # | Change sugerido | Etapa | Resumo |
+|---|-----------------|-------|--------|
+| 32 | `evi-container-smoke-ci` | 14.1 | `docker compose up agent-api` + `/health` + `/tools` no CI. Teria pego o bug do dev bridge. Vem antes do #33 porque é o que valida a decisão dele. |
+| 33 | `evi-dev-bridge-decision` | 13.1 | Consertar `_REPO_ROOT` (`EVI_REPO_ROOT` + montar repo + `git`/`claude` na imagem) **ou** remover código e spec `dev-bridge`. Decisão do usuário. |
+| 34 | `evi-tool-result-contract` | 13.2 | Resultado tipado (`ok: bool`) no lugar de `if "failed" in result.lower()`. Toca 26 tools + scripts Windmill. |
+| 35 | `evi-test-coverage-core` | 14.2–14.7 | `calendar_tool`, `auth`, `telegram_poller`, `evolution_client`, `session_lane`, `db` (PG efêmero no CI). |
+| 36 | `evi-small-correctness` | 13.3–13.4 | Heartbeat sempre-verdadeiro + eviction do `evolution_seen_ids.json`. Pequeno; pode entrar junto do #35. |
+| 37 | `evi-prompt-injection-model` | 15 | Threat model + spec para conteúdo de terceiros que chega ao grafo principal. |
+| 38 | `evi-background-execution` | 16 | Tarefas longas desacopladas do turno de chat; ack imediato + resultado depois. |
+
+**Cortado do roadmap** (motivos em [`specs/roadmap.md`](specs/roadmap.md)): MCP servers
+isolados, multimodal Llava/Whisper, cache Redis de embeddings.

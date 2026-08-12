@@ -18,10 +18,27 @@
 | Memória longa (FS + Neo4j + registro Postgres de contatos) | **Done** |
 | Ops (health, metrics, CI) | **Done** |
 | Autonomia (heartbeat, background LLM, session lane) | **Done** (17 Jun 2026) |
-| Dev bridge multi-CLI (WhatsApp/Telegram → Claude Code CLI) | **Done** (1 Ago 2026) |
+| Dev bridge multi-CLI (WhatsApp/Telegram → Claude Code CLI) | **Quebrado no container** — ver nota abaixo |
+| Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Ativo** (`evi-runtime-hardening`) |
 | Roadmap deferido | Ver tabela abaixo |
 
-**Foco atual:** operação e polish (OAuth Windmill, E2E live); novos changes só via [`openspec/BACKLOG.md`](openspec/BACKLOG.md) quando priorizado.
+**Foco atual:** fechar `evi-runtime-hardening` (Etapa 12). Nenhuma feature nova antes
+disso — ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
+
+> **Revisão de 2026-08-12.** Uma revisão geral do sistema encontrou três itens antes
+> marcados Done que não funcionam como descrito:
+> - **Dev bridge**: `_REPO_ROOT` resolve para `/` dentro do container (`WORKDIR /app`
+>   + `parents[2]`), e `scripts/` não está na imagem — `dev approve` sempre falha com
+>   `claude-dev-runner.sh missing`. Os testes mockam o backend, então nunca apareceu.
+> - **Fuso horário**: `graph._calendar_block()` usa `datetime.now()` naive num
+>   container UTC, enquanto o system prompt manda o modelo confiar nessa tabela
+>   literalmente. À noite em `America/Sao_Paulo` o agente fica um dia adiantado.
+> - **Heartbeat**: `_contacts_needing_synthesis` compara `last_ts[:10]` com um trecho
+>   de markdown — sempre verdadeiro.
+>
+> Além disso: memória de conversa é global entre sessões, `EVI_API_KEY` está vazio e
+> quatro endpoints nunca tiveram `Depends(verify_api_key)`. Detalhes e ordem de
+> correção em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 ---
 
@@ -66,17 +83,23 @@
 | `list_calendars` LangGraph tool | `agent/tools/calendar_tool.py` |
 | Dev bridge multi-CLI (Claude Code CLI) | `test_dev_bridge.py`, `test_devcli_*.py` · `dev-bridge` |
 
-### Planejado (roadmap)
+### Planejado (roadmap reordenado em 12 Ago 2026)
 
 | Feature | Prioridade | Referência |
 |---------|------------|------------|
-| API key auth obrigatória em `/chat` | Baixa | `roadmap.md` |
+| Runtime hardening (sessão, auth, fuso, deps) | **Alta — ativo** | `evi-runtime-hardening` |
+| Smoke de container no CI | **Alta** | roadmap 14.1 · BACKLOG #32 |
+| Dev bridge: consertar ou remover | **Alta** | roadmap 13.1 · BACKLOG #33 |
+| Contrato estruturado de tools | Média | roadmap 13.2 · BACKLOG #34 |
+| Cobertura: calendar_tool, auth, poller, db | Média | roadmap 14.2–14.7 · BACKLOG #35 |
+| Threat model de prompt injection | Média | roadmap 15 · BACKLOG #37 |
+| Execução em background | Média | roadmap 16 · BACKLOG #38 |
 | Compose profile Ollama | Baixa | Infra |
-| MCP servers isolados | Baixa | Arquitetura |
-| Multimodal (Llava, Whisper) | Baixa | `roadmap.md` |
-| Redis cache embeddings | Baixa | Performance |
 | WhatsApp Meta/Twilio adapter | Baixa | `providers` spec |
-| Dev bridge: backends Cursor/Copilot | Baixa | `agent/devcli/` (out of scope em `evi-dev-bridge-multi-cli`) |
+| Dev bridge: backends Cursor/Copilot | Baixa | depende de #33 |
+
+**Cortados:** MCP servers isolados, multimodal (Llava/Whisper — incompatível com
+GTX 1060 3 GB), cache Redis de embeddings. Motivos em `openspec/specs/roadmap.md`.
 
 ---
 
@@ -97,8 +120,9 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | 9 | Memória inteligente | **Done** | Daily summary LLM, profile auto-update |
 | **10** | **Runtime v3 + inbox** | **Done** | Workspace, context assembly, delete_by_query, LLM-first control, E2E harness |
 | **10.5** | **Autonomia + memória de contatos** | **Done** | Contact learning, registro Postgres, Evolution discovery, commitment replay, heartbeat, background LLM tiers |
-| **11** | **Dev bridge multi-CLI** | **Done** | `agent/devcli/`, backend Claude Code CLI, fix bug approve=plan, `dev mode` toggle |
-| 12+ | Roadmap deferido | **—** | Ver matriz “Planejado” |
+| **11** | **Dev bridge multi-CLI** | **Parcial** | `agent/devcli/`, backend Claude Code CLI, `dev mode` toggle — **não roda no container** (`_REPO_ROOT` = `/`) |
+| **12** | **Runtime hardening** | **Ativo** | Isolamento de sessão, auth, portas, fuso, pin de deps, log de falhas silenciosas |
+| 13–16 | Correção, testes, injeção, background | **—** | Ver `openspec/specs/roadmap.md` |
 
 ### Série Runtime v3 (17 Jun 2026) — Done
 
