@@ -33,8 +33,9 @@ comportamento montado.
 |---|------|--------------------|
 | 13.1 | **Dev bridge: `_REPO_ROOT` = `/` no container** | Consertar (`EVI_REPO_ROOT` + montar repo + `git`/`claude` na imagem) **ou** remover código + spec. Hoje está marcado Done e não roda. Decisão de produto, não técnica. |
 | 13.2 | **Contrato estruturado de tools** | Substituir `if "failed" in result.lower()` por resultado tipado (`ok: bool`). Toca as 26 tools e os scripts Windmill — change próprio, mas quanto mais tools, mais caro. |
-| 13.3 | `heartbeat._contacts_needing_synthesis` | Comparação `last_ts[:10] > text[idx:idx+40]` é sempre verdadeira (`'2' > '#'`). Todo contato é sinalizado como sem síntese. ~3 linhas. |
-| 13.4 | Dedupe de `evolution_seen_ids.json` | `list(set)[-5000:]` evicta em ordem arbitrária; read-modify-write sem lock. |
+| 13.3 | `heartbeat._contacts_needing_synthesis` | Comparação `last_ts[:10] > text[idx:idx+40]` é sempre verdadeira (`'2' > '#'`). Todo contato é sinalizado como sem síntese. Em `evi-small-correctness`. |
+| 13.4 | Dedupe de `evolution_seen_ids.json` | `list(set)[-5000:]` evicta em ordem arbitrária. Em `evi-small-correctness` (a race de read-modify-write fica de fora). |
+| 13.5 | **Envio de resposta sem retry nem log** | `send_telegram_message` e `evolution.send_text` engolem erro de rede em `return False`. Uma instabilidade de ~2 min em 12/08 fez o EVI calcular a resposta e descartá-la em silêncio — `evi-telegram-verify.sh` falhou com `telegram_sent=False` e log nenhum. Em `evi-small-correctness`. |
 
 ---
 
