@@ -3,9 +3,7 @@
 ## Purpose
 
 Define how EVI features are verified with minimal context (evi-test + SCN IDs).
-
 ## Requirements
-
 ### Requirement: Tiered verification
 Every feature domain MUST have Tier 1 (pytest) and Tier 2 (`./scripts/evi-test <feature>`) coverage before OpenSpec archive.
 
@@ -153,3 +151,11 @@ When `EVI_DIRECT_HANDLERS=false`, Telegram and WhatsApp control SHALL route inbo
 #### Scenario: SCN-UX-WA-CTRL-01
 - **WHEN** `tests/unit/test_whatsapp_control.py` runs with default env
 - **THEN** direct handler mocks are not called for review/inbox phrases
+
+### Requirement: Session isolation harness
+The project SHALL provide `./scripts/evi-test sessions`, verifying offline that two interleaved `session_id` values do not share bounded conversation memory.
+
+#### Scenario: SCN-TEST-11
+- **WHEN** `./scripts/evi-test sessions` runs without Docker
+- **THEN** each session's assembled message list contains only its own turns, and the command exits non-zero if any cross-session message is observed
+
