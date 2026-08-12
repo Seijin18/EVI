@@ -118,7 +118,8 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **12** | **Runtime hardening** | **Done** | Isolamento de sessão, auth nos 4 endpoints abertos, portas em `127.0.0.1` (PG→5433), fuso via `now_local()`, deps pinadas (LangChain 1.3.15), `soft_fail` em 35 sites |
 | **13** | **Correções pequenas** | **Done** | Retry + motivo nos envios, heartbeat sempre-verdadeiro, eviction do `seen_ids` |
 | **14.1** | **Container smoke no CI** | **Done** | Job `container`, `evi-test container`, guarda de isolamento de volumes |
-| 14.2–16 | Cobertura, injeção, background | **—** | Ver `openspec/specs/roadmap.md` |
+| **14.2** | **Cobertura do caminho crítico** | **Done** | poller, evolution_client, db (PG real), webhook Evolution — +62 testes |
+| 15–16 | Injeção de prompt, background | **—** | Ver `openspec/specs/roadmap.md` |
 
 ### Série Runtime v3 (17 Jun 2026) — Done
 

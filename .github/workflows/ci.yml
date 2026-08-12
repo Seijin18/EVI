@@ -10,6 +10,21 @@ on:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    # Ephemeral Postgres so tests/unit/test_db.py actually runs. Without it the
+    # module skips, and db.py's migrations, ON CONFLICT dedupe and status
+    # transitions stay unverified — they had no coverage at all before.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: evi
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: evidb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U evi -d evidb"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +39,8 @@ jobs:
         run: ruff check agent/ --select E,W,F --ignore E501
 
       - name: Unit tests
+        env:
+          DATABASE_URL: postgresql://evi:ci@127.0.0.1:5432/evidb
         run: PYTHONPATH=agent python3 -m pytest tests/unit -q
 
       - name: Offline smoke (evi-test)
