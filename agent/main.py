@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from auth import verify_api_key
 from graph import build_agent_graph
-from memory import BoundedMemory
+from services.session_memory import drop_session_memory, get_session_memory
 from tools.note_manager import build_auto_insight, save_note_manual
 from tools.registry import get_all_tools
 
@@ -18,7 +18,6 @@ AVAILABLE_TOOLS = get_all_tools()
 
 class AgentApplicationState:
     graph = None
-    memory = BoundedMemory(max_pairs=8)
     default_session = "default"
 
 
@@ -40,48 +39,61 @@ def _persist_turn(session_id: str, user_text: str, assistant_text: str) -> None:
 def _hydrate_memory(session_id: str) -> None:
     if not os.getenv("DATABASE_URL"):
         return
+    memory = get_session_memory(session_id)
     try:
         from db import load_recent_messages
 
         rows = load_recent_messages(session_id, limit=16)
-        app_state.memory.clear()
+        memory.clear()
         for row in rows:
             if row["role"] == "user":
-                app_state.memory.add(HumanMessage(content=row["content"]))
+                memory.add(HumanMessage(content=row["content"]))
             else:
-                app_state.memory.add(AIMessage(content=row["content"]))
+                memory.add(AIMessage(content=row["content"]))
     except Exception:
         pass
 
 
-def _reset_session(_session_id: str) -> None:
-    app_state.memory.clear()
-
-
-def _compact_session(session_id: str) -> None:
-    from services.memory_flush import maybe_flush_before_compaction
+def _last_turn_texts(messages: list) -> tuple[str, str]:
+    """Most recent (user_text, assistant_text) pair from a message list."""
     from llm import extract_llm_text
 
-    msgs = app_state.memory.get_messages()
     last_user = ""
     last_ai = ""
-    for m in reversed(msgs):
+    for m in reversed(messages):
         if getattr(m, "type", None) == "ai" and not last_ai:
             last_ai = extract_llm_text(getattr(m, "content", ""))
         if getattr(m, "type", None) == "human" and not last_user:
             last_user = str(getattr(m, "content", ""))
         if last_user and last_ai:
             break
+    return last_user, last_ai
+
+
+def _flush_session_memory(session_id: str, messages: list) -> None:
+    from services.memory_flush import maybe_flush_before_compaction
+
+    last_user, last_ai = _last_turn_texts(messages)
     maybe_flush_before_compaction(
         session_id=session_id,
-        messages=msgs,
+        messages=messages,
         user_text=last_user,
         assistant_text=last_ai,
     )
+
+
+def _reset_session(session_id: str) -> None:
+    drop_session_memory(session_id)
+
+
+def _compact_session(session_id: str) -> None:
+    memory = get_session_memory(session_id)
+    msgs = memory.get_messages()
+    _flush_session_memory(session_id, msgs)
     kept = msgs[-4:]
-    app_state.memory.clear()
+    memory.clear()
     for msg in kept:
-        app_state.memory.add(msg)
+        memory.add(msg)
 
 
 def _telegram_invoke_chat(message: str, session_id: str) -> Dict[str, Any]:
@@ -147,6 +159,10 @@ class InsightRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class ResetRequest(BaseModel):
+    session_id: Optional[str] = None
+
+
 class TelegramUpdate(BaseModel):
     message: Optional[Dict[str, Any]] = None
 
@@ -179,9 +195,17 @@ def list_tools():
 
 
 @app.post("/reset")
-def reset_memory():
-    app_state.memory.clear()
-    return {"status": "Memory wiped."}
+def reset_memory(
+    request: Optional[ResetRequest] = None,
+    x_session_id: Optional[str] = Header(default=None),
+):
+    session_id = (
+        (request.session_id if request else None)
+        or x_session_id
+        or app_state.default_session
+    )
+    existed = drop_session_memory(session_id)
+    return {"status": "Memory wiped.", "session_id": session_id, "existed": existed}
 
 
 @app.post("/chat")
@@ -205,38 +229,21 @@ def _chat_impl(request: ChatRequest, session_id: str) -> Dict[str, Any]:
     _hydrate_memory(session_id)
 
     from services.context_assembly import build_context
-    from services.memory_flush import maybe_flush_before_compaction
     from services.session_context import persist_tool_snapshots, summarize_tool_calls
 
+    memory = get_session_memory(session_id)
     extra_context = build_context(session_id, request.message)
 
     def _on_trim() -> None:
-        msgs = app_state.memory.get_messages()
-        last_user = ""
-        last_ai = ""
-        for m in reversed(msgs):
-            if getattr(m, "type", None) == "ai" and not last_ai:
-                from llm import extract_llm_text
+        _flush_session_memory(session_id, memory.get_messages())
 
-                last_ai = extract_llm_text(getattr(m, "content", ""))
-            if getattr(m, "type", None) == "human" and not last_user:
-                last_user = str(getattr(m, "content", ""))
-            if last_user and last_ai:
-                break
-        maybe_flush_before_compaction(
-            session_id=session_id,
-            messages=msgs,
-            user_text=last_user,
-            assistant_text=last_ai,
-        )
-
-    app_state.memory.set_on_trim(_on_trim)
+    memory.set_on_trim(_on_trim)
 
     user_message = HumanMessage(content=request.message)
-    app_state.memory.add(user_message)
+    memory.add(user_message)
 
     initial_state = {
-        "messages": app_state.memory.get_messages(),
+        "messages": memory.get_messages(),
         "task_type": "chat",
         "iterations": 0,
         "final_answer": "",
@@ -260,9 +267,9 @@ def _chat_impl(request: ChatRequest, session_id: str) -> Dict[str, Any]:
         tool_audit = summarize_tool_calls(output_messages)
         persist_tool_snapshots(session_id, output_messages)
 
-        app_state.memory.clear()
+        memory.clear()
         for msg in output_messages[-16:]:
-            app_state.memory.add(msg)
+            memory.add(msg)
 
         _persist_turn(session_id, request.message, ai_content)
         return {
@@ -296,7 +303,7 @@ def save_note(request: NoteRequest):
 def generate_insight(request: InsightRequest):
     session_id = request.session_id or app_state.default_session
     turns = []
-    for msg in app_state.memory.get_messages():
+    for msg in get_session_memory(session_id).get_messages():
         turns.append(
             {"role": "user" if msg.type == "human" else "assistant", "content": msg.content}
         )

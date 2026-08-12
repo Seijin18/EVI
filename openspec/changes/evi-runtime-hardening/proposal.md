@@ -18,7 +18,13 @@ that everything after Etapa 11 depends on.
   (`services/session_memory.py`, bounded LRU over `session_id`). `_chat_impl`,
   `_reset_session` and `_compact_session` operate on the session's own buffer.
   `session_lane` keeps serializing same-session turns; different sessions no longer
-  share state.
+  share state. Three further leaks in the same family are fixed with it:
+  `BoundedMemory.clear()` does not reset `_on_trim`, so a callback bound to session
+  A's `session_id` by closure keeps firing for session B's `add()`; `_reset_session`
+  ignores its `session_id` argument entirely, so `/reset` on one channel wipes every
+  channel; and `/insight` reads the global buffer regardless of the `session_id` it
+  was asked about. `session_lane._locks` also grows without bound — it gets the same
+  eviction policy as the memory registry.
 - **Auth closes**: `Depends(verify_api_key)` on `/note`, `/insight`, `/reset` and
   `/tools`. New `EVI_REQUIRE_API_KEY` (default `false`) makes an empty `EVI_API_KEY`
   a startup failure instead of silent open access. `GET /` and `GET /health` stay
@@ -32,7 +38,9 @@ that everything after Etapa 11 depends on.
 - **Reproducible image**: pin every dependency in `agent/requirements.txt` (single
   source, `requirements-dev.txt` references it), drop `--reload` from `CMD`.
 - **Thread-safe background LLM**: `build_background_llm` stops mutating
-  `os.environ`; provider selection becomes an explicit argument to `build_llm`.
+  `os.environ`; provider selection becomes an explicit argument to `build_llm`. The
+  three callers also start passing `provider=` to `extract_llm_text`, which today
+  parses a background response using the *chat* provider's content shape.
 - **Failure visibility**: the 35 `except Exception: pass` sites log through one
   `services/soft_fail.py` helper. Behaviour is unchanged — failures stay non-fatal —
   but they stop being invisible.

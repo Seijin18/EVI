@@ -9,8 +9,20 @@
   `EVI_SESSION_MEMORY_MAX` (default 32) with LRU eviction. `max_pairs` stays 8 —
   this change does not alter context length, only ownership.
 - `drop_session_memory(session_id)` for `/reset`.
-- `BoundedMemory` itself is unchanged; `AgentApplicationState.memory` is removed so
-  no call site can accidentally keep using a shared buffer.
+- `AgentApplicationState.memory` is removed so no call site can accidentally keep
+  using a shared buffer.
+- `session_lane._locks` moves into this module under the same cap. `session_lane()`
+  stays exported from `services/session_lane.py` (the public import, used by
+  `main.py` and `tests/unit/test_chat_commands.py`); only the data structure moves.
+
+`BoundedMemory` gains an optional `session_id` and `clear()` now resets `_on_trim`.
+Resetting the callback at the source kills the stickiness for good, instead of
+relying on every call site to remember to rebind it.
+
+Note `_chat_impl` re-adds up to 16 messages into a `maxlen=16` deque after
+`clear()`; because `add()` fires `_on_trim` when the buffer is already at capacity,
+the 16th re-add can trigger a spurious flush. Re-adding into a fresh buffer with the
+callback unset (the new `clear()` semantics) removes that too.
 
 Why a registry and not a memory instance per request: `_hydrate_memory` currently
 reloads from Postgres on every turn, so a per-request buffer would work, but the
@@ -44,6 +56,20 @@ timestamp is harmless and changing them would churn golden files.
 
 `TZ=${EVI_TIMEZONE}` on `agent-api` is belt-and-braces: it fixes anything that still
 reads the system clock, but the code no longer depends on it.
+
+### Host ports
+
+Data services bind `127.0.0.1` rather than being unpublished, because the host
+genuinely needs them: `evi-test rag --live-qdrant` hits `localhost:6333`
+(`agent/testing/cli.py`), `scripts/setup-evolution.sh` and the QR manager UI use
+`localhost:8082`, and `docs/testing.md` SCN-E2E-03 connects to Postgres from the
+host.
+
+Postgres moves to host port **5433**: an unrelated `whatbot-db-1` container on this
+machine already publishes `0.0.0.0:5432`, which is why `evi-postgres-1` has been
+down. The container-internal port stays 5432, so the compose-internal
+`DATABASE_URL` (`postgres:5432`) is unchanged; only host-side references move
+(`.env.example`, `docs/testing.md`).
 
 ### Dependency pinning
 

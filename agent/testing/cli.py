@@ -62,6 +62,101 @@ def run_memory() -> bool:
     return _result("memory", ok, f"len={len(msgs)} after bound")
 
 
+def run_sessions() -> bool:
+    """SCN-RT-03/SCN-TEST-11 — interleaved session ids never share memory."""
+    from services.session_memory import (
+        active_session_count,
+        drop_session_memory,
+        get_session_memory,
+        reset_for_tests,
+    )
+
+    prev_max = os.environ.get("EVI_SESSION_MEMORY_MAX")
+    reset_for_tests()
+    detail = "isolated"
+    try:
+        # Interleave two sessions the way two channels would.
+        a = get_session_memory("telegram-A")
+        b = get_session_memory("whatsapp-B")
+        a.add("A1")
+        b.add("B1")
+        a.add("A2")
+        b.add("B2")
+
+        a_msgs = get_session_memory("telegram-A").get_messages()
+        b_msgs = get_session_memory("whatsapp-B").get_messages()
+        ok = a_msgs == ["A1", "A2"] and b_msgs == ["B1", "B2"]
+        if not ok:
+            detail = f"cross-session leak: A={a_msgs} B={b_msgs}"
+
+        # A trim callback bound to one session must not fire for another.
+        fired: list[str] = []
+        a.set_on_trim(lambda: fired.append("A"))
+        a.clear()
+        for i in range(a.max_pairs * 2 + 2):
+            b.add(f"B-{i}")
+        ok = ok and not fired
+        if fired and detail == "isolated":
+            detail = "on_trim leaked across sessions"
+
+        # /reset on one channel must not wipe the other.
+        drop_session_memory("telegram-A")
+        ok = ok and get_session_memory("whatsapp-B").get_messages() != []
+        ok = ok and get_session_memory("telegram-A").get_messages() == []
+
+        # Registry stays bounded.
+        os.environ["EVI_SESSION_MEMORY_MAX"] = "4"
+        for i in range(12):
+            get_session_memory(f"churn-{i}")
+        ok = ok and active_session_count() <= 4
+    except Exception as e:
+        return _result("sessions", False, str(e))
+    finally:
+        reset_for_tests()
+        if prev_max is None:
+            os.environ.pop("EVI_SESSION_MEMORY_MAX", None)
+        else:
+            os.environ["EVI_SESSION_MEMORY_MAX"] = prev_max
+
+    # Optional: same guarantee through the real /chat route. Skipped when the
+    # heavy deps (fastapi/langchain) are absent, e.g. on a bare host python.
+    try:
+        from unittest.mock import MagicMock, patch
+
+        from fastapi.testclient import TestClient
+        from langchain_core.messages import AIMessage
+
+        import main
+        from services.session_memory import reset_for_tests as _reset
+
+        _reset()
+
+        def _fake_invoke(state):
+            return {"messages": [AIMessage(content="ok")], "final_answer": "ok"}
+
+        main.app_state.graph = MagicMock()
+        main.app_state.graph.invoke.side_effect = _fake_invoke
+        with patch("services.context_assembly.build_context", return_value=""), patch(
+            "services.session_context.persist_tool_snapshots"
+        ), patch.dict(os.environ, {"DATABASE_URL": ""}, clear=False):
+            client = TestClient(main.app)
+            client.post("/chat", json={"message": "sou A", "session_id": "http-A"})
+            client.post("/chat", json={"message": "sou B", "session_id": "http-B"})
+            a_http = main.get_session_memory("http-A").get_messages()
+        route_ok = any("sou A" in str(getattr(m, "content", m)) for m in a_http)
+        route_ok = route_ok and not any(
+            "sou B" in str(getattr(m, "content", m)) for m in a_http
+        )
+        if not route_ok:
+            return _result("sessions", False, "/chat leaked between sessions")
+        detail += " + /chat route"
+        _reset()
+    except ImportError:
+        detail += " (route check skipped — no fastapi/langchain)"
+
+    return _result("sessions", ok, detail)
+
+
 def run_file_organizer() -> bool:
     import importlib.util
 
@@ -921,6 +1016,7 @@ def main() -> int:
 
     runners = {
         "memory": run_memory,
+        "sessions": run_sessions,
         "file-organizer": run_file_organizer,
         "calendar": lambda: run_calendar(live_wm),
         "calendar-list": lambda: run_calendar_list(live_wm),
