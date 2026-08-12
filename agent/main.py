@@ -599,6 +599,25 @@ def heartbeat_job(_: None = Depends(verify_api_key)):
     return run_heartbeat()
 
 
+class ImportContactsRequest(BaseModel):
+    path: str
+    apply: bool = False
+
+
+@app.post("/jobs/import-contacts")
+def import_contacts_job(
+    request: ImportContactsRequest, _: None = Depends(verify_api_key)
+):
+    """Import address-book names from a local .vcf. Dry-run unless apply=true.
+
+    The file is read from disk by the agent; its contents never reach an LLM.
+    """
+    from services.vcard_import import import_vcard
+
+    report = import_vcard(request.path, dry_run=not request.apply)
+    return {"ok": True, "summary": report.summary(), **report.__dict__}
+
+
 @app.post("/jobs/contact-learn")
 def contact_learn_job(_: None = Depends(verify_api_key)):
     """Windmill cron target: re-synthesize active contacts (no Evolution backfill)."""

@@ -119,6 +119,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **13** | **Correções pequenas** | **Done** | Retry + motivo nos envios, heartbeat sempre-verdadeiro, eviction do `seen_ids` |
 | **14.1** | **Container smoke no CI** | **Done** | Job `container`, `evi-test container`, guarda de isolamento de volumes |
 | **14.2** | **Cobertura do caminho crítico** | **Done** | poller, evolution_client, db (PG real), webhook Evolution — +62 testes |
+| **17** | **Import de agenda (vCard)** | **Done** | Nomes da agenda por `.vcf`; casamento tolerante ao nono dígito |
 | 15–16 | Injeção de prompt, background | **—** | Ver `openspec/specs/roadmap.md` |
 
 ### Série Runtime v3 (17 Jun 2026) — Done

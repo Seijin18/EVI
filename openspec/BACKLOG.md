@@ -119,6 +119,12 @@ antes do #31.
 |---|--------|--------|-------|
 | 31 | `evi-runtime-hardening` | Done | Arquivado 2026-08-12. Isolamento de sessão (+ 3 vazamentos correlatos: `_on_trim` pegajoso, `_reset_session` ignorando o arg, `/insight` global), auth nos 4 endpoints sem `Depends` + `EVI_REQUIRE_API_KEY`, serviços de dados em `127.0.0.1` (PG→5433, Qdrant com API key), `now_local()` no `_calendar_block`, deps pinadas (LangChain 0.3→1.3.15 validada), `build_background_llm` sem mutar env, `soft_fail` em 35 sites. Também corrigiu `test_session_lane_serializes`, que passava por timeout de barrier |
 
+## Etapa 17 — import de agenda (12 Ago 2026)
+
+| # | Change | Status | Notas |
+|---|--------|--------|-------|
+| 39 | `evi-contact-vcard-import` | Done | Arquivado 2026-08-12. ~1000 dos 2553 contatos apareciam só como número: o WhatsApp nunca envia os nomes da sua agenda, só o `pushName` que a própria pessoa escolheu. Parser vCard + casamento por `DDD + últimos 8 dígitos` (valida o nono dígito brasileiro; 1192 contatos reais → 1191 chaves, zero colisões). Job local, dry-run por padrão, `pushName` vira alias. |
+
 ## Fila de propostas (pós-#31)
 
 Uma proposta por vez, na ordem — ver [`specs/roadmap.md`](specs/roadmap.md) para o porquê.

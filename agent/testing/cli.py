@@ -79,6 +79,23 @@ def run_container() -> bool:
     return _result("container", proc.returncode == 0, "docker compose smoke")
 
 
+def run_vcard() -> bool:
+    """SCN-MEM-12/13 — parser and ninth-digit matching, offline."""
+    from services.vcard_import import match_key, parse_vcards
+
+    text = (
+        "BEGIN:VCARD\nVERSION:3.0\nFN:Pedro Unna\n"
+        "TEL;TYPE=CELL:+55 11 98765-4321\nEND:VCARD\n"
+    )
+    cards = parse_vcards(text)
+    ok = len(cards) == 1 and cards[0].name == "Pedro Unna"
+    # With and without the Brazilian ninth digit must land on the same key.
+    ok = ok and match_key("5511987654321") == match_key("551187654321")
+    ok = ok and match_key("(11) 98765-4321") == match_key("5511987654321@s.whatsapp.net")
+    ok = ok and match_key("5511987654321") != match_key("5521987654321")
+    return _result("vcard", ok, "parser + match do nono dígito")
+
+
 def run_sessions() -> bool:
     """SCN-RT-03/SCN-TEST-11 — interleaved session ids never share memory."""
     from services.session_memory import (
@@ -1063,6 +1080,7 @@ def main() -> int:
     runners = {
         "memory": run_memory,
         "sessions": run_sessions,
+        "vcard": run_vcard,
         "container": run_container,
         "file-organizer": run_file_organizer,
         "calendar": lambda: run_calendar(live_wm),
