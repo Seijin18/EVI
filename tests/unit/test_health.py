@@ -37,3 +37,41 @@ if __name__ == "__main__":
     test_health_degraded_when_one_fails()
     test_health_route_scn_api_02()
     print("ok")
+
+
+def test_qdrant_auth_failure_is_not_healthy(monkeypatch):
+    """401/403 means reachable but unusable — RAG is broken, so not ok.
+
+    Regression guard: `QDRANT__SERVICE__API_KEY=` (empty) makes Qdrant enable
+    auth with an empty key and 401 everything, which the old `< 500` rule
+    reported as healthy.
+    """
+    import httpx
+
+    from services.health import _check_qdrant
+
+    monkeypatch.setenv("QDRANT_URL", "http://qdrant:6333")
+    monkeypatch.delenv("QDRANT_API_KEY", raising=False)
+
+    class _Resp:
+        status_code = 401
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp())
+    out = _check_qdrant()
+    assert out["ok"] is False
+    assert "401" in out["detail"]
+
+
+def test_qdrant_ok_without_auth(monkeypatch):
+    import httpx
+
+    from services.health import _check_qdrant
+
+    monkeypatch.setenv("QDRANT_URL", "http://qdrant:6333")
+    monkeypatch.delenv("QDRANT_API_KEY", raising=False)
+
+    class _Resp:
+        status_code = 200
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp())
+    assert _check_qdrant()["ok"] is True

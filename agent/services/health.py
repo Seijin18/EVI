@@ -34,6 +34,11 @@ def _check_qdrant() -> dict[str, Any]:
         r = httpx.get(
             f"{url.rstrip('/')}/collections", timeout=_CHECK_TIMEOUT, headers=headers
         )
+        # 401/403 means reachable but our credentials are wrong — RAG is broken,
+        # so it must not be reported as healthy the way a 4xx otherwise would be.
+        if r.status_code in (401, 403):
+            hint = "wrong QDRANT_API_KEY" if key else "auth required but no QDRANT_API_KEY set"
+            return {"ok": False, "detail": f"http {r.status_code} ({hint})"}
         if r.status_code < 500:
             return {"ok": True, "detail": f"http {r.status_code}"}
         return {"ok": False, "detail": f"http {r.status_code}"}

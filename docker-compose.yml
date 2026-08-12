@@ -3,7 +3,11 @@ services:
     image: qdrant/qdrant:latest
     ports: ["127.0.0.1:6333:6333"]
     environment:
-      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:-}
+      # Bare form on purpose: `- VAR=${VAR:-}` would set an EMPTY string, which
+      # Qdrant reads as "auth enabled with an empty key" and then rejects every
+      # request with 401. Without a value here Compose omits the variable, so
+      # auth stays off until you actually set QDRANT__SERVICE__API_KEY in .env.
+      - QDRANT__SERVICE__API_KEY
     volumes:
       - ./data/qdrant:/qdrant/storage
     mem_limit: 1g
@@ -128,7 +132,7 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
       - QDRANT_URL=${QDRANT_URL}
-      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_API_KEY=${QDRANT__SERVICE__API_KEY:-}
       # Code resolves dates via ZoneInfo(EVI_TIMEZONE); TZ is defence in depth.
       - TZ=${EVI_TIMEZONE:-America/Sao_Paulo}
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
