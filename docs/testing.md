@@ -13,6 +13,7 @@ Three tiers:
 | All offline smoke | `./scripts/evi-test smoke` | SCN-E2E-02 |
 | Full stack | `./scripts/evi-test smoke --full` | SCN-E2E-05 |
 | Session isolation | `./scripts/evi-test sessions` | SCN-RT-03, SCN-TEST-11 |
+| Container smoke (sistema montado) | `./scripts/evi-test container` | SCN-CI-02, SCN-CI-03 |
 | Bounded memory (single buffer) | `./scripts/evi-test memory` | — |
 | Session round-trip (Postgres) | `DATABASE_URL=... ./scripts/evi-test session` | — |
 | WhatsApp pipeline | `./scripts/evi-test whatsapp --verbose` | SCN-WA-04 |

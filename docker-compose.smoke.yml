@@ -1,0 +1,39 @@
+# Overrides for scripts/evi-container-smoke.sh only.
+#
+# CRITICAL — volumes. The base file bind-mounts `./data/postgres` and
+# `./data/qdrant`. A bind mount ignores the compose project name, so running the
+# smoke under `-p evi-smoke` still points at the DEV data directory. Two postgres
+# instances sharing one data dir corrupt it — which is exactly what happened on
+# 2026-08-12: the smoke instance took the lock file, the dev instance shut down
+# immediately, and the checkpoint record was left invalid. The `!override` +
+# named-volume entries below are what make the isolation real instead of nominal.
+#
+# Ports use `!reset` / `!override` because Compose merges list values by
+# appending: a plain `ports: []` keeps the base entry and collides with a
+# running dev stack.
+#
+# The port-binding assertion deliberately reads the REAL `docker compose config`
+# (no -p, no override), so this file cannot mask a regression there.
+services:
+  postgres:
+    ports: !reset []
+    volumes: !override
+      - smoke-postgres:/var/lib/postgresql/data
+  qdrant:
+    ports: !reset []
+    volumes: !override
+      - smoke-qdrant:/qdrant/storage
+  agent-api:
+    ports: !override
+      - "127.0.0.1::8000"
+    volumes: !override
+      - ./tests/fixtures:/fixtures:ro
+      - ./EVI_WORKSPACE:/workspace:ro
+      - smoke-logs:/logs
+      - smoke-contact-memory:/data/contact_memory
+
+volumes:
+  smoke-postgres:
+  smoke-qdrant:
+  smoke-logs:
+  smoke-contact-memory:

@@ -17,7 +17,13 @@ _here = Path(__file__).resolve()
 _agent_candidate = _here.parents[1]
 if (_agent_candidate / "main.py").is_file():
     AGENT_DIR = _agent_candidate
-    REPO_ROOT = Path(os.getenv("EVI_REPO_ROOT", _agent_candidate.parent))
+    _default_root = _agent_candidate.parent
+    # In the image AGENT_DIR is /app, so .parent is "/" — the same overshoot that
+    # left dev_bridge unable to find its scripts. Fall back to /app itself, which
+    # at least exists; the wrapper injects EVI_REPO_ROOT for the real repo path.
+    if _default_root == Path("/"):
+        _default_root = _agent_candidate
+    REPO_ROOT = Path(os.getenv("EVI_REPO_ROOT", _default_root))
 else:
     REPO_ROOT = _here.parents[2]
     AGENT_DIR = REPO_ROOT / "agent"
@@ -60,6 +66,17 @@ def run_memory() -> bool:
     m.clear()
     ok = ok and len(m.get_messages()) == 0
     return _result("memory", ok, f"len={len(msgs)} after bound")
+
+
+def run_container() -> bool:
+    """Delegates to the shell smoke — one implementation, no drift."""
+    import subprocess
+
+    script = REPO_ROOT / "scripts" / "evi-container-smoke.sh"
+    if not script.is_file():
+        return _result("container", False, f"{script} missing")
+    proc = subprocess.run([str(script)], cwd=str(REPO_ROOT))
+    return _result("container", proc.returncode == 0, "docker compose smoke")
 
 
 def run_sessions() -> bool:
@@ -1053,6 +1070,7 @@ def main() -> int:
     runners = {
         "memory": run_memory,
         "sessions": run_sessions,
+        "container": run_container,
         "file-organizer": run_file_organizer,
         "calendar": lambda: run_calendar(live_wm),
         "calendar-list": lambda: run_calendar_list(live_wm),

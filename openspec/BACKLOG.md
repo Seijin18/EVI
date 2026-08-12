@@ -125,7 +125,7 @@ Uma proposta por vez, na ordem — ver [`specs/roadmap.md`](specs/roadmap.md) pa
 
 | # | Change sugerido | Etapa | Resumo |
 |---|-----------------|-------|--------|
-| 32 | `evi-container-smoke-ci` | 14.1 | `docker compose up agent-api` + `/health` + `/tools` no CI. Teria pego o bug do dev bridge. Vem antes do #33 porque é o que valida a decisão dele. |
+| 32 | `evi-container-smoke-ci` | 14.1 | **Done** — arquivado 2026-08-12. Job `container` no CI + `evi-test container`. Reproduz o bug do dev bridge (`[KNOWN]` #33), acha `testing.cli.REPO_ROOT` = `/` (corrigido) e assegura bind/porta. Durante a implementação, rodá-lo sem isolar volumes corrompeu o Postgres de dev — recuperado com `pg_resetwal`; o script agora **aborta** se detectar bind mount de `./data` em escrita. |
 | 33 | `evi-dev-bridge-decision` | 13.1 | Consertar `_REPO_ROOT` (`EVI_REPO_ROOT` + montar repo + `git`/`claude` na imagem) **ou** remover código e spec `dev-bridge`. Decisão do usuário. |
 | 34 | `evi-tool-result-contract` | 13.2 | Resultado tipado (`ok: bool`) no lugar de `if "failed" in result.lower()`. Toca 26 tools + scripts Windmill. |
 | 35 | `evi-test-coverage-core` | 14.2–14.7 | `calendar_tool`, `auth`, `telegram_poller`, `evolution_client`, `session_lane`, `db` (PG efêmero no CI). |

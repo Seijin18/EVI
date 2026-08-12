@@ -38,3 +38,14 @@ jobs:
           EVI_CONTACT_MEMORY_DIR=$(mktemp -d) ./scripts/evi-test contact-memory
           EVI_CONTACT_MEMORY_DIR=$(mktemp -d) ./scripts/evi-test daily-summary
           ./scripts/evi-test commitments
+
+  container:
+    # Separate job: the image build must never delay unit feedback, and a
+    # failure here should read on its own. Asserts the composed system — the
+    # class of defect that reached main twice with a green `smoke` job.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Container smoke
+        run: ./scripts/evi-container-smoke.sh

@@ -34,3 +34,5 @@ logs/
 Thumbs.db
 *~
 *.swp
+data/postgres.bak-*
+data/postgres.broken-*
