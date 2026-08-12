@@ -4,6 +4,7 @@ from langchain_core.tools import tool
 
 from integrations.factory import get_integration
 from services.response_format import format_list_tasks_result, format_task_result
+from services.tool_result import ToolResult, parse_windmill_result
 
 
 def _gtasks_resource() -> str:
@@ -15,19 +16,35 @@ def _gtasks_resource() -> str:
     return gtasks
 
 
-@tool
-def create_task(title: str, due_date: str = "", notes: str = "") -> str:
-    """
-    Create a Google Task via the configured orchestration backend.
-    """
+def create_task_result(
+    title: str, due_date: str = "", notes: str = ""
+) -> ToolResult:
+    """Structured form of `create_task` — `confirm_commitments` gates a DB write on it."""
     payload = {
         "title": title,
         "due_date": due_date,
         "notes": notes,
         "gtasks": _gtasks_resource(),
     }
-    result = get_integration().post("create_task", payload, timeout=180, wait_result=True)
-    return format_task_result(title, result)
+    raw = get_integration().post("create_task", payload, timeout=180, wait_result=True)
+    out = parse_windmill_result(
+        raw,
+        action=f"criar a tarefa «{title}»",
+        resource_env="WINDMILL_GTASKS_RESOURCE",
+    )
+    if not out.ok:
+        return out
+    # Prose unchanged: format_task_result still renders the success wording the
+    # tests and the model already expect.
+    return ToolResult.success(format_task_result(title, raw), data=out.data)
+
+
+@tool
+def create_task(title: str, due_date: str = "", notes: str = "") -> str:
+    """
+    Create a Google Task via the configured orchestration backend.
+    """
+    return str(create_task_result(title, due_date, notes))
 
 
 @tool

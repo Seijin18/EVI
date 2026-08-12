@@ -9,14 +9,8 @@ from langchain_core.tools import tool
 from services.commitment_review.digest import format_pending_digest
 from services.response_format import format_confirm_results
 from tools.calendar_time import iso_event_range
-from tools.calendar_tool import schedule_event
-from tools.task_tool import create_task
-
-
-def _tool_succeeded(out: str) -> bool:
-    low = out.lower()
-    # "criad" stem matches both "criado" (Evento criado) and "criada" (Tarefa criada).
-    return "created" in low or "criad" in low
+from tools.calendar_tool import schedule_event_result
+from tools.task_tool import create_task_result
 
 
 @tool
@@ -78,40 +72,36 @@ def confirm_commitments(
             results.append(f"#{cid}: not found or not pending")
             continue
         if row["type"] == "task":
-            out = create_task.invoke(
-                {
-                    "title": row["title"],
-                    "due_date": row.get("due_date") or row.get("event_date") or "",
-                    "notes": (row.get("raw_text") or "")[:500],
-                }
+            out = create_task_result(
+                title=row["title"],
+                due_date=row.get("due_date") or row.get("event_date") or "",
+                notes=(row.get("raw_text") or "")[:500],
             )
-            if _tool_succeeded(out):
+            if out.ok:
                 update_commitment_status(
                     int(cid), "scheduled", confirmed_via=confirmed_via
                 )
                 results.append(f"#{cid}: {out}")
             else:
-                results.append(f"#{cid}: failed — {out[:200]}")
+                results.append(f"#{cid}: failed — {str(out)[:200]}")
             continue
         if row["type"] != "event":
             results.append(f"#{cid}: unsupported type {row['type']}")
             continue
         start, end = iso_event_range(row.get("event_date"), row.get("event_time"))
-        out = schedule_event.invoke(
-            {
-                "title": row["title"],
-                "start_time": start,
-                "end_time": end,
-                "description": (row.get("raw_text") or "")[:500],
-            }
+        out = schedule_event_result(
+            title=row["title"],
+            start_time=start,
+            end_time=end,
+            description=(row.get("raw_text") or "")[:500],
         )
-        if _tool_succeeded(out):
+        if out.ok:
             update_commitment_status(
                 int(cid), "scheduled", confirmed_via=confirmed_via
             )
-            results.append(f"#{cid}: {out[:120]}")
+            results.append(f"#{cid}: {str(out)[:120]}")
         else:
-            results.append(f"#{cid}: failed — {out[:200]}")
+            results.append(f"#{cid}: failed — {str(out)[:200]}")
     return format_confirm_results("\n".join(results))
 
 

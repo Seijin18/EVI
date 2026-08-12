@@ -240,7 +240,9 @@ def run_calendar(live_windmill: bool) -> bool:
                 }
             )
             text = str(r)
-            ok = '"status":"created"' in text or '"status": "created"' in text
+            from services.tool_result import parse_windmill_result
+
+            ok = parse_windmill_result(text, action="verificar").ok
             if not ok and "created in Google Calendar" in text:
                 ok = True
             if not ok and "failed" not in text.lower():
@@ -267,7 +269,9 @@ def run_calendar_list(live_windmill: bool) -> bool:
             text = str(list_calendar_events.invoke({"days_ahead": 7, "limit": 10}))
             ok = "Próximos eventos" in text or "Nenhum evento" in text
             if not ok:
-                ok = "failed" not in text.lower() and "falha" not in text.lower()
+                from services.tool_result import parse_windmill_result
+
+                ok = parse_windmill_result(text, action="verificar").ok
         except ImportError as e:
             return _result("calendar-list", False, str(e))
         except Exception as e:
@@ -290,7 +294,9 @@ def run_tasks(live_windmill: bool) -> bool:
 
             r = create_task.invoke({"title": "EVI test task", "due_date": "2026-06-10"})
             text = str(r)
-            ok = '"status":"created"' in text or '"status": "created"' in text
+            from services.tool_result import parse_windmill_result
+
+            ok = parse_windmill_result(text, action="verificar").ok
         except ImportError as e:
             return _result("tasks", False, str(e))
         except Exception as e:
