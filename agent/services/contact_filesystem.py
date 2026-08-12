@@ -328,7 +328,7 @@ def collect_known_contacts() -> list[dict[str, Any]]:
             )
     except Exception as exc:
         from services.soft_fail import soft_fail
-        soft_fail("contact_filesystem.collect_known_contacts", exc)
+        soft_fail("contact_filesystem.collect_known_contacts.registry_rows", exc)
 
     if memory_enabled():
         for path in list_contact_dirs():
@@ -380,7 +380,7 @@ def collect_known_contacts() -> list[dict[str, Any]]:
                 }
     except Exception as exc:
         from services.soft_fail import soft_fail
-        soft_fail("contact_filesystem.collect_known_contacts", exc)
+        soft_fail("contact_filesystem.collect_known_contacts.commitment_sources", exc)
 
     try:
         from services.contact_registry import merge_db_fields, touch_contact
@@ -399,7 +399,7 @@ def collect_known_contacts() -> list[dict[str, Any]]:
                 row = get_whatsapp_contact(jid)
             except Exception as exc:
                 from services.soft_fail import soft_fail
-                soft_fail("contact_filesystem.collect_known_contacts", exc)
+                soft_fail("contact_filesystem.collect_known_contacts.db_lookup", exc)
             if existing:
                 merged = merge_db_fields(existing, row)
                 by_jid[jid] = merged
@@ -419,7 +419,7 @@ def collect_known_contacts() -> list[dict[str, Any]]:
                 by_jid[jid] = merge_db_fields(base, row)
     except Exception as exc:
         from services.soft_fail import soft_fail
-        soft_fail("contact_filesystem.collect_known_contacts", exc)
+        soft_fail("contact_filesystem.collect_known_contacts.merge", exc)
 
     return sorted(by_jid.values(), key=lambda c: (c.get("label") or c["jid"]).casefold())
 

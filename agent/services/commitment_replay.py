@@ -69,7 +69,7 @@ def _queue_commitment(msg: IncomingMessage, commitment: Commitment) -> bool:
         )
     except Exception as exc:
         from services.soft_fail import soft_fail
-        soft_fail("commitment_replay._queue_commitment", exc)
+        soft_fail("commitment_replay._queue_commitment.ingest_commitment", exc)
     try:
         from services.graph_sync import sync_commitment
 
@@ -83,14 +83,14 @@ def _queue_commitment(msg: IncomingMessage, commitment: Commitment) -> bool:
         )
     except Exception as exc:
         from services.soft_fail import soft_fail
-        soft_fail("commitment_replay._queue_commitment", exc)
+        soft_fail("commitment_replay._queue_commitment.graph_sync", exc)
     try:
         from services.commitment_capture_notify import notify_commitment_captured
 
         notify_commitment_captured(row_id, commitment.title, commitment.type)
     except Exception as exc:
         from services.soft_fail import soft_fail
-        soft_fail("commitment_replay._queue_commitment", exc)
+        soft_fail("commitment_replay._queue_commitment.capture_notify", exc)
     return True
 
 

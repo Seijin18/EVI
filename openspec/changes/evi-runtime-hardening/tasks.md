@@ -31,7 +31,7 @@
   - Files: `agent/tools/calendar_time.py`, `agent/graph.py`, `docker-compose.yml`, `tests/unit/test_calendar_block_tz.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_calendar_block_tz.py -q`
 
-- [ ] 1.7 Pin dependencies; drop `--reload` from `CMD`
+- [x] 1.7 Pin dependencies; drop `--reload` from `CMD`
   - SCN-OPS-05
   - Files: `agent/requirements.txt`, `agent/Dockerfile`, `requirements-dev.txt`
   - Verify: `docker compose build agent-api && ./scripts/evi-test smoke`
@@ -56,7 +56,7 @@
   - Files: `agent/tools/contact_tool.py`, `agent/services/telegram_handler.py`, `agent/services/whatsapp_control.py`, `agent/services/session_context.py`, `agent/services/chat_commands.py` (+ `rag_tool`, `whatsapp_processor`, `telegram_audit`, `contact_registry`, `contact_memory_audit`, `contact_learning`, `commitment_capture_notify` — 1 site each)
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q` + `grep -rzoP "except Exception:\s*\n\s*pass" agent/ | wc -l` is 0
 
-- [ ] 1.10 Spec deltas
+- [x] 1.10 Spec deltas
   - Files: `openspec/changes/evi-runtime-hardening/specs/{agent-api,remote-access,providers,integrations-windmill,testing}/spec.md`
   - Verify: `openspec validate evi-runtime-hardening`
 

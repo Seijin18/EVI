@@ -8,19 +8,19 @@ Histórico das etapas 1–11 (todas concluídas): [`BACKLOG.md`](../BACKLOG.md).
 
 ---
 
-## Etapa 12 — Runtime hardening (bloqueia tudo)
+## Etapa 12 — Runtime hardening — **Done** (12 Ago 2026)
 
-Change ativo: `evi-runtime-hardening`. Nada de feature nova entra antes disto.
+`evi-runtime-hardening`, arquivado 2026-08-12.
 
-| Item | Por quê |
-|------|---------|
-| Isolamento de sessão | `app_state.memory` é global; sessões concorrentes leem histórico uma da outra |
-| Auth em `/note`, `/insight`, `/reset`, `/tools` | Endpoints sem `Depends(verify_api_key)`; `EVI_API_KEY` vazio hoje |
-| Serviços de dados fora de `0.0.0.0` | Postgres, Qdrant (sem auth), Evolution e Neo4j publicados na LAN |
-| Fuso horário na CALENDAR LOOKUP TABLE | `datetime.now()` naive em container UTC → data errada à noite em `America/Sao_Paulo` |
-| Pin de dependências + sem `--reload` | Build não reproduzível; LangChain quebra API entre releases |
-| `build_background_llm` sem mutar `os.environ` | Race: job de background troca o provider sob um `/chat` concorrente |
-| Log nos `except Exception: pass` | 35 falhas silenciosas; modo de falha atual é "nada aconteceu, sem rastro" |
+| Item | Estado |
+|------|--------|
+| Isolamento de sessão | Done — `services/session_memory.py` (LRU por `session_id`). Junto: `_on_trim` deixou de sobreviver a `clear()`, `_reset_session` passou a usar seu argumento, `/insight` deixou de ler o buffer global, e os locks do `session_lane` ganharam teto |
+| Auth em `/note`, `/insight`, `/reset`, `/tools` | Done — `Depends` nos quatro + `EVI_REQUIRE_API_KEY` (default `false`) |
+| Serviços de dados fora de `0.0.0.0` | Done — `127.0.0.1`, PG no host em **5433**, Qdrant com `QDRANT_API_KEY` |
+| Fuso horário na CALENDAR LOOKUP TABLE | Done — `now_local()` com `ZoneInfo(EVI_TIMEZONE)` |
+| Pin de dependências + sem `--reload` | Done — `agent/requirements.txt` (LangChain 0.3 → **1.3.15**, 243 testes verdes na major nova) |
+| `build_background_llm` sem mutar `os.environ` | Done — provider explícito; `extract_llm_text` também recebe o provider certo |
+| Log nos `except Exception: pass` | Done — `services/soft_fail.py`, 35 sites, zero restantes |
 
 ---
 

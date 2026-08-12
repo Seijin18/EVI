@@ -19,26 +19,24 @@
 | Ops (health, metrics, CI) | **Done** |
 | Autonomia (heartbeat, background LLM, session lane) | **Done** (17 Jun 2026) |
 | Dev bridge multi-CLI (WhatsApp/Telegram → Claude Code CLI) | **Quebrado no container** — ver nota abaixo |
-| Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Ativo** (`evi-runtime-hardening`) |
+| Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Done** (12 Ago 2026) |
 | Roadmap deferido | Ver tabela abaixo |
 
-**Foco atual:** fechar `evi-runtime-hardening` (Etapa 12). Nenhuma feature nova antes
-disso — ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
+**Foco atual:** Etapa 13–14 — smoke de container no CI (#32) e decisão do dev bridge
+(#33). Ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de 2026-08-12.** Uma revisão geral do sistema encontrou três itens antes
-> marcados Done que não funcionam como descrito:
-> - **Dev bridge**: `_REPO_ROOT` resolve para `/` dentro do container (`WORKDIR /app`
->   + `parents[2]`), e `scripts/` não está na imagem — `dev approve` sempre falha com
->   `claude-dev-runner.sh missing`. Os testes mockam o backend, então nunca apareceu.
-> - **Fuso horário**: `graph._calendar_block()` usa `datetime.now()` naive num
->   container UTC, enquanto o system prompt manda o modelo confiar nessa tabela
->   literalmente. À noite em `America/Sao_Paulo` o agente fica um dia adiantado.
-> - **Heartbeat**: `_contacts_needing_synthesis` compara `last_ts[:10]` com um trecho
->   de markdown — sempre verdadeiro.
->
-> Além disso: memória de conversa é global entre sessões, `EVI_API_KEY` está vazio e
-> quatro endpoints nunca tiveram `Depends(verify_api_key)`. Detalhes e ordem de
-> correção em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
+> marcados Done que não funcionavam como descrito. Dois foram corrigidos na Etapa 12:
+> - ~~**Fuso horário**~~ — corrigido: `now_local()` com `ZoneInfo(EVI_TIMEZONE)` em
+>   `_calendar_block()` e `iso_event_range()`.
+> - ~~**Memória global entre sessões** e `EVI_API_KEY` vazio com quatro endpoints sem
+>   `Depends`~~ — corrigidos.
+> - **Dev bridge** (aberto): `_REPO_ROOT` resolve para `/` dentro do container
+>   (`WORKDIR /app` + `parents[2]`), e `scripts/` não está na imagem — `dev approve`
+>   sempre falha com `claude-dev-runner.sh missing`. Os testes mockam o backend,
+>   então nunca apareceu. Decisão pendente (#33): consertar ou remover.
+> - **Heartbeat** (aberto): `_contacts_needing_synthesis` compara `last_ts[:10]` com
+>   um trecho de markdown — sempre verdadeiro. Tratado em #36.
 
 ---
 
@@ -87,7 +85,6 @@ disso — ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 | Feature | Prioridade | Referência |
 |---------|------------|------------|
-| Runtime hardening (sessão, auth, fuso, deps) | **Alta — ativo** | `evi-runtime-hardening` |
 | Smoke de container no CI | **Alta** | roadmap 14.1 · BACKLOG #32 |
 | Dev bridge: consertar ou remover | **Alta** | roadmap 13.1 · BACKLOG #33 |
 | Contrato estruturado de tools | Média | roadmap 13.2 · BACKLOG #34 |
@@ -121,7 +118,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **10** | **Runtime v3 + inbox** | **Done** | Workspace, context assembly, delete_by_query, LLM-first control, E2E harness |
 | **10.5** | **Autonomia + memória de contatos** | **Done** | Contact learning, registro Postgres, Evolution discovery, commitment replay, heartbeat, background LLM tiers |
 | **11** | **Dev bridge multi-CLI** | **Parcial** | `agent/devcli/`, backend Claude Code CLI, `dev mode` toggle — **não roda no container** (`_REPO_ROOT` = `/`) |
-| **12** | **Runtime hardening** | **Ativo** | Isolamento de sessão, auth, portas, fuso, pin de deps, log de falhas silenciosas |
+| **12** | **Runtime hardening** | **Done** | Isolamento de sessão, auth nos 4 endpoints abertos, portas em `127.0.0.1` (PG→5433), fuso via `now_local()`, deps pinadas (LangChain 1.3.15), `soft_fail` em 35 sites |
 | 13–16 | Correção, testes, injeção, background | **—** | Ver `openspec/specs/roadmap.md` |
 
 ### Série Runtime v3 (17 Jun 2026) — Done

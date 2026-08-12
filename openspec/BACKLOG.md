@@ -117,7 +117,7 @@ antes do #31.
 
 | # | Change | Status | Notas |
 |---|--------|--------|-------|
-| 31 | `evi-runtime-hardening` | **Ativo** | Isolamento de sessão, auth nos 4 endpoints sem `Depends`, serviços de dados fora de `0.0.0.0`, fuso em `_calendar_block`, pin de deps, `build_background_llm` sem mutar env, log nos `except: pass` |
+| 31 | `evi-runtime-hardening` | Done | Arquivado 2026-08-12. Isolamento de sessão (+ 3 vazamentos correlatos: `_on_trim` pegajoso, `_reset_session` ignorando o arg, `/insight` global), auth nos 4 endpoints sem `Depends` + `EVI_REQUIRE_API_KEY`, serviços de dados em `127.0.0.1` (PG→5433, Qdrant com API key), `now_local()` no `_calendar_block`, deps pinadas (LangChain 0.3→1.3.15 validada), `build_background_llm` sem mutar env, `soft_fail` em 35 sites. Também corrigiu `test_session_lane_serializes`, que passava por timeout de barrier |
 
 ## Fila de propostas (pós-#31)
 
