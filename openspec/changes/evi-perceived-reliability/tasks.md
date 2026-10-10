@@ -29,6 +29,6 @@
   - Files: `tests/sim/scenarios/reliability/`, `tests/sim/sim.env`, `.env.example`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag reliability --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`
 
-- [ ] 3.2 Sincronizar specs, `BACKLOG.md`/`Progress.md`/roadmap e arquivar
+- [x] 3.2 Sincronizar specs, `BACKLOG.md`/`Progress.md`/roadmap e arquivar
   - Files: `openspec/changes/evi-perceived-reliability/`, `openspec/BACKLOG.md`, `Progress.md`, `openspec/specs/roadmap.md`
   - Verify: `openspec validate --specs && PYTHONPATH=agent python3 -m pytest tests/unit -q && ./scripts/evi-sim run --tag critical,adversarial --repeat 3 --llm live && ./scripts/evi-sim run --tag critical --llm replay`

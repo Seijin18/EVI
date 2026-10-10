@@ -52,3 +52,16 @@ Nenhum container. Um processo curto por minuto no host.
 ## Out of scope
 
 Ver `proposal.md`.
+
+## As-built (2026-10-10)
+
+- Watchdog em Python stdlib; alvo padrão `http://127.0.0.1:8002/health` (porta publicada);
+  envio que falha fica pendente e é tentado de novo na próxima execução. Instalação em
+  `docs/operations.md` (timer de usuário; nada instalado pela fila).
+- `/ajuda` só lista exemplos das features ligadas; a pergunta exata "o que você pode
+  fazer?" (e variações) é respondida sem LLM.
+- Ack: destino derivado do `session_id` do turno (`telegram-<chat>` / `whatsapp-<jid>`);
+  no WhatsApp sai com o prefixo do EVI (não volta como eco).
+- OAuth no turno: mapa tool → integração; só em turno real (não teste) e com banco.
+- Simulação: falha `slow:<s>` no fake Windmill; expectativas `messages_min` e
+  `telegram_sent_count_matching`.
