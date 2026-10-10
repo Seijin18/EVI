@@ -50,3 +50,37 @@ if __name__ == "__main__":
     test_messages_v237_array_fixture()
     test_single_message_envelope()
     print("ok")
+
+
+def _audio_body(jid="5511@s.whatsapp.net", **audio):
+    return {
+        "event": "messages.upsert",
+        "data": {
+            "key": {"id": "AUD1", "remoteJid": jid, "fromMe": False},
+            "messageTimestamp": 1767225600,
+            "message": {"audioMessage": {"mimetype": "audio/ogg; codecs=opus", "seconds": 7, **audio}},
+        },
+    }
+
+
+def test_audio_message_is_recognised():
+    msgs = parse_evolution_webhook(_audio_body())
+    assert len(msgs) == 1
+    m = msgs[0]
+    assert m.kind == "audio"
+    assert m.text == ""
+    assert m.audio_seconds == 7
+    assert m.audio_mime == "audio/ogg"
+    assert m.media_key["id"] == "AUD1"
+
+
+def test_audio_mime_defaults_to_ogg():
+    body = _audio_body()
+    del body["data"]["message"]["audioMessage"]["mimetype"]
+    assert parse_evolution_webhook(body)[0].audio_mime == "audio/ogg"
+
+
+def test_text_message_kind_is_text():
+    msgs = parse_evolution_webhook(_load("messages_upsert.json"))
+    assert msgs[0].kind == "text"
+    assert msgs[0].media_key is None

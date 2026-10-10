@@ -7,12 +7,12 @@
 
 ## 2. Entradas
 
-- [ ] 2.1 Telegram: `voice`/`audio` → `getFile` + download → transcrição → `chat()` com eco "🎙️ Entendi"
+- [x] 2.1 Telegram: `voice`/`audio` → `getFile` + download → transcrição → `chat()` com eco "🎙️ Entendi"
   - SCN-VOICE-01, SCN-VOICE-03
   - Files: `agent/services/telegram_handler.py`, `agent/services/telegram_poller.py`, `tests/unit/test_telegram_handler.py`, `tests/unit/test_telegram_poller.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_handler.py tests/unit/test_telegram_poller.py -q`
 
-- [ ] 2.2 WhatsApp controle: `audioMessage` no parser (só JIDs de controle) + `getBase64FromMediaMessage` + transcrição
+- [x] 2.2 WhatsApp controle: `audioMessage` no parser (só JIDs de controle) + `getBase64FromMediaMessage` + transcrição
   - SCN-VOICE-02, SCN-VOICE-05
   - Files: `agent/services/evolution_parser.py`, `agent/services/whatsapp_control.py`, `agent/messaging/evolution.py`, `tests/unit/test_whatsapp_control.py`, `tests/unit/test_evolution_parser.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_whatsapp_control.py tests/unit/test_evolution_parser.py -q` e `./scripts/evi-test whatsapp`

@@ -138,3 +138,120 @@ if __name__ == "__main__":
     test_direct_email_when_handlers_enabled()
     test_processes_gemini_content_blocks()
     print("ok")
+
+
+# --- voice (evi-voice-input SCN-VOICE-01/03) ---------------------------------
+
+import pytest  # noqa: E402
+
+from services import transcribe as _tr  # noqa: E402
+
+_VOICE = {"message": {"chat": {"id": 7}, "voice": {"file_id": "F1", "duration": 5, "file_size": 1000}}}
+
+
+@pytest.fixture
+def voice_env(monkeypatch):
+    monkeypatch.setenv("EVI_VOICE_ENABLED", "true")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "SECRET:TOKEN")
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    with (
+        patch("services.telegram_handler.send_telegram_message", return_value=True) as send,
+        patch("services.telegram_handler._persist_turn"),
+        patch("services.telegram_handler.log_telegram_turn"),
+    ):
+        yield send
+
+
+def test_voice_disabled_replies_without_download(voice_env, monkeypatch):
+    monkeypatch.setenv("EVI_VOICE_ENABLED", "false")
+    with patch("services.telegram_poller.download_file") as dl:
+        out = process_telegram_update(_VOICE, lambda m, s, **k: {})
+    dl.assert_not_called()
+    voice_env.assert_called_once()
+    assert voice_env.call_args.args[0] == _tr.MSG_DISABLED
+    assert out["telegram_sent"] is True
+
+
+def test_voice_too_long_no_download_no_transcribe(voice_env, monkeypatch):
+    monkeypatch.setenv("EVI_VOICE_MAX_SECONDS", "300")
+    update = {"message": {"chat": {"id": 7}, "voice": {"file_id": "F", "duration": 600}}}
+    with (
+        patch("services.telegram_poller.download_file") as dl,
+        patch("services.transcribe.transcribe") as tx,
+    ):
+        process_telegram_update(update, lambda m, s, **k: {})
+    dl.assert_not_called()
+    tx.assert_not_called()
+    assert "passa de" in voice_env.call_args.args[0]
+
+
+def test_voice_ok_invokes_chat_with_voice_kind_and_echo(voice_env):
+    seen = {}
+
+    def chat(msg, sid, input_kind="text"):
+        seen.update(msg=msg, sid=sid, kind=input_kind)
+        return {"response": "Feito.", "tools": []}
+
+    with (
+        patch("services.telegram_poller.get_file_path", return_value="voice/a.oga"),
+        patch("services.telegram_poller.download_file", return_value=b"OGG"),
+        patch(
+            "services.transcribe.transcribe",
+            return_value=_tr.TranscriptionResult(True, "marca dentista"),
+        ) as tx,
+    ):
+        out = process_telegram_update(_VOICE, chat)
+    assert seen == {"msg": "marca dentista", "sid": "telegram-7", "kind": "voice"}
+    assert tx.call_args.args[1] == "audio/ogg"
+    sent = voice_env.call_args.args[0]
+    assert sent.startswith("🎙️ Entendi: marca dentista\n\n")
+    assert sent.endswith("Feito.")
+    assert out["response"] == sent
+
+
+def test_voice_echo_truncated_to_200(voice_env):
+    with (
+        patch("services.telegram_poller.get_file_path", return_value="p"),
+        patch("services.telegram_poller.download_file", return_value=b"x"),
+        patch("services.transcribe.transcribe", return_value=_tr.TranscriptionResult(True, "a" * 500)),
+    ):
+        process_telegram_update(_VOICE, lambda m, s, input_kind="text": {"response": "ok"})
+    first = voice_env.call_args.args[0].split("\n\n")[0]
+    assert len(first) <= len("🎙️ Entendi: ") + 201
+
+
+def test_voice_download_failure_visible_and_token_not_leaked(voice_env, caplog):
+    with patch(
+        "services.telegram_poller.get_file_path",
+        side_effect=RuntimeError("getFile failed: boom <token>"),
+    ):
+        out = process_telegram_update(_VOICE, lambda m, s, **k: {})
+    assert voice_env.call_args.args[0] == _tr.MSG_FAILED
+    assert "SECRET:TOKEN" not in str(out) and "SECRET:TOKEN" not in caplog.text
+
+
+def test_voice_transcription_failure_uses_user_message(voice_env):
+    with (
+        patch("services.telegram_poller.get_file_path", return_value="p"),
+        patch("services.telegram_poller.download_file", return_value=b"x"),
+        patch(
+            "services.transcribe.transcribe",
+            return_value=_tr.TranscriptionResult(False, "", _tr.REASON_EMPTY),
+        ),
+    ):
+        process_telegram_update(_VOICE, lambda m, s, **k: {})
+    assert voice_env.call_args.args[0] == _tr.MSG_EMPTY
+
+
+def test_voice_audio_uses_own_mime_and_other_chat_skipped(voice_env, monkeypatch):
+    update = {"message": {"chat": {"id": 7}, "audio": {"file_id": "A", "mime_type": "audio/mpeg"}}}
+    with (
+        patch("services.telegram_poller.get_file_path", return_value="p"),
+        patch("services.telegram_poller.download_file", return_value=b"x"),
+        patch("services.transcribe.transcribe", return_value=_tr.TranscriptionResult(True, "oi")) as tx,
+    ):
+        process_telegram_update(update, lambda m, s, input_kind="text": {"response": "ok"})
+        assert tx.call_args.args[1] == "audio/mpeg"
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "999")
+        out = process_telegram_update(update, lambda m, s, input_kind="text": {})
+    assert out["skipped"] == "chat not allowed"

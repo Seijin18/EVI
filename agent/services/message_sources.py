@@ -19,6 +19,10 @@ class IncomingMessage:
     is_group: bool = False
     label: str = ""  # pushName or chat display name
     participant: str = ""  # sender JID in group chats
+    kind: str = "text"  # "text" | "audio" (voice note; text stays "")
+    audio_seconds: float | None = None
+    audio_mime: str = ""
+    media_key: dict | None = None  # raw Evolution message key, to fetch the media
 
 
 class MessageSource(ABC):

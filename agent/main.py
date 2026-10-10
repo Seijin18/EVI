@@ -420,7 +420,7 @@ def telegram_webhook(
     flagged = _header_is_test(x_evi_test)
     return process_telegram_update(
         payload,
-        (lambda m, sid: _telegram_invoke_chat(m, sid, True)) if flagged else _telegram_invoke_chat,
+        (lambda m, sid, input_kind="text": _telegram_invoke_chat(m, sid, True, input_kind)) if flagged else _telegram_invoke_chat,
         reset_session=_reset_session,
         compact_session=_compact_session,
     )
@@ -467,6 +467,7 @@ def evolution_webhook(
     control_jids = parse_control_jids()
     control_results: list[dict] = []
     ingest_raw = []
+    audio_activity = []
     for msg in raw:
         if msg.sender in control_jids:
             if is_evi_bot_message(msg.text):
@@ -511,6 +512,10 @@ def evolution_webhook(
             result = process_whatsapp_control_message(
                 jid=msg.sender,
                 text=msg.text,
+                kind=msg.kind,
+                audio_seconds=msg.audio_seconds,
+                audio_mime=msg.audio_mime or "audio/ogg",
+                media_key=msg.media_key,
                 invoke_chat=_whatsapp_control_invoke_chat,
                 reset_session=_reset_session,
                 compact_session=_compact_session,
@@ -529,6 +534,10 @@ def evolution_webhook(
                     "error": result.get("error"),
                 },
             )
+        elif msg.kind == "audio":
+            # Third-party voice notes: never downloaded or transcribed (SCN-VOICE-05).
+            # Only recorded as inbound activity ("[áudio]") for reply debts.
+            audio_activity.append(msg)
         else:
             ingest_raw.append(msg)
 
@@ -536,7 +545,7 @@ def evolution_webhook(
         from services.reply_debts import track_conversation
         from services.whatsapp_processor import reply_debts_enabled
 
-        track_conversation(ingest_raw)
+        track_conversation(ingest_raw + audio_activity)
         if reply_debts_enabled():
             from services.promises import capture_promises
 

@@ -25,6 +25,19 @@ def _text_from_message(data: Dict[str, Any]) -> str:
     return str(msg.get("text") or "")
 
 
+def _audio_info(item: Dict[str, Any]) -> Dict[str, Any] | None:
+    msg = item.get("message") or item
+    audio = msg.get("audioMessage") if isinstance(msg, dict) else None
+    if not isinstance(audio, dict):
+        return None
+    try:
+        seconds = float(audio["seconds"]) if audio.get("seconds") is not None else None
+    except (TypeError, ValueError):
+        seconds = None
+    mime = str(audio.get("mimetype") or "audio/ogg").split(";")[0].strip() or "audio/ogg"
+    return {"seconds": seconds, "mime": mime}
+
+
 def _normalize_messages(data: Any) -> List[Dict[str, Any]]:
     if isinstance(data, list):
         return [item for item in data if isinstance(item, dict)]
@@ -69,7 +82,8 @@ def _records_to_messages(
         from_me = bool(key.get("fromMe") or item.get("fromMe"))
         is_group = "@g.us" in remote
         text = _text_from_message(item)
-        if not text.strip():
+        audio = None if text.strip() else _audio_info(item)
+        if not text.strip() and audio is None:
             continue
         label = str(item.get("pushName") or key.get("pushName") or "")
         participant = str(key.get("participant") or item.get("participant") or "")
@@ -91,6 +105,16 @@ def _records_to_messages(
                 is_group=is_group,
                 label=label,
                 participant=participant,
+                **(
+                    {
+                        "kind": "audio",
+                        "audio_seconds": audio["seconds"],
+                        "audio_mime": audio["mime"],
+                        "media_key": dict(key) if key else {"id": str(msg_id), "remoteJid": remote, "fromMe": from_me},
+                    }
+                    if audio is not None
+                    else {}
+                ),
             )
         )
     return results

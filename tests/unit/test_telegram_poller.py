@@ -241,3 +241,46 @@ def test_api_base_override_used_by_getupdates_and_send(monkeypatch):
     monkeypatch.delenv("TELEGRAM_API_BASE")
     tn.send_telegram_message("hi", chat_id=1)
     assert sent["url"] == "https://api.telegram.org/botTOK/sendMessage"
+
+
+# --- getFile / download (evi-voice-input) ------------------------------------
+
+import io  # noqa: E402
+
+
+def test_get_file_path_and_error_scrubs_token(monkeypatch):
+    monkeypatch.setattr(tp, "_api_get", lambda t, m, p=None: {"result": {"file_path": "voice/x.oga"}})
+    assert tp.get_file_path("TOK", "id") == "voice/x.oga"
+
+    def boom(t, m, p=None):
+        raise urllib.error.URLError(f"https://api/bot{t}/getFile unreachable")
+
+    monkeypatch.setattr(tp, "_api_get", boom)
+    with pytest.raises(RuntimeError) as ei:
+        tp.get_file_path("TOK123", "id")
+    assert "TOK123" not in str(ei.value)
+
+
+def test_download_file_streams_and_aborts_past_limit(monkeypatch):
+    urls = []
+
+    def fake_open(req, timeout):
+        urls.append((req.full_url, timeout))
+        return io.BytesIO(b"a" * 200_000)
+
+    monkeypatch.setattr(tp.urllib.request, "urlopen", fake_open)
+    assert len(tp.download_file("TOK", "voice/x.oga", 300_000)) == 200_000
+    assert urls[0][0].endswith("/file/botTOK/voice/x.oga") and urls[0][1] == 30
+    with pytest.raises(RuntimeError) as ei:
+        tp.download_file("TOK", "voice/x.oga", 100_000)
+    assert "TOK" not in str(ei.value).replace("<token>", "")
+
+
+def test_download_error_scrubs_token(monkeypatch):
+    def fake_open(req, timeout):
+        raise urllib.error.URLError(f"fail {req.full_url}")
+
+    monkeypatch.setattr(tp.urllib.request, "urlopen", fake_open)
+    with pytest.raises(RuntimeError) as ei:
+        tp.download_file("TOK999", "p", 10)
+    assert "TOK999" not in str(ei.value)

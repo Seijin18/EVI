@@ -55,7 +55,8 @@ def track_conversation(messages: Iterable) -> int:
             if msg.from_me:
                 db.record_outbound(jid, ts)
             else:
-                db.record_inbound(jid, ts, msg.text, msg.id)
+                preview = "[áudio]" if getattr(msg, "kind", "text") == "audio" else msg.text
+                db.record_inbound(jid, ts, preview, msg.id)
             recorded += 1
         except Exception as exc:  # noqa: BLE001
             soft_fail("reply_debts.track_message", exc)

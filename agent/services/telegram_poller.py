@@ -34,6 +34,43 @@ def _api_get(token: str, method: str, params: Optional[Dict[str, Any]] = None) -
     return data
 
 
+def _scrub(text: object, token: str) -> str:
+    """Remove the bot token (present in every Bot API URL) from text meant for logs/replies."""
+    out = str(text)
+    return out.replace(token, "<token>") if token else out
+
+
+def get_file_path(token: str, file_id: str) -> str:
+    """Resolve a Telegram file_id to its download path via getFile. Errors never carry the token."""
+    try:
+        data = _api_get(token, "getFile", {"file_id": file_id})
+    except Exception as exc:
+        raise RuntimeError(f"getFile failed: {_scrub(exc, token)}") from None
+    path = (data.get("result") or {}).get("file_path")
+    if not path:
+        raise RuntimeError("getFile returned no file_path")
+    return str(path)
+
+
+def download_file(token: str, file_path: str, max_bytes: int) -> bytes:
+    """Download a file by path, aborting once it passes max_bytes. Errors never carry the token."""
+    url = f"{telegram_api_base()}/file/bot{token}/{file_path.lstrip('/')}"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        buf = bytearray()
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            while True:
+                chunk = resp.read(64 * 1024)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                if len(buf) > max_bytes:
+                    raise ValueError(f"file exceeds {max_bytes} bytes")
+    except Exception as exc:
+        raise RuntimeError(f"download failed: {_scrub(exc, token)}") from None
+    return bytes(buf)
+
+
 def delete_webhook(token: str, drop_pending: bool = False) -> bool:
     try:
         _api_get(token, "deleteWebhook", {"drop_pending_updates": str(drop_pending).lower()})

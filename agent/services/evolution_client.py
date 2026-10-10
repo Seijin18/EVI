@@ -20,4 +20,8 @@ def send_whatsapp_text(jid: str, text: str, *, add_prefix: bool = True) -> SendR
     return _client.send_text(jid, text, add_prefix=add_prefix)
 
 
-__all__ = ["is_evi_bot_message", "format_evi_whatsapp", "send_whatsapp_text", "reply_prefix"]
+def get_whatsapp_media(message_key: dict):
+    return _client.get_media_base64(message_key)
+
+
+__all__ = ["is_evi_bot_message", "format_evi_whatsapp", "send_whatsapp_text", "reply_prefix", "get_whatsapp_media"]

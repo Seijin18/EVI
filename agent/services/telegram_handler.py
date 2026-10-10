@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable, Dict
 
 from llm import extract_llm_text
@@ -37,11 +38,13 @@ def _reply_direct(
     ai_content: str,
     tools: list,
     extra: Dict[str, Any] | None = None,
+    reply_prefix: str = "",
 ) -> Dict[str, Any]:
     from services.send_result import EMPTY_TEXT, send_outcome
 
     ai_content = format_for_telegram(extract_llm_text(ai_content))
-    result = send_telegram_message(ai_content, chat_id=chat_id) if ai_content else False
+    outgoing = f"{reply_prefix}{ai_content}" if ai_content else ""
+    result = send_telegram_message(outgoing, chat_id=chat_id) if outgoing else False
     sent, reason = send_outcome(result)
     if not ai_content:
         reason = EMPTY_TEXT
@@ -55,7 +58,7 @@ def _reply_direct(
     )
     out: Dict[str, Any] = {
         "ok": True,
-        "response": ai_content,
+        "response": outgoing,
         "session_id": session_id,
         "telegram_sent": sent,
     }
@@ -65,6 +68,101 @@ def _reply_direct(
     if extra:
         out.update(extra)
     return out
+
+
+_ECHO_MAX_CHARS = 200
+
+
+def _voice_attachment(message: Dict[str, Any]) -> tuple[Dict[str, Any], str] | None:
+    voice = message.get("voice")
+    if isinstance(voice, dict):
+        return voice, voice.get("mime_type") or "audio/ogg"
+    audio = message.get("audio")
+    if isinstance(audio, dict):
+        return audio, audio.get("mime_type") or "audio/mpeg"
+    return None
+
+
+def _voice_turn(
+    message: Dict[str, Any],
+    attachment: tuple[Dict[str, Any], str],
+    invoke_chat: ChatInvoke,
+) -> Dict[str, Any]:
+    """Voice note -> transcription -> chat(); every outcome produces a visible reply."""
+    import os
+
+    from services import transcribe as tr
+
+    chat_id = message.get("chat", {}).get("id", "telegram")
+    session_id = f"telegram-{chat_id}"
+    configured = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if configured and str(chat_id) != configured:
+        return {"ok": True, "skipped": "chat not allowed"}
+
+    def fail(msg: str, detail: str = "") -> Dict[str, Any]:
+        return _reply_direct(
+            session_id=session_id,
+            chat_id=chat_id,
+            text="[voice]",
+            ai_content=msg,
+            tools=[{"type": "error", "detail": detail[:500]}] if detail else [],
+            extra={"voice": True, "voice_error": detail or msg},
+        )
+
+    try:
+        if not tr.voice_enabled():
+            return fail(tr.MSG_DISABLED)
+        meta, mime = attachment
+        duration = meta.get("duration")
+        if isinstance(duration, (int, float)) and duration > tr.max_seconds():
+            return fail(tr.user_message(tr.TranscriptionResult(False, "", tr.REASON_TOO_LONG)))
+        size = meta.get("file_size")
+        if isinstance(size, (int, float)) and size > tr.MAX_BYTES:
+            return fail(tr.user_message(tr.TranscriptionResult(False, "", tr.REASON_TOO_BIG)))
+
+        token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+        from services.telegram_poller import _scrub, download_file, get_file_path
+
+        try:
+            audio = download_file(token, get_file_path(token, str(meta.get("file_id", ""))), tr.MAX_BYTES)
+        except Exception as exc:
+            return fail(tr.MSG_FAILED, _scrub(exc, token))
+
+        result = tr.transcribe(
+            audio, mime, duration_s=float(duration) if isinstance(duration, (int, float)) else None
+        )
+        if not result.ok:
+            return fail(tr.user_message(result), result.reason)
+
+        text = result.text
+        echo = text if len(text) <= _ECHO_MAX_CHARS else text[:_ECHO_MAX_CHARS].rstrip() + "…"
+        prefix = f"🎙️ Entendi: {echo}\n\n"
+        try:
+            reply = invoke_chat(text, session_id, input_kind="voice")  # type: ignore[call-arg]
+        except Exception as exc:
+            detail = str(exc)
+            return _reply_direct(
+                session_id=session_id,
+                chat_id=chat_id,
+                text=text,
+                ai_content="Não consegui processar sua mensagem agora. " f"Detalhe: {detail[:180]}",
+                tools=[{"type": "error", "detail": detail[:500]}],
+                extra={"error": True, "voice": True},
+                reply_prefix=prefix,
+            )
+        tools = reply.get("tools") or reply.get("output_messages") or []
+        return _reply_direct(
+            session_id=session_id,
+            chat_id=chat_id,
+            text=text,
+            ai_content=reply.get("response") or "",
+            tools=tools if isinstance(tools, list) else [],
+            extra={"llm": True, "voice": True},
+            reply_prefix=prefix,
+        )
+    except Exception as exc:
+        logging.getLogger(__name__).exception("voice turn failed")
+        return fail(tr.MSG_FAILED, type(exc).__name__)
 
 
 def process_telegram_update(
@@ -77,6 +175,9 @@ def process_telegram_update(
     """Process one Telegram update dict; invoke_chat(message, session_id) -> {response: ...}."""
     message = update.get("message") or {}
     if "text" not in message:
+        attachment = _voice_attachment(message)
+        if attachment:
+            return _voice_turn(message, attachment, invoke_chat)
         return {"ok": True, "skipped": "no text"}
 
     text = message["text"]
