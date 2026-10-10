@@ -1,6 +1,6 @@
 ## 1. Esperando sua resposta
 
-- [ ] 1.1 Tabela `wa_conversation_state` + helpers + atualização no webhook para conversas diretas (inclusive `fromMe` sem eco), antes do filtro de processamento; fixture `messages_upsert_from_me.json`
+- [x] 1.1 Tabela `wa_conversation_state` + helpers + atualização no webhook para conversas diretas (inclusive `fromMe` sem eco), antes do filtro de processamento; fixture `messages_upsert_from_me.json`
   - SCN-DEBT-01, SCN-DEBT-02
   - Files: `agent/db.py`, `agent/main.py`, `tests/unit/test_db.py`, `tests/unit/test_reply_debts.py`, `tests/fixtures/evolution/messages_upsert_from_me.json`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reply_debts.py -q` e `DATABASE_URL=<PG efêmero> EVI_TEST_EPHEMERAL_DB=1 PYTHONPATH=agent python3 -m pytest tests/unit/test_db.py -q` — grupo e chat de controle não gravam estado; `fromMe` não entra na extração

@@ -515,6 +515,13 @@ def evolution_webhook(
         else:
             ingest_raw.append(msg)
 
+    try:
+        from services.reply_debts import track_conversation
+
+        track_conversation(ingest_raw)
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("main.evolution_webhook.reply_debts", exc)
+
     messages, filter_stats, dropped = filter_for_processing(ingest_raw, log_dir=log_dir)
 
     for item in dropped:

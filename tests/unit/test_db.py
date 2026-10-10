@@ -718,3 +718,43 @@ def test_create_reminder_stores_monthly_anchor_day(rem_ids):
     d = _mk(rem_ids, due, repeat="daily")
     assert db.get_reminder(m)["anchor_day"] == 31
     assert db.get_reminder(d)["anchor_day"] is None
+
+
+# --- wa_conversation_state (evi-reply-debts) ----------------------------------
+
+
+@pytest.mark.ephemeral_db
+def test_wa_conversation_state_forward_only_and_idempotent():
+    import db
+
+    jid = f"{_uid()}@s.whatsapp.net"
+    t1 = dt.datetime(2026, 6, 3, 10, 0, tzinfo=dt.timezone.utc)
+    t2 = t1 + dt.timedelta(hours=1)
+    db.record_inbound(jid, t2, "x" * 300, "m2")
+    db.record_inbound(jid, t2, "x" * 300, "m2")  # redelivery
+    db.record_inbound(jid, t1, "velha", "m1")  # older: ignored
+    st = db.get_state(jid)
+    assert st["last_in_id"] == "m2" and st["last_in_at"] == t2
+    assert len(st["last_in_preview"]) == 160
+    assert st["last_out_at"] is None
+
+    db.record_outbound(jid, t2)
+    db.record_outbound(jid, t1)  # older: ignored
+    assert db.get_state(jid)["last_out_at"] == t2
+    db.acknowledge(jid, t2)
+    assert db.get_state(jid)["acknowledged_at"] == t2
+    assert any(r["jid"] == jid for r in db.list_states())
+    assert db.get_state("nope@s.whatsapp.net") is None
+
+
+@pytest.mark.ephemeral_db
+def test_wa_conversation_state_outbound_first_then_inbound():
+    import db
+
+    jid = f"{_uid()}@s.whatsapp.net"
+    t = dt.datetime(2026, 6, 3, 10, 0, tzinfo=dt.timezone.utc)
+    db.record_outbound(jid, t)
+    db.record_inbound(jid, t + dt.timedelta(minutes=1), "oi", "m1")
+    st = db.get_state(jid)
+    assert st["last_out_at"] == t and st["last_in_id"] == "m1"
+

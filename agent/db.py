@@ -164,6 +164,15 @@ def _run_migrations() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS reminder_fires_fired_at
                     ON reminder_fires (fired_at);
+                CREATE TABLE IF NOT EXISTS wa_conversation_state (
+                    jid VARCHAR(128) PRIMARY KEY,
+                    last_in_at TIMESTAMPTZ,
+                    last_in_preview TEXT,
+                    last_in_id VARCHAR(128),
+                    last_out_at TIMESTAMPTZ,
+                    acknowledged_at TIMESTAMPTZ,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                );
                 """
             )
         conn.commit()
@@ -1224,3 +1233,70 @@ def reminder_stats(since, until) -> Dict[str, Any]:
 # DROP in _run_migrations() would run on every startup of every install, and
 # tidiness is not worth a destructive automatic statement. Drop by hand if you
 # want them gone:  DROP TABLE IF EXISTS dev_jobs, dev_bridge_state;
+
+
+# --- wa_conversation_state (evi-reply-debts) ---------------------------------
+# One row per direct WhatsApp conversation. Timestamps only move forward, so a
+# webhook redelivery or out-of-order message never regresses the state.
+
+_PREVIEW_MAX = 160
+
+
+def record_inbound(jid: str, ts, preview: str, msg_id: str) -> None:
+    preview = (preview or "")[:_PREVIEW_MAX]
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO wa_conversation_state "
+                "(jid, last_in_at, last_in_preview, last_in_id) "
+                "VALUES (%s, %s, %s, %s) "
+                "ON CONFLICT (jid) DO UPDATE SET "
+                "last_in_at = EXCLUDED.last_in_at, "
+                "last_in_preview = EXCLUDED.last_in_preview, "
+                "last_in_id = EXCLUDED.last_in_id, updated_at = now() "
+                "WHERE wa_conversation_state.last_in_at IS NULL "
+                "OR EXCLUDED.last_in_at > wa_conversation_state.last_in_at",
+                (jid, ts, preview, msg_id),
+            )
+        conn.commit()
+
+
+def record_outbound(jid: str, ts) -> None:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO wa_conversation_state (jid, last_out_at) VALUES (%s, %s) "
+                "ON CONFLICT (jid) DO UPDATE SET "
+                "last_out_at = GREATEST(wa_conversation_state.last_out_at, EXCLUDED.last_out_at), "
+                "updated_at = now()",
+                (jid, ts),
+            )
+        conn.commit()
+
+
+def acknowledge(jid: str, ts) -> None:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO wa_conversation_state (jid, acknowledged_at) VALUES (%s, %s) "
+                "ON CONFLICT (jid) DO UPDATE SET "
+                "acknowledged_at = GREATEST(wa_conversation_state.acknowledged_at, EXCLUDED.acknowledged_at), "
+                "updated_at = now()",
+                (jid, ts),
+            )
+        conn.commit()
+
+
+def get_state(jid: str) -> Dict[str, Any] | None:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM wa_conversation_state WHERE jid = %s", (jid,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def list_states() -> List[Dict[str, Any]]:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM wa_conversation_state ORDER BY updated_at DESC")
+            return [dict(r) for r in cur.fetchall()]
