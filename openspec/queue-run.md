@@ -1,8 +1,8 @@
 # Execução da fila — iniciada 2026-10-10
 ## Estado
-- Change atual: evi-sim-harness (fase: implementar) — task 4.1
+- Change atual: evi-usage-validation (fase: implementar) — task 1.1
 - Ordem: evi-sim-harness → evi-usage-validation → evi-morning-briefing → evi-reminders → evi-reply-debts → evi-voice-input → evi-perceived-reliability → evi-prompt-injection-model
-- Concluídos: —
+- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..HEAD do archive)
 - Pulados: evi-background-execution (#38) — condicional: "abrir só se o ack imediato do #44 não bastar na prática"; exige dados de uso real
 ## Decisões tomadas sem o usuário
 - 2026-10-10 fila: agentes de projeto (`.claude/agents/`) não estão registrados nesta sessão; usados via `general-purpose` com `model` equivalente (haiku/sonnet/opus) e instrução de seguir o arquivo do agente.
@@ -11,7 +11,9 @@
 - 2026-10-10 evi-sim-harness 3.3: fake Windmill passava `action` (sempre enviado pelo cliente) ao `main()` do script → TypeError; corrigido no fake (Windmill real descarta chaves não declaradas).
 - 2026-10-10 evi-sim-harness 3.3: SIM-RU-09 reescrito ("reunião de condomínio" → "reunião com o síndico") porque o extrator heurístico descarta título genérico "Reunião" e o fallback Ollama está desligado na sim. Comportamento do extrator fica para `evi-reply-debts` (#42), que repensa a extração.
 - 2026-10-10 evi-sim-harness 3.3: SIM-RU-08 1/3 — modelo pedia número completo em vez de chamar `set_whatsapp_contact_name` com final; docstring da tool ajustada (aceita últimos dígitos, chamar direto).
+- 2026-10-10 evi-sim-harness: SIM-RU-05 travou 1/3 live (uma chamada ao Gemini sem retorno em 90 s) → `EVI_LLM_TIMEOUT_SEC` (default 60) no cliente Gemini. Muda produção: turno que antes travava agora tem retry após 60 s.
 ## Pendências do usuário (não bloqueantes)
 - [ ] Criar projeto Gemini separado e definir `EVI_SIM_GEMINI_API_KEY` no `.env` — a simulação hoje consome a cota de produção — `.env`
+- [ ] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf`
 ## Bloqueios
 - —

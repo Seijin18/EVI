@@ -15,8 +15,8 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 
 | # | Change | Etapa | Status | Resumo |
 |---|--------|-------|--------|--------|
-| 45 | `evi-sim-harness` | V1 | **Ativo** | Simulação do sistema montado: imagem de produção, poller/webhook reais, LLM real, scripts Windmill reais; falsos só nas bordas e no relógio. Cenários de uso real, falha e injeção; record/replay na CI |
-| 46 | `evi-usage-validation` | V2 | Proposto (`openspec/queued/`) | Validação com base no uso real: `turn_log`, sinais de resultado, relatório semanal com linha de base, sonda somente-leitura, falha real → cenário de simulação |
+| 45 | `evi-sim-harness` | V1 | **Done** (2026-10-10) | Simulação do sistema montado: imagem de produção, poller/webhook reais, LLM real, scripts Windmill reais; falsos só nas bordas e no relógio. Cenários de uso real, falha e injeção; record/replay na CI |
+| 46 | `evi-usage-validation` | V2 | **Ativo** | Validação com base no uso real: `turn_log`, sinais de resultado, relatório semanal com linha de base, sonda somente-leitura, falha real → cenário de simulação |
 | 40 | `evi-morning-briefing` | 18 | Proposto (`openspec/queued/`) | Briefing matinal determinístico no Telegram; responder age sobre os itens; falha parcial visível. Inclui delimitação de conteúdo externo (parte mínima do #37) |
 | 41 | `evi-reminders` | 19 | Fila | Lembretes com horário e recorrência disparados pelo próprio EVI (loop in-process); adiar/feito por resposta |
 | 42 | `evi-reply-debts` | 20 | Fila | Troca "compromissos" (0/37 confirmados) por: esperando sua resposta (determinístico), promessas suas, combinados com data |

@@ -19,5 +19,4 @@ Ordem: [`BACKLOG.md`](../BACKLOG.md) → "Fila atual".
 
 | Change | Por que está aqui |
 |---|---|
-| [`evi-usage-validation`](evi-usage-validation/proposal.md) | Validação com base no uso real; depende do `evi-sim-harness` (promote → cenário) |
 | [`evi-morning-briefing`](evi-morning-briefing/proposal.md) | Proposto em 2026-10-10 como ativo; recuado para depois dos dois changes de teste, para nascer validado por eles e ter linha de base de uso |

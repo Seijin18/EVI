@@ -47,9 +47,10 @@ mensagens a terceiros por conta própria.
 Um change ativo por vez. Cada item abaixo vira `openspec/changes/<slug>/` quando
 o anterior for arquivado.
 
-### Etapa V1 — Simulação do sistema montado — **ativo**
+### Etapa V1 — Simulação do sistema montado — **Done** (2026-10-10)
 
-Change: [`evi-sim-harness`](../changes/evi-sim-harness/proposal.md).
+Change: [`evi-sim-harness`](../changes/archive/2026-10-10-evi-sim-harness/proposal.md).
+As-built: 21 cenários (real-usage 11, whatsapp 3, failure 3, adversarial 3, smoke 1); `critical` 3/3 live e verdes em replay (job `sim-replay` na CI). Achou e corrigiu: timeout ausente no cliente Gemini, fake Windmill aceitando chaves extras, docstring de `set_whatsapp_contact_name`.
 
 **Por quê.** Os testes atuais mockam o LLM e as integrações; os problemas que
 chegaram ao uso real estavam no sistema montado (tool errada, data relativa
@@ -65,9 +66,9 @@ record/replay do LLM para a CI.
 
 **Pronto quando:** cenários `critical` 3/3 com LLM real e verdes em replay na CI.
 
-### Etapa V2 — Validação com base no uso real — `evi-usage-validation` (proposto)
+### Etapa V2 — Validação com base no uso real — `evi-usage-validation` — **ativo**
 
-Change completo em [`openspec/queued/evi-usage-validation/`](../queued/evi-usage-validation/proposal.md).
+Change: [`evi-usage-validation`](../changes/evi-usage-validation/proposal.md).
 
 **Por quê.** Nada mede se o EVI funciona para o usuário depois de integrado; os
 sinais da revisão de 2026-10-10 só apareceram por consulta manual ao Postgres.

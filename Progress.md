@@ -21,12 +21,12 @@
 | Dev bridge multi-CLI | **Removido** (12 Ago 2026) — nunca rodou no container |
 | Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Done** (12 Ago 2026) |
 | Contrato de tools + cobertura do caminho crítico + import vCard | **Done** (12 Ago 2026) |
-| Verificação realista (simulação + validação em uso real) | **Em andamento** — V1 ativa |
+| Verificação realista (simulação + validação em uso real) | **Em andamento** — V1 Done (10 Out 2026), V2 ativa |
 | Assistente proativo (briefing, lembretes, voz) | **Proposto** — Etapa 18 em `openspec/queued/` |
 
-**Foco atual:** #45 `evi-sim-harness` (V1) — simulação do sistema montado, fiel ao uso
-real, sem tocar em conta real. Depois #46 `evi-usage-validation` (V2) e #40
-`evi-morning-briefing` (Etapa 18), ambos já propostos em `openspec/queued/`. Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
+**Foco atual:** #46 `evi-usage-validation` (V2) — validação com base no uso real.
+#45 `evi-sim-harness` (V1) arquivado em 2026-10-10. Depois #40 `evi-morning-briefing`
+(Etapa 18), já proposto em `openspec/queued/`. Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
 porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de produto de 2026-10-10** ([`docs/ux-review-2026-10.md`](docs/ux-review-2026-10.md)).
@@ -93,6 +93,7 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 | Heartbeat + background LLM tiers | `services/heartbeat.py`, `build_background_llm()` |
 | `list_calendars` LangGraph tool | `agent/tools/calendar_tool.py` |
 
+| Simulação do sistema montado (L2 `evi-sim`) | `./scripts/evi-sim run --tag critical --llm replay` · `testing` SCN-SIM-01..09 |
 | Contrato estruturado de tools (`ToolResult`) | `test_tool_result.py` · SCN-TOOL-01/02 |
 | Import de agenda vCard | `test_vcard_import.py` · `data-long-memory` |
 
@@ -100,8 +101,7 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 | Feature | Etapa | Referência |
 |---------|-------|------------|
-| Simulação do sistema montado (`evi-sim`) | V1 · **ativo** | BACKLOG #45 · `openspec/changes/evi-sim-harness/` |
-| Validação com base no uso real | V2 | BACKLOG #46 · `openspec/queued/evi-usage-validation/` |
+| Validação com base no uso real | V2 · **ativo** | BACKLOG #46 · `openspec/changes/evi-usage-validation/` |
 | Briefing matinal no Telegram + delimitação de conteúdo externo | 18 | BACKLOG #40 · `openspec/queued/evi-morning-briefing/` |
 | Lembretes com horário e recorrência | 19 | BACKLOG #41 |
 | Pendências de resposta e promessas (substitui extração de compromissos) | 20 | BACKLOG #42 |
