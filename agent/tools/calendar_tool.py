@@ -71,7 +71,7 @@ def schedule_event_result(
 
 @tool
 def schedule_event(
-    title: str, start_time: str, end_time: str, description: str = ""
+    title: str, start_time: str, end_time: str = "", description: str = ""
 ) -> str:
     """
     Schedule a Google Calendar event via the configured orchestration backend.
@@ -79,10 +79,25 @@ def schedule_event(
     Args:
         title: Event title.
         start_time: Local wall clock (e.g. 2026-06-10T09:00:00) in EVI_TIMEZONE.
-        end_time: Local wall clock end time.
+        end_time: Local wall clock end time. Optional: leave empty when the user gave
+            no end time — the event then lasts 1 hour. Don't ask the user for it.
         description: Optional description.
     """
+    if not (end_time or "").strip():
+        end_time = _default_end(start_time)
     return str(schedule_event_result(title, start_time, end_time, description))
+
+
+def _default_end(start_time: str) -> str:
+    """One hour after ``start_time`` (same wall-clock format); start unchanged if unparsable."""
+    from datetime import datetime, timedelta
+
+    raw = normalize_wall_clock(start_time)
+    try:
+        start = datetime.fromisoformat(raw)
+    except ValueError:
+        return raw
+    return (start + timedelta(hours=1)).isoformat(timespec="seconds")
 
 
 @tool

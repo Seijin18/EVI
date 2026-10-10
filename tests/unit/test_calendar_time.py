@@ -31,3 +31,13 @@ if __name__ == "__main__":
     test_iso_range_no_utc_suffix()
     test_evi_timezone_default()
     print("ok")
+
+
+def test_schedule_event_default_end_is_one_hour_after_start():
+    """No end time from the user → 1 h event, no clarification round-trip."""
+    from tools.calendar_tool import _default_end
+
+    assert _default_end("2026-10-11T10:00:00") == "2026-10-11T11:00:00"
+    assert _default_end("2026-10-11T23:30") == "2026-10-12T00:30:00"
+    assert _default_end("2026-10-11T10:00:00-03:00") == "2026-10-11T11:00:00"
+    assert _default_end("amanhã") == "amanhã"
