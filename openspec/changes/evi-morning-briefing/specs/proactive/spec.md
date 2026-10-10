@@ -37,12 +37,12 @@ Each delivery SHALL be recorded in `briefing_log` with `(day, kind)` unique, `da
 - **AND** a call without a valid API key returns 401
 
 ### Requirement: Replying to the briefing acts on its items
-After a successful delivery, the briefing text SHALL be appended as an assistant message to the session memory of `telegram-<TELEGRAM_CHAT_ID>`, and a tool snapshot named `morning_briefing` SHALL be stored with `{"items": [{"n": <number>, "ref": {...}}]}` where `ref` carries the commitment id, Gmail message id or calendar event id. The bootstrap instructions SHALL tell the model to resolve item numbers from that snapshot.
+After a successful delivery, the briefing text SHALL be appended as an assistant message to the session memory of `telegram-<TELEGRAM_CHAT_ID>`, and a tool snapshot named `morning_briefing` SHALL be stored with `{"kind", "day", "refs": {"<n>": "<kind>:<id>"}}` where each ref carries the commitment id, Gmail message id, task id or calendar event id. The bootstrap instructions SHALL tell the model to resolve item numbers from that snapshot.
 
 #### Scenario: SCN-BRIEF-05
 - **GIVEN** a delivered briefing where item 4 is pending commitment id 12
 - **WHEN** the next Telegram turn is assembled
-- **THEN** the session history ends with the briefing and the SESSION TOOL SNAPSHOTS block maps `4 → {"kind": "commitment", "id": 12}`
+- **THEN** the session history ends with the briefing and the SESSION TOOL SNAPSHOTS block maps `"4": "commitment:12"`
 
 ### Requirement: Briefing is scheduled from Windmill
 A Windmill script `f/integrations/briefing` SHALL POST `/jobs/briefing` with the API key, following the `heartbeat` script's envelope (`{"status": "ok"|"error", ...}`). The schedule itself lives in Windmill and SHALL be documented in `windmill/README.md`, including the optional evening run with `kind=evening`.
