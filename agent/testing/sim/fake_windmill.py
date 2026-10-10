@@ -28,6 +28,7 @@ Faults (``set_faults({op_or_"*": fault})``, per scenario ``faults:``):
                       script's own error path builds the envelope.
 * ``timeout``         sleeps ``timeout_sleep_sec`` (default beyond the agent's
                       longest Windmill timeout, 180s) then answers 504.
+* ``slow:<seconds>``  sleeps that long, then runs the script normally (slow-tool UX).
 * ``http_500``        Windmill answers 500 as for a failed job (script not run).
 * ``malformed_body``  200 with a non-JSON body (script not run).
 
@@ -41,6 +42,7 @@ import inspect
 import io
 import json
 import os
+import re
 import threading
 import time
 import types
@@ -57,6 +59,11 @@ Response = tuple[int, bytes, dict[str, str]]
 DEFAULT_SCRIPTS_DIR = "/windmill/f/integrations"
 DEFAULT_TIMEOUT_SLEEP_SEC = 200.0  # agent's longest Windmill timeout is 180s
 FAULTS = ("oauth_expired", "timeout", "http_500", "malformed_body")
+_SLOW_RE = re.compile(r"^slow:(\d+(?:\.\d+)?)$")
+
+
+def _valid_fault(f: str) -> bool:
+    return f in FAULTS or bool(_SLOW_RE.match(str(f)))
 FAKE_TOKEN = "sim-fake-access-token"
 FAKE_BASE = "http://windmill-sim:8000"
 FAKE_WORKSPACE = "evi"
@@ -123,8 +130,8 @@ class FakeWindmill:
     def set_faults(self, faults: dict[str, str] | None) -> None:
         faults = dict(faults or {})
         for op, f in faults.items():
-            if f not in FAULTS:
-                raise ValueError(f"unknown fault {f!r} for {op!r}; expected one of {FAULTS}")
+            if not _valid_fault(f):
+                raise ValueError(f"unknown fault {f!r} for {op!r}; expected one of {FAULTS} or slow:<seconds>")
         self._faults = faults
 
     def clear_faults(self) -> None:
@@ -201,7 +208,11 @@ class FakeWindmill:
         entry: dict[str, Any] = {"op": op, "payload": payload, "fault": fault, "wait": wait}
         self.calls.append(entry)
 
-        if fault == "timeout":
+        slow = _SLOW_RE.match(fault) if fault else None
+        if slow:
+            self._sleep(float(slow.group(1)))
+            resp = self._execute(op, payload, entry, expired=False)
+        elif fault == "timeout":
             self._sleep(self.timeout_sleep_sec)
             resp = _wm_error(504, "Gateway Timeout", "TimeoutErr")
         elif fault == "http_500":
@@ -212,7 +223,7 @@ class FakeWindmill:
             resp = self._execute(op, payload, entry, expired=(fault == "oauth_expired"))
 
         entry["status"] = resp[0]
-        if fault is None and resp[0] == 200:
+        if (fault is None or slow) and resp[0] == 200:
             try:
                 entry["result"] = json.loads(resp[1])
             except ValueError:

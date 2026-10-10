@@ -24,7 +24,7 @@
 
 ## 3. Simulação e fechamento
 
-- [ ] 3.1 Cenários `SIM-REL-*` (`/ajuda`; Windmill lento → "⏳" antes do resultado; OAuth expirado → aviso uma vez no dia) + `sim.env` + `.env.example`
+- [x] 3.1 Cenários `SIM-REL-*` (`/ajuda`; Windmill lento → "⏳" antes do resultado; OAuth expirado → aviso uma vez no dia) + `sim.env` + `.env.example`
   - SCN-REL-02..04
   - Files: `tests/sim/scenarios/reliability/`, `tests/sim/sim.env`, `.env.example`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag reliability --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`

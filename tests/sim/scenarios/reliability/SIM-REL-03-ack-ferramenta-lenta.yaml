@@ -1,0 +1,18 @@
+id: SIM-REL-03
+title: Confiabilidade - ferramenta lenta gera "⏳" antes do resumo (SCN-REL-03)
+tags: [reliability]
+source: synthetic
+clock: D0 09:00
+seed:
+  gmail:
+    - {id: mail-r1, from: "Ana Exemplo <ana@exemplo.test>", subject: "Orçamento da reforma", snippet: "Segue o orçamento.", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+steps:
+  - fault: {windmill: {summarize_inbox: "slow:8"}}
+  - telegram: "resume meus e-mails"
+    expect:
+      reply_within_s: 120
+      messages_min: 2
+      reply_matches: "^⏳[^\\n]*\\n\\S"
+      tools_called_any: [summarize_inbox]
+      telegram_sent_count_matching: {regex: "⏳", count: 1}
+      outbound_to_third_parties: 0

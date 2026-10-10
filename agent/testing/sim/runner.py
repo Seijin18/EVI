@@ -255,12 +255,15 @@ def observe(ctx: Ctx, step_obs: dict, exp: dict) -> dict:
 
 
 # --------------------------------------------------------------------------- steps
-def _wait_reply(ctx: Ctx, fetch, baseline: int, timeout_s: float) -> tuple[str | None, float | None]:
-    """Poll ``fetch()`` (list of reply texts, in order) until a new one shows up."""
+def _wait_reply(ctx: Ctx, fetch, baseline: int, timeout_s: float, min_count: int = 1) -> tuple[str | None, float | None]:
+    """Poll ``fetch()`` (list of reply texts, in order) until ``min_count`` new ones show up.
+
+    The reply is all messages since ``baseline`` joined by newlines (e.g. a "⏳" ack followed
+    by the real answer), so ``reply_matches`` sees every message of the step."""
     t0 = time.monotonic()
     while time.monotonic() - t0 < timeout_s:
         msgs = fetch()
-        if len(msgs) > baseline:
+        if len(msgs) - baseline >= max(1, min_count):
             time.sleep(SETTLE_S)  # let multi-part replies land
             msgs = fetch()
             return "\n".join(msgs[baseline:]), time.monotonic() - t0
@@ -331,7 +334,7 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
     if step.type == "telegram":
         base = len(_telegram_replies(ctx))
         ctx.fakes("POST", "/_sim/telegram/updates", {"text": step.value})
-        sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _telegram_replies(ctx), base, timeout)
+        sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _telegram_replies(ctx), base, timeout, int(exp.get("messages_min") or 1))
     elif step.type == "telegram_voice":
         base = len(_telegram_replies(ctx))
         body = {"audio_b64": _audio_b64(step.value["file"]), "duration_s": int(step.value.get("duration_s") or DEFAULT_VOICE_SECONDS)}

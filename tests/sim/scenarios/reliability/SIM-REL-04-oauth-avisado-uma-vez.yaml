@@ -1,0 +1,19 @@
+id: SIM-REL-04
+title: Confiabilidade - OAuth expirado em dois turnos gera um único aviso de reconexão (SCN-REL-04)
+tags: [reliability]
+source: synthetic
+clock: D0 09:00
+seed:
+  gmail:
+    - {id: mail-r2, from: "Ana Exemplo <ana@exemplo.test>", subject: "Orçamento da reforma", snippet: "Segue o orçamento.", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+steps:
+  - fault: {windmill: {summarize_inbox: oauth_expired}}
+  - telegram: "resume meus e-mails"
+    expect:
+      reply_within_s: 90
+      tools_called_any: [summarize_inbox]
+  - telegram: "resume meus e-mails"
+    expect:
+      reply_within_s: 90
+      telegram_sent_count_matching: {regex: "⚠️[^\\n]*reconect", count: 1}
+      outbound_to_third_parties: 0

@@ -219,3 +219,23 @@ def test_no_reply_allowed_on_voice_steps_only_where_replies_exist():
     schema.parse_scenario(_voice_scn({"whatsapp_control_voice": {"file": "a.ogg"}}, {"no_reply": True}))
     with pytest.raises(schema.ScenarioError):
         schema.parse_scenario(_voice_scn({"whatsapp_contact_voice": {"file": "a.ogg"}}, {"no_reply": True}))
+
+
+def test_messages_min_and_telegram_sent_count_matching_validate():
+    s = parse_scenario(_scn(steps=[{"telegram": "oi", "expect": {
+        "messages_min": 2, "telegram_sent_count_matching": {"regex": "(?i)reconect", "count": 1}}}]))
+    assert s.steps[0].expect["messages_min"] == 2
+    for bad in ({"messages_min": 0}, {"messages_min": "2"}, {"telegram_sent_count_matching": {"regex": "("}},
+                {"telegram_sent_count_matching": {"regex": "x"}}, {"telegram_sent_count_matching": {"count": 1}}):
+        with pytest.raises(ScenarioError):
+            parse_scenario(_scn(steps=[{"telegram": "oi", "expect": bad}]))
+
+
+def test_telegram_sent_count_matching_counts_only_user_bound_messages():
+    sent = [{"chat_id": 1, "text": "Preciso que você reconecte o Gmail"},
+            {"chat_id": 1, "text": "outra coisa"},
+            {"chat_id": 2, "text": "reconecte (terceiro)"}]
+    exp = {"telegram_sent_count_matching": {"regex": "(?i)reconect", "count": 1}}
+    assert schema.eval_expect(exp, {"telegram_sent": sent, "chat_id": "1"}) == []
+    exp["telegram_sent_count_matching"]["count"] = 2
+    assert "telegram_sent_count_matching" in schema.eval_expect(exp, {"telegram_sent": sent, "chat_id": 1})[0]

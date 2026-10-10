@@ -1,0 +1,12 @@
+id: SIM-REL-02
+title: Confiabilidade - /ajuda lista exemplos das features ligadas, sem ferramentas (SCN-REL-02)
+tags: [reliability]
+source: synthetic
+clock: D0 09:00
+steps:
+  - telegram: "/ajuda"
+    expect:
+      reply_within_s: 90
+      reply_matches: "(?i)lembra|agenda|e-mail"
+      outbound_to_third_parties: 0
+      tools_not_called: [schedule_event, create_task, delete_emails, delete_emails_by_query, summarize_inbox, list_events]

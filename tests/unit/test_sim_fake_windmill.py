@@ -190,6 +190,22 @@ def test_timeout_sleeps_configured_time_then_504():
     assert w.calls[-1]["fault"] == "timeout"
 
 
+def test_slow_fault_sleeps_then_executes_normally():
+    slept = []
+    w = FakeWindmill(FakeGoogle(), scripts_dir=str(SCRIPTS), sleep=slept.append)
+    w.set_faults({"summarize_inbox": "slow:8"})
+    status, raw = run(w, "summarize_inbox", OPS["summarize_inbox"])
+    assert slept == [8.0] and status == 200
+    assert json.loads(raw) is not None and w.calls[-1]["fault"] == "slow:8" and "result" in w.calls[-1]
+
+
+def test_slow_fault_requires_numeric_seconds():
+    w = FakeWindmill(FakeGoogle(), scripts_dir=str(SCRIPTS))
+    for bad in ("slow", "slow:", "slow:abc"):
+        with pytest.raises(ValueError):
+            w.set_faults({"summarize_inbox": bad})
+
+
 def test_default_timeout_sleep_exceeds_agent_timeouts():
     assert FakeWindmill(FakeGoogle(), scripts_dir=str(SCRIPTS)).timeout_sleep_sec > 180
 

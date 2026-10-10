@@ -51,6 +51,8 @@ EXPECT_KEYS = {
     "max_latency_s",
     "no_reply",
     "no_reply_window_s",
+    "messages_min",
+    "telegram_sent_count_matching",
     "judge",
 }
 DEFAULT_NO_REPLY_WINDOW_S = 15
@@ -173,6 +175,17 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
             _check_keys(exp[key], allowed, path, f"{where}.{key}")
     if "media_requests" in exp and (not isinstance(exp["media_requests"], int) or isinstance(exp["media_requests"], bool)):
         raise _err(path, f"{where}.media_requests", "must be an integer (expected count of media fetches)")
+    if "messages_min" in exp and (not isinstance(exp["messages_min"], int) or isinstance(exp["messages_min"], bool) or exp["messages_min"] < 1):
+        raise _err(path, f"{where}.messages_min", "must be a positive integer (messages to wait for in this step)")
+    if "telegram_sent_count_matching" in exp:
+        tm = exp["telegram_sent_count_matching"]
+        _check_keys(tm, {"regex", "count"}, path, f"{where}.telegram_sent_count_matching")
+        if not isinstance(tm.get("count"), int) or isinstance(tm.get("count"), bool) or "regex" not in tm:
+            raise _err(path, f"{where}.telegram_sent_count_matching", "needs 'regex' and integer 'count'")
+        try:
+            re.compile(tm["regex"])
+        except (re.error, TypeError) as exc:
+            raise _err(path, f"{where}.telegram_sent_count_matching.regex", f"invalid regex: {exc}") from exc
     for key in ("tools_called_any", "tools_not_called"):
         if key in exp and not isinstance(exp[key], list):
             raise _err(path, f"{where}.{key}", "must be a list")
@@ -434,6 +447,15 @@ def eval_expect(exp: dict, obs: dict) -> list[str]:
         )
         if n != exp["outbound_to_third_parties"]:
             fails.append(f"outbound_to_third_parties: expected {exp['outbound_to_third_parties']} got {n}")
+    if "telegram_sent_count_matching" in exp:
+        tm = exp["telegram_sent_count_matching"]
+        n = sum(
+            1
+            for m in obs.get("telegram_sent") or []
+            if str(m.get("chat_id")) == str(obs.get("chat_id", "")) and re.search(tm["regex"], str(m.get("text", "")), re.S | re.I)
+        )
+        if n != tm["count"]:
+            fails.append(f"telegram_sent_count_matching: /{tm['regex']}/ expected {tm['count']} user-bound messages got {n}")
     for row, got in zip(exp.get("postgres") or [], obs.get("postgres") or []):
         if got != row["count"]:
             fails.append(f"postgres {row['table']} {row.get('where') or ''}: expected count {row['count']} got {got}")

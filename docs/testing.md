@@ -64,6 +64,11 @@ Lembretes: `./scripts/evi-sim run --tag reminders --repeat 3 --llm live` (o loop
 `expect: {reply_within_s, reply_matches, no_reply}`: captura as mensagens enviadas ao Telegram
 do usuário após a mudança de relógio (saída proativa, sem mensagem do usuário), como o passo `job`.
 `postgres` aceita as tabelas `reminders` e `reminder_fires`.
+Confiabilidade percebida: `./scripts/evi-sim run --tag reliability --repeat 3 --llm live` (sim.env define
+`EVI_SLOW_ACK_SEC=3`). Falha `slow:<segundos>` no Windmill (`fault: {windmill: {summarize_inbox: "slow:8"}}`)
+atrasa e depois executa normalmente. `expect.messages_min: N` espera N mensagens no passo (ex.: "⏳" +
+resposta; `reply_matches` vê todas, unidas por `\n`); `expect.telegram_sent_count_matching: {regex, count}`
+conta as mensagens enviadas ao usuário em todo o cenário.
 Voz: `./scripts/evi-sim run --tag voice --repeat 3 --llm live` (sim.env liga `EVI_VOICE_ENABLED`).
 Passos de voz: `telegram_voice: {file, duration_s?}`, `whatsapp_control_voice: {file, duration_s?}` e
 `whatsapp_contact_voice: {file, duration_s?, jid?, push_name?}`, onde `file` é um nome em
