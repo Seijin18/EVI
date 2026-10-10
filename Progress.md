@@ -22,11 +22,11 @@
 | Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Done** (12 Ago 2026) |
 | Contrato de tools + cobertura do caminho crítico + import vCard | **Done** (12 Ago 2026) |
 | Verificação realista (simulação + validação em uso real) | **Done** (10 Out 2026) — V1 + V2 |
-| Assistente proativo (briefing, lembretes, voz) | **Em andamento** — Etapas 18–20 Done (10 Out 2026), 21 ativa |
+| Assistente proativo (briefing, lembretes, voz) | **Em andamento** — Etapas 18–21 Done (10 Out 2026), 22 ativa |
 
-**Foco atual:** #43 `evi-voice-input` (Etapa 21). Arquivados em 2026-10-10: #45
+**Foco atual:** #44 `evi-perceived-reliability` (Etapa 22). Arquivados em 2026-10-10: #45
 `evi-sim-harness` (V1), #46 `evi-usage-validation` (V2), #40 `evi-morning-briefing` (18),
-#41 `evi-reminders` (19), #42 `evi-reply-debts` (20). Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
+#41 `evi-reminders` (19), #42 `evi-reply-debts` (20), #43 `evi-voice-input` (21). Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
 porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de produto de 2026-10-10** ([`docs/ux-review-2026-10.md`](docs/ux-review-2026-10.md)).
@@ -98,6 +98,7 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 | Briefing matinal no Telegram + guarda `wrap_external` | `./scripts/evi-test briefing` · SIM-BRIEF-01..04 · `proactive` |
 | Lembretes que disparam (loop in-process) | `test_reminders.py`, `test_reminder_loop.py` · SIM-REM-01..05 · `proactive` |
 | Pendências de resposta, promessas e combinados com data | `test_reply_debts.py`, `test_promises.py` · SIM-DEBT-01..06 · `messaging-whatsapp` |
+| Mensagens de voz (Telegram + controle WhatsApp) | `test_transcribe.py` · SIM-VOICE-01..05 · `agent-api` |
 | Contrato estruturado de tools (`ToolResult`) | `test_tool_result.py` · SCN-TOOL-01/02 |
 | Import de agenda vCard | `test_vcard_import.py` · `data-long-memory` |
 
@@ -105,7 +106,6 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 | Feature | Etapa | Referência |
 |---------|-------|------------|
-| Mensagens de voz via Gemini | 21 · **ativo** | BACKLOG #43 · `openspec/changes/evi-voice-input/` |
 | Watchdog externo, `/ajuda`, ack imediato, aviso de OAuth | 22 | BACKLOG #44 |
 | Injeção de prompt — restante | 23 | BACKLOG #37 |
 | Execução em background — restante | 24 | BACKLOG #38 |

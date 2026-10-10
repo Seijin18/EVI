@@ -153,9 +153,10 @@ após duas semanas, desligar a extração por LLM e manter só (a).
 
 **Dependência.** Etapa 18.
 
-### Etapa 21 — Mensagens de voz — `evi-voice-input` — **ativo**
+### Etapa 21 — Mensagens de voz — `evi-voice-input` — **Done** (2026-10-10)
 
-Change: [`evi-voice-input`](../changes/evi-voice-input/proposal.md).
+Change: [`evi-voice-input`](../changes/archive/2026-10-10-evi-voice-input/proposal.md).
+As-built: voz no Telegram e no chat de controle transcrita pelo Gemini com eco; áudio de terceiros nunca baixado. Ligar com `EVI_VOICE_ENABLED=true`.
 
 **Por quê.** No Brasil, áudio é o modo padrão no WhatsApp; Zapia e Luzia nasceram
 transcrevendo áudio. Hoje o EVI ignora `audioMessage`/voice.
@@ -172,7 +173,9 @@ era rodar localmente na GTX 1060 3 GB. Via Gemini não usa GPU e cabe no free ti
 Ressalva: no free tier o Google pode usar o conteúdo para treino — aceitável para
 comandos ditados ao próprio assistente, por isso o limite a áudio do usuário.
 
-### Etapa 22 — Confiabilidade percebida — `evi-perceived-reliability`
+### Etapa 22 — Confiabilidade percebida — `evi-perceived-reliability` — **ativo**
+
+Change: [`evi-perceived-reliability`](../changes/evi-perceived-reliability/proposal.md).
 
 Itens pequenos, independentes, que mudam a confiança no dia a dia.
 
