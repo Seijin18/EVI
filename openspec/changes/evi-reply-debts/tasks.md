@@ -12,7 +12,7 @@
 
 ## 2. Promessas, combinados e briefing
 
-- [ ] 2.1 Heurística de promessas sobre `fromMe` diretas → `pending_commitments` `type='promise'` (só com a flag)
+- [x] 2.1 Heurística de promessas sobre `fromMe` diretas → `pending_commitments` `type='promise'` (só com a flag)
   - SCN-DEBT-04
   - Files: `agent/services/promises.py`, `agent/main.py`, `tests/unit/test_promises.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_promises.py -q` — lista de padrões com positivos e negativos reais anonimizados

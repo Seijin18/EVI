@@ -517,8 +517,13 @@ def evolution_webhook(
 
     try:
         from services.reply_debts import track_conversation
+        from services.whatsapp_processor import reply_debts_enabled
 
         track_conversation(ingest_raw)
+        if reply_debts_enabled():
+            from services.promises import capture_promises
+
+            capture_promises(ingest_raw)
     except Exception as exc:  # noqa: BLE001
         soft_fail("main.evolution_webhook.reply_debts", exc)
 
