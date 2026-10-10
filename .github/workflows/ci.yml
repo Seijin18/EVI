@@ -41,6 +41,7 @@ jobs:
       - name: Unit tests
         env:
           DATABASE_URL: postgresql://evi:ci@127.0.0.1:5432/evidb
+          EVI_TEST_EPHEMERAL_DB: "1"
         run: PYTHONPATH=agent python3 -m pytest tests/unit -q
 
       - name: Offline smoke (evi-test)

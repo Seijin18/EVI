@@ -663,7 +663,7 @@ def heartbeat_job(_: None = Depends(verify_api_key)):
 
 @app.post("/jobs/usage-report")
 def usage_report_job(week: Optional[str] = None, _: None = Depends(verify_api_key)):
-    """Windmill cron target (Sunday 20h): weekly usage report. `?week=YYYY-Www` overrides."""
+    """Windmill cron target (Monday 00:30, week that just closed): weekly usage report. `?week=YYYY-Www` overrides."""
     from services.usage_report import generate_report
 
     try:

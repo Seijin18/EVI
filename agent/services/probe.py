@@ -140,17 +140,26 @@ def _notify(day: date, check: str, reason: str, detail: str) -> bool:
     """One warning per integration per day. Telegram itself can't warn via Telegram."""
     if check == "telegram":
         return False
+    claimed = False
     try:
-        if db.probe_already_notified(day, check):
+        # Claim before sending so overlapping runs cannot double-send.
+        if not db.claim_probe_notification(day, check):
             return False
+        claimed = True
         from services.telegram_notify import send_telegram_message
 
         if not send_telegram_message(_warning_text(check, reason, detail)):
-            return False  # not marked: the next run may try again
+            db.release_probe_notification(day, check)  # next run may try again
+            return False
         db.mark_probe_notified(day, check)
         return True
     except Exception as exc:
         soft_fail("probe.notify", exc)
+        if claimed:
+            try:
+                db.release_probe_notification(day, check)
+            except Exception as rel_exc:
+                soft_fail("probe.notify_release", rel_exc)
         return False
 
 

@@ -1,4 +1,7 @@
-"""Windmill cron: trigger EVI weekly usage report via agent-api."""
+"""Windmill cron: trigger EVI weekly usage report via agent-api.
+
+Schedule: Monday 00:30 local (reports the ISO week that just closed).
+"""
 
 import json
 import os

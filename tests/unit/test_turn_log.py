@@ -6,7 +6,6 @@ thread hop. The DB round-trip tests skip without `DATABASE_URL`.
 """
 
 import operator
-import os
 import sys
 import uuid
 from pathlib import Path
@@ -192,7 +191,7 @@ def test_outcome_outside_a_turn_is_ignored():
 
 # --- real Postgres ----------------------------------------------------------
 
-needs_db = pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="needs DATABASE_URL")
+needs_db = pytest.mark.ephemeral_db
 
 
 @needs_db

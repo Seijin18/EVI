@@ -68,7 +68,8 @@ def parse_week(label: str) -> datetime:
 def default_week_start(now: datetime) -> datetime:
     """ISO week containing (local now - 6 days).
 
-    Sunday 20h reports the week that is ending; Monday-Saturday report the previous full week.
+    A Monday 00:30 run (recommended schedule) reports the week that just closed;
+    Sunday evening would report the week still ending, Tuesday-Saturday the previous full week.
     """
     local = now.astimezone(_tz())
     return _monday_midnight((local - timedelta(days=6)).date())
@@ -383,6 +384,30 @@ def _first_real_turn_ts() -> datetime | None:
     return row[0] if row else None
 
 
+def baseline_path() -> Path:
+    from services.workspace import workspace_root
+
+    return workspace_root() / "reports" / "baseline.json"
+
+
+def _load_baseline() -> Dict[str, Any] | None:
+    import json
+
+    try:
+        data = json.loads(baseline_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and isinstance(data.get("kpis"), dict) else None
+
+
+def _store_baseline(data: Dict[str, Any]) -> None:
+    import json
+
+    path = baseline_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def run_signals_job(now: datetime | None = None) -> Dict[str, Any]:
     """Nightly job body: signals for the last 2 days + retention prune. Idempotent."""
     summary = run_usage_signals()
@@ -415,16 +440,28 @@ def build_report(week_start: datetime, now: datetime | None = None) -> Dict[str,
     r["prev_kpis"] = prev if prev and prev["turns"] else None
 
     def _base():
+        stored = _load_baseline()
+        if stored:
+            return stored
         win = baseline_window(_first_real_turn_ts(), now)
         if not win:
             return None
-        return win, compute_kpis(db.list_turns(*win), weeks=2.0)
+        kpis = compute_kpis(db.list_turns(*win), weeks=2.0)
+        last_day = (win[1] - timedelta(days=1)).date()
+        data = {
+            "start_week": week_label(win[0]),
+            "end_week": week_label(win[1] - timedelta(days=1)),
+            "start": win[0].date().isoformat(),
+            "end": last_day.isoformat(),
+            "computed_at": now.isoformat(),
+            "kpis": kpis,
+        }
+        _store_baseline(data)  # frozen: never recomputed (turn_log is pruned at 180 days)
+        return data
 
     base = _section("baseline", _base)
-    r["base_kpis"] = base[1] if base else None
-    r["baseline_range"] = (
-        f"{base[0][0].date()} a {(base[0][1] - timedelta(days=1)).date()}" if base else None
-    )
+    r["base_kpis"] = base["kpis"] if base else None
+    r["baseline_range"] = f"{base['start']} a {base['end']}" if base else None
 
     r["commitments"] = _section("commitments", lambda: _fetch_commitments(week_start, end))
     r["probes"] = _section(
@@ -453,8 +490,13 @@ def generate_report(week: str | None = None, now: datetime | None = None, notify
     report = build_report(week_start, now)
     md = render_markdown(report)
     path: Path = workspace_root() / "reports" / f"usage-{report['label']}.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(md, encoding="utf-8")
+
+    def _write() -> str:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(md, encoding="utf-8")
+        return str(path)
+
+    written = _section("write_markdown", _write)
 
     summary = render_telegram(report)
     sent = False
@@ -468,7 +510,8 @@ def generate_report(week: str | None = None, now: datetime | None = None, notify
     return {
         "ok": True,
         "week": report["label"],
-        "path": str(path),
+        "path": written,
+        "local_report": written or "relatório local indisponível",
         "telegram_sent": sent,
         "summary": summary,
         "kpis": report["kpis"],

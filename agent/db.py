@@ -120,6 +120,11 @@ def _run_migrations() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS probe_log_day_check
                     ON probe_log (day, check_name);
+                CREATE TABLE IF NOT EXISTS probe_notified (
+                    day DATE NOT NULL,
+                    check_name VARCHAR(64) NOT NULL,
+                    PRIMARY KEY (day, check_name)
+                );
                 """
             )
         conn.commit()
@@ -731,6 +736,33 @@ def probe_already_notified(day, check_name: str) -> bool:
                 (day, check_name),
             )
             return bool(cur.fetchone()[0])
+
+
+def claim_probe_notification(day, check_name: str) -> bool:
+    """Atomically claim the (day, check) warning slot. True only for the first caller."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO probe_notified (day, check_name) VALUES (%s, %s)
+                ON CONFLICT DO NOTHING RETURNING 1
+                """,
+                (day, check_name),
+            )
+            claimed = cur.fetchone() is not None
+        conn.commit()
+    return claimed
+
+
+def release_probe_notification(day, check_name: str) -> None:
+    """Give the claim back (send failed) so the next run can retry."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM probe_notified WHERE day = %s AND check_name = %s",
+                (day, check_name),
+            )
+        conn.commit()
 
 
 def mark_probe_notified(day, check_name: str) -> None:

@@ -233,6 +233,7 @@ def _window():
     return now - timedelta(minutes=5), now + timedelta(minutes=5)
 
 
+@pytest.mark.ephemeral_db
 def test_turn_log_migration_idempotent_and_insert_list():
     import db
 
@@ -254,6 +255,7 @@ def test_turn_log_migration_idempotent_and_insert_list():
     assert rows[0]["signals"] == {}
 
 
+@pytest.mark.ephemeral_db
 def test_turn_log_excludes_test_by_default():
     import db
 
@@ -264,6 +266,7 @@ def test_turn_log_excludes_test_by_default():
     assert [r for r in db.list_turns(since, until, include_test=True) if r["session_id"] == sid]
 
 
+@pytest.mark.ephemeral_db
 def test_feedback_targets_latest_non_command_turn():
     import db
 
@@ -278,6 +281,7 @@ def test_feedback_targets_latest_non_command_turn():
     assert db.set_turn_feedback(f"none-{_uid()}", "bom") is None
 
 
+@pytest.mark.ephemeral_db
 def test_session_turns_around_and_signals():
     import db
 
@@ -294,6 +298,7 @@ def test_session_turns_around_and_signals():
     assert db.get_turn(-1) is None
 
 
+@pytest.mark.ephemeral_db
 def test_probe_log_notified_flag():
     import datetime as dt
 

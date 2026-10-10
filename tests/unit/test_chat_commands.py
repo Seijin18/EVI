@@ -4,6 +4,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 _agent = Path(__file__).resolve().parents[2] / "agent"
 sys.path.insert(0, str(_agent))
 
@@ -112,12 +114,9 @@ def test_feedback_without_turn_or_db_is_soft(monkeypatch):
 PG_URL = os.getenv("DATABASE_URL", "")
 
 
+@pytest.mark.ephemeral_db
 def test_feedback_scn_use_03_real_db(monkeypatch):
     """SCN-USE-03: /ruim <motivo> marks the latest non-command turn."""
-    import pytest
-
-    if not PG_URL:
-        pytest.skip("DATABASE_URL not set")
     import db
 
     monkeypatch.setattr(db, "DATABASE_URL", PG_URL)

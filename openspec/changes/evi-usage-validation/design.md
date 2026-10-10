@@ -67,7 +67,7 @@ calibrar falsos positivos.
 
 ## Relatório semanal
 
-`POST /jobs/usage-report` (domingo 20h via Windmill), período = semana ISO anterior.
+`POST /jobs/usage-report` (segunda 00:30 via Windmill, semana que acabou de fechar; período = semana ISO que contém agora−6 dias, fuso EVI_TIMEZONE).
 
 | KPI | Fonte |
 |---|---|

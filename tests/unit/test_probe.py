@@ -42,6 +42,7 @@ class FakeDB:
     def __init__(self):
         self.rows = []
         self.notified = set()
+        self.claimed = set()
 
     def insert_probe(self, day, check, ok, reason=None, ms=None):
         self.rows.append((day, check, ok, reason, ms))
@@ -53,11 +54,23 @@ class FakeDB:
     def mark_probe_notified(self, day, check):
         self.notified.add((day, check))
 
+    def claim_probe_notification(self, day, check):
+        if (day, check) in self.claimed:
+            return False
+        self.claimed.add((day, check))
+        return True
+
+    def release_probe_notification(self, day, check):
+        self.claimed.discard((day, check))
+
 
 @pytest.fixture
 def env(monkeypatch):
     fake_db = FakeDB()
-    for name in ("insert_probe", "probe_already_notified", "mark_probe_notified"):
+    for name in (
+        "insert_probe", "probe_already_notified", "mark_probe_notified",
+        "claim_probe_notification", "release_probe_notification",
+    ):
         monkeypatch.setattr(db, name, getattr(fake_db, name))
     sent = []
     monkeypatch.setattr(
@@ -202,7 +215,7 @@ def test_probe_module_imports_no_write_path():
 PG_URL = os.getenv("DATABASE_URL", "")
 
 
-@pytest.mark.skipif(not PG_URL, reason="needs DATABASE_URL (ephemeral Postgres)")
+@pytest.mark.ephemeral_db
 def test_scn_use_06_real_db(monkeypatch):
     monkeypatch.setattr(db, "DATABASE_URL", PG_URL)
     db.reset_db_init_for_tests()
@@ -224,3 +237,30 @@ def test_scn_use_06_real_db(monkeypatch):
     assert len(sent) == 1 and "Gmail" in sent[0]
     rows = [r for r in db.list_probes(fake_day, fake_day) if r["check_name"] == "gmail"]
     assert len(rows) == 2 and all(not r["ok"] and r["reason"] == "oauth" for r in rows)
+
+
+@pytest.mark.ephemeral_db
+def test_claim_probe_notification_race_and_release(monkeypatch):
+    import datetime as dt
+    from concurrent.futures import ThreadPoolExecutor
+
+    monkeypatch.setattr(db, "DATABASE_URL", PG_URL)
+    db.reset_db_init_for_tests()
+    db.init_db()
+    day = dt.date(2099, 6, 1)
+    chk = f"race-{time.time_ns()}"
+    try:
+        with ThreadPoolExecutor(4) as ex:
+            results = list(ex.map(lambda _: db.claim_probe_notification(day, chk), range(4)))
+        assert results.count(True) == 1
+        db.release_probe_notification(day, chk)
+        assert db.claim_probe_notification(day, chk) is True
+    finally:
+        db.release_probe_notification(day, chk)
+
+
+def test_notify_releases_claim_when_send_fails(env, monkeypatch):
+    env.install({"summarize_inbox": OAUTH_ERR})
+    monkeypatch.setattr("services.telegram_notify.send_telegram_message", lambda text, chat_id=None: False)
+    probe.run_probe()
+    assert env.db.claimed == set()  # released: the next run may retry

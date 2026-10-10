@@ -5,4 +5,5 @@ markers = [
     "requires_ollama: needs Ollama for inference",
     "requires_n8n: needs live n8n webhook",
     "requires_qdrant: needs Qdrant running",
+    "ephemeral_db: mutates Postgres; runs only with DATABASE_URL and EVI_TEST_EPHEMERAL_DB=1",
 ]

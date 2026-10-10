@@ -1,6 +1,5 @@
 """SCN-USE-05: weekly usage report (pure KPIs + DB-backed endpoint)."""
 
-import os
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -148,7 +147,7 @@ def test_telegram_has_no_user_text_and_max_10_lines():
     assert ur.UNAVAILABLE in ur.render_markdown(r)
 
 
-needs_db = pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="needs DATABASE_URL")
+needs_db = pytest.mark.ephemeral_db
 
 
 @needs_db
@@ -174,14 +173,13 @@ def test_endpoint_end_to_end(tmp_path, monkeypatch):
         ids.append(db.insert_turn(session_id=f"{sid}-{i}", channel="api", user_text=f"consulta unica {i} {sid}",
                                   latency_ms=100 * (i + 1), llm_calls=2))
     for i in range(5):
-        db.insert_turn(session_id=f"evi-test-{i}", channel="api", user_text="teste", is_test=True)
+        ids.append(db.insert_turn(session_id=f"evi-test-{sid}-{i}", channel="api", user_text="teste", is_test=True))
     with db._conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE turn_log SET ts = %s WHERE session_id LIKE %s OR session_id LIKE 'evi-test-%%'",
-                        (start + timedelta(days=1, hours=10), f"{sid}%"))
-            cur.execute("DELETE FROM turn_log WHERE ts >= %s AND ts < %s AND session_id NOT LIKE %s AND NOT is_test",
-                        (start, start + timedelta(days=7), f"{sid}%"))
+        with conn.cursor() as cur:  # only the rows this test inserted (cleaned up by conftest)
+            cur.execute("UPDATE turn_log SET ts = %s WHERE id = ANY(%s)",
+                        (start + timedelta(days=1, hours=10), ids))
         conn.commit()
+    ids = ids[:10]
     for tid in ids[:2]:
         db.update_turn_signals(tid, {"correction": True})
 
@@ -196,8 +194,68 @@ def test_endpoint_end_to_end(tmp_path, monkeypatch):
     assert Path(body["path"]).parent == tmp_path / "reports"
     assert "Turnos para revisar" in md
     assert len(sent) == 1 and len(sent[0].splitlines()) <= 10 and "consulta unica" not in sent[0]
+    assert body["local_report"] == body["path"]
     assert TestClient(main.app).post("/jobs/usage-report?week=bad").status_code == 400
     assert TestClient(main.app).post("/jobs/usage-signals").json()["ok"] is True
+
+
+def test_baseline_is_persisted_and_never_recomputed(tmp_path, monkeypatch):
+    import db
+
+    monkeypatch.setenv("EVI_WORKSPACE", str(tmp_path))
+    first = datetime(2026, 9, 2, 9, tzinfo=TZ)
+    calls = {"n": 0}
+
+    def fake_list(since, until, include_test=False):
+        calls["n"] += 1
+        return seeded_week()
+
+    monkeypatch.setattr(db, "list_turns", fake_list)
+    monkeypatch.setattr(db, "list_probes", lambda *a: [])
+    monkeypatch.setattr(ur, "run_usage_signals", lambda **k: {})
+    monkeypatch.setattr(ur, "prune_turn_log", lambda d=180: 0)
+    monkeypatch.setattr(ur, "_first_real_turn_ts", lambda: first)
+    monkeypatch.setattr(ur, "_fetch_commitments", lambda s, e: {"confirmed": 0, "dismissed": 0, "pending": 0})
+    now = datetime(2026, 10, 10, tzinfo=TZ)
+    r1 = ur.build_report(MON, now)
+    stored = ur._load_baseline()
+    assert stored and stored["start_week"] == "2026-W37" and stored["end_week"] == "2026-W38"
+    assert (tmp_path / "reports" / "baseline.json").exists()
+    assert r1["base_kpis"]["turns"] == 5.0 and r1["baseline_range"] == "2026-09-07 a 2026-09-20"
+    # first turn "moves" (prune drift) and data changes: stored baseline wins
+    monkeypatch.setattr(ur, "_first_real_turn_ts", lambda: datetime(2026, 12, 1, tzinfo=TZ))
+    monkeypatch.setattr(db, "list_turns", lambda *a, **k: [])
+    r2 = ur.build_report(MON, now)
+    assert r2["base_kpis"] == r1["base_kpis"] and r2["baseline_range"] == r1["baseline_range"]
+
+
+def test_baseline_in_formation_writes_nothing(tmp_path, monkeypatch):
+    import db
+
+    monkeypatch.setenv("EVI_WORKSPACE", str(tmp_path))
+    monkeypatch.setattr(db, "list_turns", lambda *a, **k: [])
+    monkeypatch.setattr(db, "list_probes", lambda *a: [])
+    monkeypatch.setattr(ur, "run_usage_signals", lambda **k: {})
+    monkeypatch.setattr(ur, "prune_turn_log", lambda d=180: 0)
+    monkeypatch.setattr(ur, "_first_real_turn_ts", lambda: datetime(2026, 10, 1, tzinfo=TZ))
+    monkeypatch.setattr(ur, "_fetch_commitments", lambda s, e: {"confirmed": 0, "dismissed": 0, "pending": 0})
+    r = ur.build_report(MON, datetime(2026, 10, 10, tzinfo=TZ))
+    assert r["base_kpis"] is None and not (tmp_path / "reports" / "baseline.json").exists()
+
+
+def test_markdown_write_failure_still_sends_summary(tmp_path, monkeypatch):
+    sent = []
+    monkeypatch.setattr(ur, "build_report", lambda ws, now=None: {
+        "label": "2026-W40", "start": MON, "end": MON + timedelta(days=7), "kpis": None, "review": None,
+        "prev_kpis": None, "base_kpis": None, "baseline_range": None, "commitments": None, "probes": None,
+    })
+    blocker = tmp_path / "ws"
+    blocker.write_text("not a dir")  # reports/ cannot be created under a file
+    monkeypatch.setenv("EVI_WORKSPACE", str(blocker))
+    monkeypatch.setattr("services.telegram_notify.send_telegram_message", lambda t, chat_id=None: sent.append(t) or True)
+    out = ur.generate_report(week="2026-W40")
+    assert out["ok"] is True and out["path"] is None and out["local_report"] == "relatório local indisponível"
+    assert len(sent) == 1 and out["telegram_sent"] is True
 
 
 def test_report_lists_new_payload_shapes_without_values():

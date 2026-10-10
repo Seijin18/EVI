@@ -71,6 +71,7 @@ def test_cleanup_prefixes_match_turn_log():
     assert cleanup.TEST_SESSION_PREFIXES == turn_log.TEST_SESSION_PREFIXES
 
 
+@pytest.mark.ephemeral_db
 def test_cleanup_sql_against_postgres():
     psycopg2 = pytest.importorskip("psycopg2")
     try:

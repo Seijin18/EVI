@@ -1,6 +1,5 @@
 """SCN-USE-04: implicit usage signals (pure rules + idempotent job + retention)."""
 
-import os
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -91,7 +90,7 @@ def test_turn_succeeded():
 
 # --- DB-backed --------------------------------------------------------------
 
-needs_db = pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="needs DATABASE_URL")
+needs_db = pytest.mark.ephemeral_db
 
 
 @pytest.fixture
