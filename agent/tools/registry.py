@@ -9,6 +9,7 @@ from tools.rag_tool import (
     ingest_university_pdf,
     query_university_notes,
 )
+from tools.reply_debt_tools import dismiss_reply_debt, list_reply_debts
 from tools.commitment_tools import (
     confirm_commitments,
     dismiss_commitments,
@@ -65,4 +66,6 @@ def get_all_tools():
         cancel_reminder,
         snooze_reminder,
         complete_reminder,
+        list_reply_debts,
+        dismiss_reply_debt,
     ]

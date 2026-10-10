@@ -564,12 +564,14 @@ def evolution_webhook(
     queued_ids: list[int] = []
     try:
         from db import init_db, insert_pending_commitment
+        from services.whatsapp_processor import commitment_status_for
 
         init_db()
         msg_by_id = {m.id: m for m in messages}
         for c in commitments:
             raw = msg_by_id.get(c.source_id)
             raw_text = raw.text if raw else ""
+            c_status = commitment_status_for(c)
             row_id = insert_pending_commitment(
                 source="evolution",
                 source_id=c.source_id,
@@ -582,8 +584,9 @@ def evolution_webhook(
                 raw_text=raw_text,
                 source_chat=raw.sender if raw else "",
                 source_label=raw.label if raw else "",
+                status=c_status,
             )
-            if row_id:
+            if row_id and c_status == "pending":
                 queued_ids.append(row_id)
                 try:
                     from services.contact_filesystem import ingest_commitment

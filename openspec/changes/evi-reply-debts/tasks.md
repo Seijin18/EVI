@@ -5,7 +5,7 @@
   - Files: `agent/db.py`, `agent/main.py`, `tests/unit/test_db.py`, `tests/unit/test_reply_debts.py`, `tests/fixtures/evolution/messages_upsert_from_me.json`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reply_debts.py -q` e `DATABASE_URL=<PG efêmero> EVI_TEST_EPHEMERAL_DB=1 PYTHONPATH=agent python3 -m pytest tests/unit/test_db.py -q` — grupo e chat de controle não gravam estado; `fromMe` não entra na extração
 
-- [ ] 1.2 `services/reply_debts.py` (consulta de pendências, filtro de "ok/👍") + tools `list_reply_debts`, `dismiss_reply_debt` + registro + linha no `AGENTS.md`
+- [x] 1.2 `services/reply_debts.py` (consulta de pendências, filtro de "ok/👍") + tools `list_reply_debts`, `dismiss_reply_debt` + registro + linha no `AGENTS.md`
   - SCN-DEBT-01, SCN-DEBT-03
   - Files: `agent/services/reply_debts.py`, `agent/tools/reply_debt_tools.py`, `agent/tools/registry.py`, `EVI_WORKSPACE/AGENTS.md`, `tests/unit/test_reply_debts.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reply_debts.py -q`
@@ -17,7 +17,7 @@
   - Files: `agent/services/promises.py`, `agent/main.py`, `tests/unit/test_promises.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_promises.py -q` — lista de padrões com positivos e negativos reais anonimizados
 
-- [ ] 2.2 Combinados só com data: itens sem data → `undated` com a flag; listagens mostram só `pending`
+- [x] 2.2 Combinados só com data: itens sem data → `undated` com a flag; listagens mostram só `pending`
   - SCN-DEBT-05
   - Files: `agent/services/whatsapp_processor.py`, `agent/db.py`, `tests/unit/test_whatsapp_processor.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_whatsapp_processor.py -q` e `./scripts/evi-test whatsapp`

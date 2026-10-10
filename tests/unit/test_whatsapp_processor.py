@@ -1,7 +1,11 @@
 from pathlib import Path
 
+import uuid
+
+import pytest
+
 from services.message_sources import IncomingMessage
-from services.whatsapp_processor import _resolve_date, _resolve_time, extract_commitment, process_fixture_file
+from services.whatsapp_processor import Commitment, commitment_status_for, _resolve_date, _resolve_time, extract_commitment, process_fixture_file
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests" / "fixtures" / "whatsapp" / "messages.jsonl"
@@ -145,6 +149,42 @@ def test_extract_volleyball_segunda():
     assert c2 is not None
     assert c2.date == "2026-06-22"
     assert c2.time == "17:00"
+
+
+def _c(date=None, due=None):
+    return Commitment(source_id="x", type="event", title="Jantar", date=date, due=due)
+
+
+def test_status_flag_off_always_pending(monkeypatch):
+    monkeypatch.delenv("EVI_REPLY_DEBTS_ENABLED", raising=False)
+    assert commitment_status_for(_c()) == "pending"
+    assert commitment_status_for(_c(date="2026-06-04")) == "pending"
+
+
+def test_status_flag_on_undated_without_date(monkeypatch):
+    monkeypatch.setenv("EVI_REPLY_DEBTS_ENABLED", "true")
+    assert commitment_status_for(_c()) == "undated"
+    assert commitment_status_for(_c(date="2026-06-04")) == "pending"
+    assert commitment_status_for(_c(due="2026-06-05")) == "pending"
+
+
+@pytest.mark.ephemeral_db
+def test_scn_debt_05_undated_not_listed(monkeypatch):
+    from db import init_db, insert_pending_commitment, list_pending_commitments
+
+    init_db()
+    monkeypatch.setenv("EVI_REPLY_DEBTS_ENABLED", "true")
+    undated = commitment_status_for(_c())
+    rid = insert_pending_commitment(
+        source="evolution", source_id=f"debt05-undated-{uuid.uuid4().hex}", ctype="event", title="Jantar", status=undated
+    )
+    rid2 = insert_pending_commitment(
+        source="evolution", source_id=f"debt05-dated-{uuid.uuid4().hex}", ctype="event", title="Jantar dated",
+        event_date="2099-01-01", status=commitment_status_for(_c(date="2099-01-01")),
+    )
+    ids = {r["id"] for r in list_pending_commitments(limit=500, include_past=True)}
+    assert rid is not None and rid not in ids
+    assert rid2 in ids
 
 
 if __name__ == "__main__":

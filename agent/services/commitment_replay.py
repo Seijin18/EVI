@@ -40,6 +40,9 @@ def _queue_commitment(msg: IncomingMessage, commitment: Commitment) -> bool:
     """Insert pending commitment + side effects. Returns True if new row."""
     from db import init_db, insert_pending_commitment
 
+    from services.whatsapp_processor import commitment_status_for
+
+    status = commitment_status_for(commitment)
     init_db()
     row_id = insert_pending_commitment(
         source="evolution",
@@ -53,9 +56,12 @@ def _queue_commitment(msg: IncomingMessage, commitment: Commitment) -> bool:
         raw_text=msg.text[:2000],
         source_chat=msg.sender,
         source_label=msg.label,
+        status=status,
     )
     if not row_id:
         return False
+    if status != "pending":
+        return False  # undated: stored, but no capture notification / review
     try:
         from services.contact_filesystem import ingest_commitment
 

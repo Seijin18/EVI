@@ -235,6 +235,7 @@ def insert_pending_commitment(
     raw_text: str = "",
     source_chat: str = "",
     source_label: str = "",
+    status: str = "pending",
 ) -> int | None:
     with _conn() as conn:
         with conn.cursor() as cur:
@@ -243,8 +244,8 @@ def insert_pending_commitment(
                 INSERT INTO pending_commitments (
                     source, source_id, type, title,
                     event_date, event_time, due_date,
-                    priority, raw_text, source_chat, source_label
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    priority, raw_text, source_chat, source_label, status
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source, source_id) DO NOTHING
                 RETURNING id
                 """,
@@ -260,6 +261,7 @@ def insert_pending_commitment(
                     raw_text[:2000] if raw_text else None,
                     source_chat or None,
                     source_label or None,
+                    status,
                 ),
             )
             row = cur.fetchone()
@@ -1299,4 +1301,22 @@ def list_states() -> List[Dict[str, Any]]:
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM wa_conversation_state ORDER BY updated_at DESC")
+            return [dict(r) for r in cur.fetchall()]
+
+
+def list_debt_candidates(now, min_age, max_age, limit: int = 200) -> List[Dict[str, Any]]:
+    """Conversations whose last inbound is unanswered and unacknowledged, aged
+    between ``min_age`` and ``max_age`` (timedeltas) relative to ``now``.
+    Oldest first. The closing-message filter is applied by the caller."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT jid, last_in_at, last_in_preview FROM wa_conversation_state "
+                "WHERE last_in_at IS NOT NULL "
+                "AND last_in_at > COALESCE(last_out_at, '-infinity') "
+                "AND last_in_at > COALESCE(acknowledged_at, '-infinity') "
+                "AND last_in_at <= %s AND last_in_at >= %s "
+                "ORDER BY last_in_at ASC LIMIT %s",
+                (now - min_age, now - max_age, limit),
+            )
             return [dict(r) for r in cur.fetchall()]

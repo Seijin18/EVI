@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -232,6 +233,18 @@ def extract_commitment(msg: IncomingMessage) -> Optional[Commitment]:
         confidence=0.8 if ctype == "event" else 0.7,
         priority=classify_priority(text),
     )
+
+
+def reply_debts_enabled() -> bool:
+    """EVI_REPLY_DEBTS_ENABLED, read at call time (default off)."""
+    return os.getenv("EVI_REPLY_DEBTS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def commitment_status_for(commitment: Commitment) -> str:
+    """'undated' for commitments without a resolved event/due date (flag on), else 'pending'."""
+    if reply_debts_enabled() and not (commitment.date or commitment.due):
+        return "undated"
+    return "pending"
 
 
 class WhatsAppProcessor:

@@ -154,3 +154,94 @@ def test_tracking_failure_does_not_break_webhook(client, fake_db):
     with patch("services.reply_debts.track_conversation", side_effect=RuntimeError("x")):
         payload = json.loads((FIXTURES / "messages_upsert.json").read_text())
         assert _post(client, payload).status_code == 200
+
+
+# --- debt query + closing filter (SCN-DEBT-01, SCN-DEBT-03) -------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["ok", "OK!", "okay", "blz", "beleza", "valeu", "vlw", "obrigado", "Obrigada!",
+     "brigado", "muito obrigado", "valeu 👍", "👍", "👍🙏", "de nada", "tmj", "show",
+     "top", "ok, valeu.", "Ok. Obrigado!!", "..."],
+)
+def test_closing_positive(text):
+    assert reply_debts.is_closing_message(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["ok, me manda amanhã?", "consegue me mandar o orçamento?", "valeu, e o prazo?",
+     "obrigado, mas ainda preciso do contrato", "", None, "okupa", "123"],
+)
+def test_closing_negative(text):
+    assert not reply_debts.is_closing_message(text)
+
+
+def test_list_debts_filters_closing_and_formats(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 6, 3, 18, 0, tzinfo=timezone.utc)
+    rows = [
+        {"jid": "a@s.whatsapp.net", "last_in_at": now - timedelta(hours=9),
+         "last_in_preview": "valeu 👍"},
+        {"jid": "b@s.whatsapp.net", "last_in_at": now - timedelta(hours=6),
+         "last_in_preview": "consegue me mandar o orçamento?"},
+    ]
+    seen = {}
+
+    class Db:
+        def init_db(self):
+            pass
+
+        def list_debt_candidates(self, n, mn, mx, limit=200):
+            seen.update(now=n, mn=mn, mx=mx)
+            return rows
+
+        def get_whatsapp_contact(self, jid):
+            return {"display_name": "Fulana"} if jid.startswith("b") else None
+
+    monkeypatch.setitem(sys.modules, "db", Db())
+    monkeypatch.delenv("EVI_REPLY_DEBT_HOURS", raising=False)
+    out = reply_debts.list_debts(now=now)
+    assert [d["name"] for d in out] == ["Fulana"]
+    assert out[0]["preview"].startswith("consegue") and round(out[0]["age_h"]) == 6
+    assert seen["mn"] == timedelta(hours=4) and seen["mx"] == timedelta(days=7)
+
+
+def test_tools_empty_and_listing(monkeypatch):
+    from tools import reply_debt_tools
+
+    monkeypatch.setattr("services.reply_debts.list_debts", lambda **k: [])
+    assert reply_debt_tools.list_reply_debts.invoke({}) == "Ninguém esperando sua resposta."
+    monkeypatch.setattr(
+        "services.reply_debts.list_debts",
+        lambda **k: [{"jid": "b@s.whatsapp.net", "name": "Fulana", "since": None,
+                      "age_h": 6.2, "preview": "manda o orçamento?"}],
+    )
+    out = reply_debt_tools.list_reply_debts.invoke({})
+    assert out.startswith("Fulana — há 6 h: «externo:whatsapp»") and "«/externo»" in out
+
+
+def test_dismiss_tool_resolves_name_and_acknowledges(monkeypatch):
+    from tools import reply_debt_tools
+
+    acked = []
+
+    class Db:
+        def init_db(self):
+            pass
+
+        def acknowledge(self, jid, ts):
+            acked.append(jid)
+
+    monkeypatch.setitem(sys.modules, "db", Db())
+    monkeypatch.setattr(
+        "services.contact_filesystem.resolve_contact_for_query",
+        lambda q: (("b@s.whatsapp.net", "Fulana"), "") if q == "Fulana" else (None, "nada"),
+    )
+    assert "Fulana" in reply_debt_tools.dismiss_reply_debt.invoke({"jid_or_name": "Fulana"})
+    assert acked == ["b@s.whatsapp.net"]
+    assert reply_debt_tools.dismiss_reply_debt.invoke({"jid_or_name": "zzz"}) == "nada"
+    reply_debt_tools.dismiss_reply_debt.invoke({"jid_or_name": "c@s.whatsapp.net"})
+    assert acked[-1] == "c@s.whatsapp.net"

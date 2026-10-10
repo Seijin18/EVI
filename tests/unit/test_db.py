@@ -758,3 +758,28 @@ def test_wa_conversation_state_outbound_first_then_inbound():
     st = db.get_state(jid)
     assert st["last_out_at"] == t and st["last_in_id"] == "m1"
 
+
+
+@pytest.mark.ephemeral_db
+def test_list_debt_candidates_window_and_state_rules():
+    import db
+
+    now = dt.datetime(2026, 6, 10, 12, 0, tzinfo=dt.timezone.utc)
+    h = lambda n: now - dt.timedelta(hours=n)  # noqa: E731
+    u = _uid()
+    cases = {
+        "old": h(30), "mid": h(6), "fresh": h(1), "ancient": h(24 * 9),
+        "replied": h(8), "acked": h(8),
+    }
+    jids = {k: f"{k}{u}@s.whatsapp.net" for k in cases}
+    for k, ts in cases.items():
+        db.record_inbound(jids[k], ts, k, f"m-{k}")
+    db.record_outbound(jids["replied"], h(7))
+    db.acknowledge(jids["acked"], h(7))
+    rows = db.list_debt_candidates(now, dt.timedelta(hours=4), dt.timedelta(days=7))
+    got = [r["jid"] for r in rows if r["jid"].endswith(f"{u}@s.whatsapp.net")]
+    assert got == [jids["old"], jids["mid"]]
+    # a newer inbound after the ack/reply revives the debt
+    db.record_inbound(jids["acked"], h(5), "de novo", "m2")
+    rows = db.list_debt_candidates(now, dt.timedelta(hours=4), dt.timedelta(days=7))
+    assert jids["acked"] in [r["jid"] for r in rows]
