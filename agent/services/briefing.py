@@ -335,6 +335,60 @@ def _telegram_session_id(chat_id: str) -> str:
     return f"telegram-{chat_id}"
 
 
+NO_BRIEFING_TODAY = "não há briefing de hoje para resolver os números"
+
+
+def resolve_briefing_items(
+    numbers: list[int], session_id: str | None = None, kind: str = "commitment"
+) -> tuple[list[int], list[str]]:
+    """Mapeia números do briefing de hoje ("confirma 2") para ids reais.
+
+    Lê o último snapshot ``morning_briefing`` do dia local da sessão (padrão: a do
+    turno atual; fallback: a sessão Telegram configurada). Retorna ``(ids, erros)``.
+    """
+    if session_id is None:
+        from services.turn_log import current_session_id
+
+        session_id = current_session_id()
+    if not session_id:
+        chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+        session_id = _telegram_session_id(chat_id) if chat_id else None
+    nums = [int(n) for n in numbers]
+    refs: dict | None = None
+    if session_id:
+        try:
+            today = now_local().date()
+            tz = now_local().tzinfo
+            for row in db.load_tool_snapshots(session_id, limit=50):
+                if row.get("tool_name") != "morning_briefing":
+                    continue
+                created = datetime.fromisoformat(str(row.get("created_at")))
+                if created.tzinfo is not None and tz is not None:
+                    created = created.astimezone(tz)
+                if created.date() == today:
+                    refs = (row.get("payload") or {}).get("refs") or {}
+                break
+        except Exception as exc:
+            soft_fail("briefing.resolve_items", exc)
+    if refs is None:
+        return [], [NO_BRIEFING_TODAY] if nums else []
+    label = {"commitment": "um compromisso"}.get(kind, f"do tipo {kind}")
+    ids: list[int] = []
+    errors: list[str] = []
+    for n in nums:
+        ref = refs.get(str(n))
+        if ref is None:
+            errors.append(f"item {n} não existe no briefing")
+            continue
+        ref_kind, _, ref_id = str(ref).partition(":")
+        if ref_kind != kind or not ref_id.lstrip("-").isdigit():
+            errors.append(f"item {n} do briefing não é {label}")
+            continue
+        if int(ref_id) not in ids:
+            ids.append(int(ref_id))
+    return ids, errors
+
+
 def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime | None = None) -> dict:
     """Monta e envia o briefing ao Telegram; só o envio propaga falha.
 

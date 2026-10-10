@@ -204,3 +204,50 @@ def test_real_task_success_still_schedules():
     raw = '{"status": "created", "action": "create_task", "task_id": "t1"}'
     out, upd = _confirm(_ROW_TASK, raw)
     upd.assert_called_once()
+
+
+def _briefing_resolver(ids, errors=()):
+    return patch("services.briefing.resolve_briefing_items", return_value=(ids, list(errors)))
+
+
+def test_confirm_briefing_items_maps_to_real_id():
+    rows = [{"id": 1, "type": "task", "title": "Pagar", "due_date": "2026-10-10", "raw_text": ""}]
+    updates = []
+    mock_client = MagicMock()
+    mock_client.post.return_value = '{"status":"created","action":"create_task"}'
+    with patch("db.init_db"), patch("db.list_pending_commitments", return_value=rows), patch(
+        "db.update_commitment_status",
+        side_effect=lambda cid, status, confirmed_via="chat": updates.append((cid, status)) or True,
+    ), patch("tools.task_tool.get_integration", return_value=mock_client), _briefing_resolver([1]):
+        out = confirm_commitments.invoke({"briefing_items": [2]})
+    assert updates == [(1, "scheduled")]
+    assert "#1:" in out and "#2" not in out
+
+
+def test_confirm_briefing_items_reports_resolution_errors():
+    with patch("db.init_db"), patch("db.list_pending_commitments", return_value=[]), _briefing_resolver(
+        [], ["item 3 do briefing não é um compromisso"]
+    ):
+        out = confirm_commitments.invoke({"briefing_items": [3]})
+    assert "item 3 do briefing não é um compromisso" in out
+
+
+def test_dismiss_briefing_items_union_with_ids():
+    updates = []
+    with patch("db.init_db"), patch(
+        "db.update_commitment_status", side_effect=lambda cid, status: updates.append(cid) or True
+    ), _briefing_resolver([1, 5]):
+        out = dismiss_commitments.invoke({"commitment_ids": [5, 7], "briefing_items": [1, 2]})
+    assert updates == [5, 7, 1]
+    assert "Dismissed 3" in out
+
+
+def test_dismiss_briefing_items_without_briefing_today_fall_back_to_ids():
+    from services.briefing import NO_BRIEFING_TODAY
+
+    updates = []
+    with patch("db.init_db"), patch(
+        "db.update_commitment_status", side_effect=lambda cid, status: updates.append(cid) or True
+    ), _briefing_resolver([], [NO_BRIEFING_TODAY]):
+        out = dismiss_commitments.invoke({"briefing_items": [4]})
+    assert updates == [4] and "Dismissed 1" in out

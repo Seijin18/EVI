@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 from langchain_core.tools import tool
 
@@ -52,20 +52,44 @@ def list_scheduled_today(limit: int = 25) -> str:
     return format_scheduled_today(rows)
 
 
+def _merge_briefing_ids(
+    commitment_ids: Optional[List[int]], briefing_items: Optional[List[int]]
+) -> tuple[List[int], List[str]]:
+    ids = [int(c) for c in (commitment_ids or [])]
+    errors: List[str] = []
+    if briefing_items:
+        from services.briefing import NO_BRIEFING_TODAY, resolve_briefing_items
+
+        resolved, errors = resolve_briefing_items(list(briefing_items))
+        if errors == [NO_BRIEFING_TODAY]:
+            # Sem briefing hoje os números só podem ser ids do digest de pendentes
+            # ("confirmar 1,2"); confirm/dismiss validam o id contra os pendentes.
+            resolved, errors = [int(n) for n in briefing_items], []
+        ids += [i for i in resolved if i not in ids]
+    return ids, errors
+
+
 @tool
 def confirm_commitments(
-    commitment_ids: List[int],
+    commitment_ids: Optional[List[int]] = None,
     confirmed_via: str = "chat",
+    briefing_items: Optional[List[int]] = None,
 ) -> str:
     """
     Confirm selected pending commitments: events → Google Calendar, tasks → Google Tasks.
     Marks rows as scheduled on success.
+    If the user refers to numbers from the last briefing ('confirma 2', 'dispensa 1 e 3'),
+    pass them in briefing_items — never as commitment_ids. Otherwise (ids from
+    list_pending_commitments, or the commitment named by title) use commitment_ids and
+    leave briefing_items empty. Never guess numbers: if the user named a commitment by
+    title, call list_pending_commitments first to get its id.
     """
     from db import init_db, list_pending_commitments, update_commitment_status
 
     init_db()
+    commitment_ids, resolve_errors = _merge_briefing_ids(commitment_ids, briefing_items)
     pending = {r["id"]: r for r in list_pending_commitments(limit=100, include_past=True)}
-    results = []
+    results = list(resolve_errors)
     for cid in commitment_ids:
         row = pending.get(int(cid))
         if not row:
@@ -106,13 +130,23 @@ def confirm_commitments(
 
 
 @tool
-def dismiss_commitments(commitment_ids: List[int]) -> str:
-    """Dismiss pending commitments without scheduling."""
+def dismiss_commitments(
+    commitment_ids: Optional[List[int]] = None,
+    briefing_items: Optional[List[int]] = None,
+) -> str:
+    """Dismiss pending commitments without scheduling.
+    If the user refers to numbers from the last briefing ('confirma 2', 'dispensa 1 e 3'),
+    pass them in briefing_items — never as commitment_ids. Otherwise (ids from
+    list_pending_commitments, or the commitment named by title) use commitment_ids and
+    leave briefing_items empty.
+    """
     from db import init_db, update_commitment_status
 
     init_db()
+    commitment_ids, errors = _merge_briefing_ids(commitment_ids, briefing_items)
     n = 0
     for cid in commitment_ids:
         if update_commitment_status(int(cid), "dismissed"):
             n += 1
-    return f"Dismissed {n} commitment(s)."
+    msg = f"Dismissed {n} commitment(s)."
+    return "\n".join([msg, *errors]) if errors else msg

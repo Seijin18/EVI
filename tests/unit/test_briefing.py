@@ -474,3 +474,39 @@ def test_pinned_briefing_snapshot_survives_other_tools(monkeypatch):
     assert "morning_briefing" in session_context.format_tool_snapshots("s")
     monkeypatch.setattr(db, "load_tool_snapshots", lambda sid, limit=5: (rows + [old])[:limit])
     assert "morning_briefing" not in session_context.format_tool_snapshots("s")
+
+
+# ---- resolve_briefing_items --------------------------------------------------
+
+
+def _snap(refs, created="2026-10-10 06:00:00-03:00"):
+    return [{"tool_name": "morning_briefing", "payload": {"kind": "morning", "day": "2026-10-10", "refs": refs}, "created_at": created}]
+
+
+def _resolve(monkeypatch, rows, numbers, **kw):
+    monkeypatch.setattr(briefing, "now_local", lambda: NOW)
+    monkeypatch.setattr(db, "load_tool_snapshots", lambda sid, limit=5: rows)
+    return briefing.resolve_briefing_items(numbers, session_id="telegram-1", **kw)
+
+
+def test_resolve_briefing_items_ok(monkeypatch):
+    rows = _snap({"1": "calendar:ev1", "2": "commitment:1", "3": "commitment:9"})
+    assert _resolve(monkeypatch, rows, [2, 3]) == ([1, 9], [])
+
+
+def test_resolve_briefing_items_wrong_kind(monkeypatch):
+    rows = _snap({"3": "email:abc"})
+    ids, errs = _resolve(monkeypatch, rows, [3])
+    assert ids == [] and errs == ["item 3 do briefing não é um compromisso"]
+
+
+def test_resolve_briefing_items_missing_number(monkeypatch):
+    ids, errs = _resolve(monkeypatch, _snap({"1": "commitment:1"}), [7])
+    assert ids == [] and "item 7" in errs[0]
+
+
+def test_resolve_briefing_items_no_snapshot_today(monkeypatch):
+    old = _snap({"1": "commitment:1"}, created="2026-10-09 06:00:00-03:00")
+    ids, errs = _resolve(monkeypatch, old, [1])
+    assert ids == [] and errs
+    assert _resolve(monkeypatch, [], [1])[1]
