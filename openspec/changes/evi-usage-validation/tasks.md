@@ -44,7 +44,7 @@
 
 ## 3. Ciclo com a simulação
 
-- [ ] 3.1 `evi-sim promote <turn_id>` com anonimização estável e `expect` TODO; runner recusa TODO
+- [x] 3.1 `evi-sim promote <turn_id>` com anonimização estável e `expect` TODO; runner recusa TODO
   - SCN-USE-07
   - Files: `agent/testing/sim/promote.py`, `agent/testing/sim/runner.py`, `scripts/evi-sim`, `tests/unit/test_sim_promote.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_promote.py -q` — nenhum telefone, e-mail ou nome do seed original no YAML gerado

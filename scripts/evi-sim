@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# EVI simulation harness CLI. Subcommands: guard | up | down | run | report
+# EVI simulation harness CLI. Subcommands: guard | up | down | run | report | promote
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -85,8 +85,22 @@ case "$cmd" in
   report)
     PYTHONPATH="${ROOT}/agent" "$PY" -m testing.sim.runner report "$@"
     ;;
+  promote)
+    # Read-only (SELECT) on the production DB. Default: exec inside the dev stack's agent-api
+    # (the host cannot resolve the compose postgres hostname) and write the YAML here.
+    # Override: EVI_PROMOTE_DATABASE_URL=postgresql://... runs on the host directly.
+    [[ -n "${1:-}" ]] || { echo "usage: evi-sim promote <turn_id>" >&2; exit 64; }
+    if [[ -n "${EVI_PROMOTE_DATABASE_URL:-}" ]]; then
+      DATABASE_URL="$EVI_PROMOTE_DATABASE_URL" PYTHONPATH="${ROOT}/agent" "$PY" -m testing.sim.promote "$1"
+    else
+      _tmp="$(mktemp)"; trap 'rm -f "$_tmp"' EXIT
+      docker compose -f "${ROOT}/docker-compose.yml" exec -T agent-api python -m testing.sim.promote --stdout "$1" >"$_tmp"
+      PYTHONPATH="${ROOT}/agent" "$PY" -m testing.sim.promote --save-stdin <"$_tmp"
+      echo "evi-sim promote: DRAFT. Review for leaked data and fill expect before committing." >&2
+    fi
+    ;;
   *)
-    echo "usage: evi-sim {guard|up|down|run|report}" >&2
+    echo "usage: evi-sim {guard|up|down|run|report|promote}" >&2
     exit 64
     ;;
 esac

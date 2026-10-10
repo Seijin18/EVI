@@ -20,7 +20,7 @@ SOURCES = ("real-usage", "failure", "adversarial", "synthetic")
 STEP_TYPES = ("telegram", "whatsapp_control", "whatsapp_contact", "clock", "job", "fault")
 JOBS = ("heartbeat", "daily-summary")
 # agent tables a scenario may inspect via expect.postgres (never free-form SQL)
-PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots")
+PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log")
 
 TOP_KEYS = {"id", "title", "tags", "source", "clock", "seed", "steps", "judge", "description"}
 STEP_KEYS = set(STEP_TYPES) | {"expect", "judge"}
@@ -223,6 +223,8 @@ def parse_scenario(data: Any, path: str = "<memory>") -> Scenario:
                 raise _err(path, f"{where}.{kind}", "must be a string or mapping")
         elif kind == "fault":
             _check_keys(value, {"windmill", "telegram"}, path, f"{where}.fault")
+        if isinstance(st.get("expect"), dict) and "todo" in st["expect"]:
+            raise _err(path, f"{where}.expect", f"scenario {data['id']} has TODO expect — fill it before running")
         steps.append(Step(kind, value, _validate_expect(st.get("expect"), path, f"{where}.expect", kind)))
     return Scenario(
         id=str(data["id"]),
