@@ -1,0 +1,25 @@
+id: SIM-REM-02
+title: Lembrete - "adia 1h" depois da entrega reentrega uma hora depois (SCN-REM-04)
+tags: [reminders]
+source: synthetic
+clock: D0 17:00
+steps:
+  - telegram: "me lembra às 18h de pagar o boleto"
+    expect:
+      reply_within_s: 90
+      postgres:
+        - {table: reminders, where: {status: pending}, count: 1}
+  - clock: "D0 18:00"
+    expect:
+      reply_within_s: 30
+      reply_matches: "(?i)boleto"
+  - telegram: "adia 1h"
+    expect:
+      reply_within_s: 90
+      postgres:
+        - {table: reminders, where: {status: pending}, count: 1}
+  - clock: "D0 19:00"
+    expect:
+      reply_within_s: 30
+      reply_matches: "(?i)boleto"
+      outbound_to_third_parties: 0

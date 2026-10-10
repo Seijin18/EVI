@@ -303,10 +303,15 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
             sr.latency_s = time.monotonic() - t0
     elif step.type == "clock":
         v = str(step.value)
+        base = len(_telegram_replies(ctx))
         if schema.is_relative(v):
             ctx.set_clock(schema.parse_relative(v, ctx.today(), ctx.tz))
         else:
             ctx.set_clock(ctx.now() + schema.parse_delta(v))
+        if "reply_within_s" in exp or exp.get("no_reply"):
+            # proactive output (e.g. the reminder loop): messages sent to the user after the jump
+            t0 = time.monotonic()
+            sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _telegram_replies(ctx), base, timeout)
     elif step.type == "job":
         base = len(_telegram_replies(ctx))
         ctx.agent("POST", f"/jobs/{step.value}", {})

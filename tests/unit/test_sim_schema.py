@@ -125,3 +125,24 @@ def test_eval_gmail_tools_outbound_reply_postgres():
             "tools_called_any": ["x"], "reply_matches": "^nope$"}
     assert len(schema.eval_expect(exp2, obs)) == 8
     assert "no reply" in schema.eval_expect({"reply_within_s": 5}, {"reply": None})[0]
+
+
+def test_clock_step_accepts_reply_and_no_reply_expectations():
+    s = parse_scenario(_scn(steps=[
+        {"clock": "D0 18:00", "expect": {"reply_within_s": 30, "reply_matches": "(?i)boleto"}},
+        {"clock": "+10m", "expect": {"no_reply": True}},
+    ]))
+    assert s.steps[0].expect["reply_within_s"] == 30 and s.steps[1].expect["no_reply"] is True
+
+
+def test_no_reply_still_rejected_on_job_step():
+    with pytest.raises(ScenarioError):
+        parse_scenario(_scn(steps=[{"job": "heartbeat", "expect": {"no_reply": True}}]))
+
+
+def test_reminders_tables_are_in_postgres_allowlist():
+    s = parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"postgres": [
+        {"table": "reminders", "where": {"status": "sent"}, "count": 1},
+        {"table": "reminder_fires", "count": 1},
+    ]}}]))
+    assert len(s.steps[0].expect["postgres"]) == 2

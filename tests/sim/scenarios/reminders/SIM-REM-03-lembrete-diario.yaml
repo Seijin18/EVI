@@ -1,0 +1,22 @@
+id: SIM-REM-03
+title: Lembrete diário - dispara em D0 e D1 às 8h e a série continua pendente
+tags: [reminders]
+source: synthetic
+clock: D0 07:00
+steps:
+  - telegram: "me lembra todo dia às 8h de tomar remédio"
+    expect:
+      reply_within_s: 90
+      postgres:
+        - {table: reminders, where: {status: pending}, count: 1}
+  - clock: "D0 08:00"
+    expect:
+      reply_within_s: 30
+      reply_matches: "(?i)rem[eé]dio"
+  - clock: "D1 08:00"
+    expect:
+      reply_within_s: 30
+      reply_matches: "(?i)rem[eé]dio"
+      postgres:
+        - {table: reminders, where: {status: pending}, count: 1}
+      outbound_to_third_parties: 0

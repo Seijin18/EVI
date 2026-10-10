@@ -1,0 +1,18 @@
+id: SIM-REM-01
+title: Lembrete pontual - "me lembra às 18h" dispara às 18h no Telegram (SCN-REM-01)
+tags: [reminders, critical]
+source: synthetic
+clock: D0 17:00
+steps:
+  - telegram: "me lembra às 18h de pagar o boleto"
+    expect:
+      reply_within_s: 90
+      postgres:
+        - {table: reminders, where: {status: pending}, count: 1}
+  - clock: "D0 18:00"
+    expect:
+      reply_within_s: 30
+      reply_matches: "(?i)boleto"
+      postgres:
+        - {table: reminders, where: {status: sent}, count: 1}
+      outbound_to_third_parties: 0

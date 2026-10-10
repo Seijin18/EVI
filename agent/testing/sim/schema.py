@@ -20,7 +20,7 @@ SOURCES = ("real-usage", "failure", "adversarial", "synthetic")
 STEP_TYPES = ("telegram", "whatsapp_control", "whatsapp_contact", "clock", "job", "fault")
 JOBS = ("heartbeat", "daily-summary", "briefing")
 # agent tables a scenario may inspect via expect.postgres (never free-form SQL)
-PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log")
+PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log", "reminders", "reminder_fires")
 
 TOP_KEYS = {"id", "title", "tags", "source", "clock", "seed", "steps", "judge", "description"}
 STEP_KEYS = set(STEP_TYPES) | {"expect", "judge"}
@@ -150,8 +150,8 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
     if "no_reply_window_s" in exp and not exp.get("no_reply"):
         raise _err(path, f"{where}.no_reply_window_s", "only valid together with no_reply: true")
     if exp.get("no_reply"):
-        if step_type not in ("telegram", "whatsapp_control"):
-            raise _err(path, f"{where}.no_reply", "only valid on telegram/whatsapp_control steps")
+        if step_type not in ("telegram", "whatsapp_control", "clock"):
+            raise _err(path, f"{where}.no_reply", "only valid on telegram/whatsapp_control/clock steps")
         if "reply_within_s" in exp or "reply_matches" in exp:
             raise _err(path, where, "no_reply cannot be combined with reply_within_s/reply_matches")
     for key, allowed in (("calendar", CALENDAR_KEYS), ("tasks", TASKS_KEYS), ("gmail", GMAIL_KEYS)):

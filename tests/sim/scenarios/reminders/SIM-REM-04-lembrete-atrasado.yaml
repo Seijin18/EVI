@@ -1,0 +1,21 @@
+id: SIM-REM-04
+title: Lembrete atrasado - salto de relógio entrega uma vez, marcado atrasado com a hora original (SCN-REM-05)
+tags: [reminders]
+source: synthetic
+clock: D0 17:00
+steps:
+  - telegram: "me lembra às 18h de pagar o boleto"
+    expect:
+      reply_within_s: 90
+      postgres:
+        - {table: reminders, where: {status: pending}, count: 1}
+  - clock: "D0 21:00"
+    expect:
+      reply_within_s: 30
+      reply_matches: "(?i)atrasad.*18:00.*boleto"
+      postgres:
+        - {table: reminders, where: {status: sent}, count: 1}
+  - clock: "+10m"
+    expect:
+      no_reply: true
+      outbound_to_third_parties: 0
