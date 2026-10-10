@@ -47,6 +47,33 @@ WEBHOOK_LATENCY = (
     if _HAS_PROM
     else None
 )
+TURNS_TOTAL = (
+    Counter(
+        "evi_turns_total",
+        "Agent turns by channel and outcome",
+        ["channel", "outcome"],
+    )
+    if _HAS_PROM
+    else None
+)
+PROBE_FAILURES_TOTAL = (
+    Counter(
+        "evi_probe_failures_total",
+        "Synthetic probe failures by check",
+        ["check"],
+    )
+    if _HAS_PROM
+    else None
+)
+
+_TURN_CHANNELS = frozenset({"telegram", "whatsapp_control", "api", "job"})
+_TURN_OUTCOMES = frozenset({"ok", "error", "tool_failed"})
+_PROBE_CHECKS = frozenset({"calendar", "tasks", "gmail", "telegram"})
+
+
+def _bounded(value: str, allowed: frozenset[str]) -> str:
+    v = (value or "").strip().lower()
+    return v if v in allowed else "other"
 
 
 def metrics_enabled() -> bool:
@@ -62,6 +89,19 @@ def metrics_enabled() -> bool:
 def observe_webhook(webhook: str, duration_sec: float) -> None:
     if metrics_enabled() and WEBHOOK_LATENCY is not None:
         WEBHOOK_LATENCY.labels(webhook=webhook).observe(duration_sec)
+
+
+def record_turn(channel: str, outcome: str) -> None:
+    if metrics_enabled() and TURNS_TOTAL is not None:
+        TURNS_TOTAL.labels(
+            channel=_bounded(channel, _TURN_CHANNELS),
+            outcome=_bounded(outcome, _TURN_OUTCOMES),
+        ).inc()
+
+
+def record_probe_failure(check: str) -> None:
+    if metrics_enabled() and PROBE_FAILURES_TOTAL is not None:
+        PROBE_FAILURES_TOTAL.labels(check=_bounded(check, _PROBE_CHECKS)).inc()
 
 
 def metrics_response() -> Response:

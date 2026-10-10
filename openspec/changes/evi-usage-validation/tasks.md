@@ -37,7 +37,7 @@
   - Files: `agent/services/probe.py`, `agent/main.py`, `windmill/f/integrations/probe.py`, `tests/unit/test_probe.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_probe.py -q` — nenhuma tool de escrita é importada pelo módulo; OAuth expirado gera 1 aviso mesmo com 2 execuções no dia
 
-- [ ] 2.5 Métricas `evi_turns_total{channel,outcome}` e `evi_probe_failures_total{check}`
+- [x] 2.5 Métricas `evi_turns_total{channel,outcome}` e `evi_probe_failures_total{check}`
   - SCN-USE-05
   - Files: `agent/services/metrics.py`, `tests/unit/test_metrics.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_metrics.py -q`
