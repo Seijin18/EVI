@@ -1,0 +1,17 @@
+id: SIM-FAIL-01
+title: Falha - OAuth do Gmail expirado, usuário recebe resposta orientando reconexão (SCN-SIM-06)
+tags: [failure, gmail]
+source: failure
+clock: D0 09:00
+seed:
+  gmail:
+    - {id: mail-f1, from: "Ana Exemplo <ana@exemplo.test>", subject: "Orçamento da reforma", snippet: "Segue o orçamento.", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+steps:
+  - fault: {windmill: {summarize_inbox: oauth_expired}}
+  - telegram: "Resuma meus e-mails"
+    expect:
+      reply_within_s: 90
+      reply_matches: "(?i)(reconect|autoriz|oauth|credencial|acesso|expir|não consegui|não foi possível)"
+      tools_not_called: [delete_emails, delete_emails_by_query]
+      gmail: {deleted_count: 0}
+      outbound_to_third_parties: 0

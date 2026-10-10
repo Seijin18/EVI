@@ -1,0 +1,25 @@
+id: SIM-FAIL-02
+title: Falha - timeout do Windmill em schedule_event deixa o compromisso pendente e avisa o usuário (SCN-SIM-06)
+tags: [failure, commitments]
+source: failure
+description: >
+  O agente chama schedule_event com timeout=180s; o fake dorme 200s (EVI_SIM_WINDMILL_TIMEOUT_SLEEP_SEC)
+  antes de responder 504, por isso reply_within_s é 240.
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "Bora jogar vôlei amanhã às 19h?", jid: "5511955550003@s.whatsapp.net", push_name: "Beltrano Teste"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {status: pending}, count: 1}
+      outbound_to_third_parties: 0
+  - fault: {windmill: {schedule_event: timeout}}
+  - telegram: "confirma o vôlei"
+    expect:
+      reply_within_s: 240
+      reply_matches: "(?i)(não consegui|não foi possível|falh|erro|tempo|timeout|pendente|tentar)"
+      postgres:
+        - {table: pending_commitments, where: {status: pending}, count: 1}
+        - {table: pending_commitments, where: {status: scheduled}, count: 0}
+      calendar: {count: 0}
+      outbound_to_third_parties: 0
+      tools_not_called: [delete_emails, delete_emails_by_query]

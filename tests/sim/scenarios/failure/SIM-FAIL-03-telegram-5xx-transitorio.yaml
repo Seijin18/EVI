@@ -1,0 +1,12 @@
+id: SIM-FAIL-03
+title: Falha - sendMessage do Telegram com 5xx transitório, resposta ainda é entregue (SCN-SIM-06)
+tags: [failure, telegram]
+source: failure
+clock: D0 09:00
+steps:
+  - fault: {telegram: {sendMessage: transient, count: 1}}
+  - telegram: "Oi"
+    expect:
+      reply_within_s: 90
+      outbound_to_third_parties: 0
+      tools_not_called: [delete_emails, delete_emails_by_query]
