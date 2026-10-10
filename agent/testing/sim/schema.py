@@ -17,7 +17,19 @@ from zoneinfo import ZoneInfo
 
 DEFAULT_TZ = "America/Sao_Paulo"
 SOURCES = ("real-usage", "failure", "adversarial", "synthetic")
-STEP_TYPES = ("telegram", "whatsapp_control", "whatsapp_contact", "clock", "job", "fault")
+STEP_TYPES = (
+    "telegram",
+    "whatsapp_control",
+    "whatsapp_contact",
+    "telegram_voice",
+    "whatsapp_control_voice",
+    "whatsapp_contact_voice",
+    "clock",
+    "job",
+    "fault",
+)
+VOICE_STEPS = ("telegram_voice", "whatsapp_control_voice", "whatsapp_contact_voice")
+AUDIO_FIXTURE_RE = re.compile(r"^[A-Za-z0-9_.-]+$")  # name inside tests/fixtures/audio/
 JOBS = ("heartbeat", "daily-summary", "briefing")
 # agent tables a scenario may inspect via expect.postgres (never free-form SQL)
 PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log", "reminders", "reminder_fires", "wa_conversation_state")
@@ -34,6 +46,7 @@ EXPECT_KEYS = {
     "tools_called_any",
     "tools_not_called",
     "outbound_to_third_parties",
+    "media_requests",
     "postgres",
     "max_latency_s",
     "no_reply",
@@ -151,13 +164,15 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
     if "no_reply_window_s" in exp and not exp.get("no_reply"):
         raise _err(path, f"{where}.no_reply_window_s", "only valid together with no_reply: true")
     if exp.get("no_reply"):
-        if step_type not in ("telegram", "whatsapp_control", "clock"):
-            raise _err(path, f"{where}.no_reply", "only valid on telegram/whatsapp_control/clock steps")
+        if step_type not in ("telegram", "whatsapp_control", "telegram_voice", "whatsapp_control_voice", "clock"):
+            raise _err(path, f"{where}.no_reply", "only valid on telegram/whatsapp_control(_voice)/clock steps")
         if "reply_within_s" in exp or "reply_matches" in exp or "reply_not_matches" in exp:
             raise _err(path, where, "no_reply cannot be combined with reply_within_s/reply_matches")
     for key, allowed in (("calendar", CALENDAR_KEYS), ("tasks", TASKS_KEYS), ("gmail", GMAIL_KEYS)):
         if key in exp:
             _check_keys(exp[key], allowed, path, f"{where}.{key}")
+    if "media_requests" in exp and (not isinstance(exp["media_requests"], int) or isinstance(exp["media_requests"], bool)):
+        raise _err(path, f"{where}.media_requests", "must be an integer (expected count of media fetches)")
     for key in ("tools_called_any", "tools_not_called"):
         if key in exp and not isinstance(exp[key], list):
             raise _err(path, f"{where}.{key}", "must be a list")
@@ -227,6 +242,15 @@ def parse_scenario(data: Any, path: str = "<memory>") -> Scenario:
                 _check_keys(value, {"text", "jid", "from_me", "group", "push_name"}, path, f"{where}.{kind}")
             elif not isinstance(value, str):
                 raise _err(path, f"{where}.{kind}", "must be a string or mapping")
+        elif kind in VOICE_STEPS:
+            allowed = {"file", "duration_s"} if kind != "whatsapp_contact_voice" else {"file", "duration_s", "jid", "push_name"}
+            if not isinstance(value, dict):
+                raise _err(path, f"{where}.{kind}", "must be a mapping with 'file'")
+            _check_keys(value, allowed, path, f"{where}.{kind}")
+            if not isinstance(value.get("file"), str) or not AUDIO_FIXTURE_RE.match(value["file"]):
+                raise _err(path, f"{where}.{kind}.file", "must be a file name inside tests/fixtures/audio/")
+            if "duration_s" in value and (not isinstance(value["duration_s"], int) or isinstance(value["duration_s"], bool) or value["duration_s"] <= 0):
+                raise _err(path, f"{where}.{kind}.duration_s", "must be a positive integer")
         elif kind == "fault":
             _check_keys(value, {"windmill", "telegram"}, path, f"{where}.fault")
         if isinstance(st.get("expect"), dict) and "todo" in st["expect"]:
@@ -359,7 +383,7 @@ def eval_expect(exp: dict, obs: dict) -> list[str]:
 
     ``obs`` keys: ``reply`` (str|None), ``latency_s``, ``google`` (fake Google state),
     ``tools_called`` (iterable), ``evolution_sent``, ``telegram_sent``,
-    ``control_jids``, ``chat_id``, ``base`` (date), ``tz``, ``postgres`` (counts,
+    ``media_requests``, ``control_jids``, ``chat_id``, ``base`` (date), ``tz``, ``postgres`` (counts,
     parallel to ``exp['postgres']``).
     """
     fails: list[str] = []
@@ -397,6 +421,10 @@ def eval_expect(exp: dict, obs: dict) -> list[str]:
     bad = called & set(exp.get("tools_not_called") or [])
     if bad:
         fails.append(f"tools_not_called: forbidden tools called: {sorted(bad)}")
+    if "media_requests" in exp:
+        n_media = len(obs.get("media_requests") or [])
+        if n_media != exp["media_requests"]:
+            fails.append(f"media_requests: expected {exp['media_requests']} got {n_media}")
     if "outbound_to_third_parties" in exp:
         n = count_third_party_outbound(
             obs.get("evolution_sent") or [],

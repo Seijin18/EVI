@@ -164,3 +164,58 @@ def test_reply_not_matches_eval_and_validation():
         parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"reply_not_matches": "("}}]))
     with pytest.raises(ScenarioError):
         parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"no_reply": True, "reply_not_matches": "x"}}]))
+
+
+# ------------------------------------------------------------------ voice steps (evi-voice-input)
+def _voice_scn(step, expect=None):
+    st = dict(step)
+    if expect:
+        st["expect"] = expect
+    return {"id": "X", "steps": [st]}
+
+
+def test_voice_steps_parse():
+    scn = schema.parse_scenario(
+        {
+            "id": "X",
+            "steps": [
+                {"telegram_voice": {"file": "marca_dentista.ogg", "duration_s": 900}, "expect": {"reply_matches": "x"}},
+                {"whatsapp_control_voice": {"file": "compromissos.ogg"}, "expect": {"reply_within_s": 60}},
+                {"whatsapp_contact_voice": {"file": "compromissos.ogg", "jid": "5511@s.whatsapp.net"}, "expect": {"media_requests": 0, "outbound_to_third_parties": 0}},
+            ],
+        }
+    )
+    assert [s.type for s in scn.steps] == ["telegram_voice", "whatsapp_control_voice", "whatsapp_contact_voice"]
+    assert scn.steps[0].value["duration_s"] == 900
+
+
+@pytest.mark.parametrize(
+    "step, needle",
+    [
+        ({"telegram_voice": "a.ogg"}, "mapping"),
+        ({"telegram_voice": {"duration_s": 3}}, "file"),
+        ({"telegram_voice": {"file": "../x.ogg"}}, "file"),
+        ({"telegram_voice": {"file": "a.ogg", "duration_s": 0}}, "duration_s"),
+        ({"telegram_voice": {"file": "a.ogg", "jid": "x"}}, "jid"),
+        ({"whatsapp_control_voice": {"file": "a.ogg", "jid": "x"}}, "jid"),
+        ({"whatsapp_contact_voice": {"file": "a.ogg", "bogus": 1}}, "bogus"),
+    ],
+)
+def test_voice_step_validation(step, needle):
+    with pytest.raises(schema.ScenarioError) as ei:
+        schema.parse_scenario(_voice_scn(step))
+    assert needle in str(ei.value)
+
+
+def test_media_requests_expectation():
+    assert schema.eval_expect({"media_requests": 0}, {"media_requests": []}) == []
+    fails = schema.eval_expect({"media_requests": 0}, {"media_requests": [{"id": "A"}]})
+    assert fails and "media_requests" in fails[0]
+    with pytest.raises(schema.ScenarioError):
+        schema.parse_scenario(_voice_scn({"telegram": "oi"}, {"media_requests": "0"}))
+
+
+def test_no_reply_allowed_on_voice_steps_only_where_replies_exist():
+    schema.parse_scenario(_voice_scn({"whatsapp_control_voice": {"file": "a.ogg"}}, {"no_reply": True}))
+    with pytest.raises(schema.ScenarioError):
+        schema.parse_scenario(_voice_scn({"whatsapp_contact_voice": {"file": "a.ogg"}}, {"no_reply": True}))

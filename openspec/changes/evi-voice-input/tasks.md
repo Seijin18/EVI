@@ -24,7 +24,7 @@
 
 ## 3. Simulação e fechamento
 
-- [ ] 3.1 Fakes (`getFile`/download, `getBase64FromMediaMessage`), fixture de áudio sintético, cenários `SIM-VOICE-*` (Telegram voz → evento criado; WhatsApp controle voz; áudio de terceiro ignorado; áudio longo recusado), `sim.env`, `.env.example`, `docs/testing.md`
+- [x] 3.1 Fakes (`getFile`/download, `getBase64FromMediaMessage`), fixture de áudio sintético, cenários `SIM-VOICE-*` (Telegram voz → evento criado; WhatsApp controle voz; áudio de terceiro ignorado; áudio longo recusado), `sim.env`, `.env.example`, `docs/testing.md`
   - SCN-VOICE-01..05
   - Files: `agent/testing/sim/fake_telegram.py`, `agent/testing/sim/fake_evolution.py`, `tests/fixtures/audio/`, `tests/sim/scenarios/voice/`, `tests/sim/sim.env`
   - Verify: `./scripts/evi-sim run --tag voice --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --llm replay`

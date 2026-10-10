@@ -235,7 +235,7 @@ def test_combined_state_seed_and_reset(client):
     client.post("/message/sendText/sim", json={"number": "1", "text": "b"})
     client.post("/_sim/faults", json={"*": "http_500"})
     st = client.get("/_sim/state").json()
-    assert set(st) == {"google", "windmill_calls", "telegram_sent", "evolution_sent"}
+    assert set(st) == {"google", "windmill_calls", "telegram_sent", "evolution_sent", "media_requests"}
     assert st["google"]["tasks"] and len(st["telegram_sent"]) == 1 and len(st["evolution_sent"]) == 1
     client.post("/_sim/telegram/updates", json={"text": "pend"})
     client.post("/_sim/telegram/faults", json={"sendMessage": "transient"})
@@ -255,3 +255,50 @@ def test_windmill_shares_google_instance():
 def test_seed_plain_google_still_works(client):
     client.post("/_sim/seed", json={"tasks": [{"title": "x"}]})
     assert client.get("/_sim/state").json()["google"]["tasks"]
+
+
+# ------------------------------------------------------------------ voice (evi-voice-input)
+def test_telegram_voice_getfile_and_download(client):
+    import base64
+
+    audio = b"OggS-fake-opus-bytes"
+    r = client.post("/_sim/telegram/voice", json={"audio_b64": base64.b64encode(audio).decode(), "duration_s": 7})
+    assert r.status_code == 200
+    upd = client.get(f"{TOK}/getUpdates?offset=0&timeout=0").json()["result"][0]
+    assert upd["update_id"] == r.json()["update_id"]
+    msg = upd["message"]
+    voice = msg["voice"]
+    assert "text" not in msg and msg["chat"]["type"] == "private"
+    assert voice["duration"] == 7 and voice["file_size"] == len(audio) and voice["mime_type"] == "audio/ogg"
+    got = client.get(f"{TOK}/getFile", params={"file_id": voice["file_id"]}).json()
+    assert got["ok"] and got["result"]["file_size"] == len(audio)
+    dl = client.get(f"/file/botsim-token/{got['result']['file_path']}")
+    assert dl.status_code == 200 and dl.content == audio
+
+
+def test_telegram_getfile_unknown_and_bad_token(client):
+    assert client.get(f"{TOK}/getFile", params={"file_id": "nope"}).status_code == 400
+    assert client.get("/file/botsim-token/voice/missing.oga").status_code == 404
+    assert client.get("/file/botwrong/voice/x.oga").status_code == 401
+
+
+def test_telegram_voice_requires_audio(client):
+    assert client.post("/_sim/telegram/voice", json={}).status_code == 400
+
+
+def test_evolution_media_served_by_message_id_and_logged(client):
+    import base64
+
+    audio = b"OggS-wa-audio"
+    assert client.post("/_sim/evolution/media", json={"id": "M1", "audio_b64": base64.b64encode(audio).decode()}).status_code == 200
+    key = {"id": "M1", "remoteJid": "5500000000001@s.whatsapp.net"}
+    r = client.post("/chat/getBase64FromMediaMessage/sim", json={"message": {"key": key}, "convertToMp4": False})
+    assert r.status_code == 201
+    assert base64.b64decode(r.json()["base64"]) == audio and r.json()["mimetype"].startswith("audio/ogg")
+    miss = client.post("/chat/getBase64FromMediaMessage/sim", json={"message": {"key": {"id": "X"}}})
+    assert miss.status_code == 404
+    reqs = client.get("/_sim/state").json()["media_requests"]
+    assert [m["id"] for m in reqs] == ["M1", "X"]
+    client.post("/_sim/reset")
+    assert client.get("/_sim/state").json()["media_requests"] == []
+    assert client.post("/chat/getBase64FromMediaMessage/sim", json={"message": {"key": key}}).status_code == 404

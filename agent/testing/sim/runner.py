@@ -49,6 +49,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_SCENARIOS_DIR = REPO_ROOT / "tests" / "sim" / "scenarios"
 SIM_ENV = REPO_ROOT / "tests" / "sim" / "sim.env"
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "evolution" / "messages_upsert.json"
+AUDIO_DIR = REPO_ROOT / "tests" / "fixtures" / "audio"
+DEFAULT_VOICE_SECONDS = 3
 COMPOSE = ["docker", "compose", "-p", "evi-sim", "--env-file", "/dev/null", "-f", str(REPO_ROOT / "docker-compose.sim.yml")]
 AUDIT_LOG = "/tmp/evi-sim-logs"
 LLM_COUNT_FILE = "/tmp/evi-sim-llm-calls"  # written by testing.sim.llm_counter in the container
@@ -240,6 +242,7 @@ def observe(ctx: Ctx, step_obs: dict, exp: dict) -> dict:
         "google": state["google"],
         "evolution_sent": state["evolution_sent"],
         "telegram_sent": state["telegram_sent"],
+        "media_requests": state.get("media_requests") or [],
         "control_jids": ctx.control_jids,
         "chat_id": ctx.chat_id,
         "base": ctx.today(),
@@ -275,16 +278,46 @@ def _control_replies(ctx: Ctx) -> list[str]:
     return [m.get("text", "") for m in sent if m.get("jid") in ctx.control_jids]
 
 
-def build_webhook_payload(text: str, jid: str, *, from_me: bool = False, group: bool = False, push_name: str = "Sim", ts: int | None = None) -> dict:
+def build_webhook_payload(
+    text: str,
+    jid: str,
+    *,
+    from_me: bool = False,
+    group: bool = False,
+    push_name: str = "Sim",
+    ts: int | None = None,
+    audio_seconds: int | None = None,
+) -> dict:
     payload = copy.deepcopy(json.loads(FIXTURE.read_text(encoding="utf-8")))
     msg = payload["data"]["messages"][0]
     msg["key"] = {"id": f"SIM{uuid.uuid4().hex[:16].upper()}", "remoteJid": GROUP_JID if group else jid, "fromMe": from_me}
     if group:
         msg["key"]["participant"] = jid
     msg["messageTimestamp"] = int(ts if ts is not None else time.time())
-    msg["message"] = {"conversation": text}
+    if audio_seconds is not None:  # voice note: audioMessage instead of text
+        msg["message"] = {"audioMessage": {"mimetype": "audio/ogg; codecs=opus", "seconds": int(audio_seconds), "ptt": True}}
+    else:
+        msg["message"] = {"conversation": text}
     msg["pushName"] = push_name
     return payload
+
+
+def _audio_b64(name: str) -> str:
+    import base64
+
+    path = AUDIO_DIR / name
+    if not path.is_file():
+        raise FileNotFoundError(f"audio fixture not found: {path}")
+    return base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+def _voice_webhook(ctx: Ctx, jid: str, v: dict, *, push_name: str = "Sim") -> None:
+    """Register the audio in the fake Evolution under a fresh message id and POST the audioMessage webhook."""
+    seconds = int(v.get("duration_s") or DEFAULT_VOICE_SECONDS)
+    payload = build_webhook_payload("", jid, push_name=push_name, ts=ctx.sim_now().timestamp(), audio_seconds=seconds)
+    mid = payload["data"]["messages"][0]["key"]["id"]
+    ctx.fakes("POST", "/_sim/evolution/media", {"id": mid, "audio_b64": _audio_b64(v["file"])})
+    ctx.agent("POST", "/webhooks/evolution", payload)
 
 
 def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
@@ -299,6 +332,23 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
         base = len(_telegram_replies(ctx))
         ctx.fakes("POST", "/_sim/telegram/updates", {"text": step.value})
         sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _telegram_replies(ctx), base, timeout)
+    elif step.type == "telegram_voice":
+        base = len(_telegram_replies(ctx))
+        body = {"audio_b64": _audio_b64(step.value["file"]), "duration_s": int(step.value.get("duration_s") or DEFAULT_VOICE_SECONDS)}
+        ctx.fakes("POST", "/_sim/telegram/voice", body)
+        sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _telegram_replies(ctx), base, timeout)
+    elif step.type in ("whatsapp_control_voice", "whatsapp_contact_voice"):
+        base = len(_control_replies(ctx))
+        if step.type == "whatsapp_control_voice":
+            _voice_webhook(ctx, sorted(ctx.control_jids)[0], step.value)
+        else:
+            _voice_webhook(ctx, step.value.get("jid", DEFAULT_CONTACT_JID), step.value, push_name=step.value.get("push_name", "Sim"))
+        waits = step.type == "whatsapp_control_voice" and bool({"reply_within_s", "reply_matches", "reply_not_matches", "no_reply"} & set(exp))
+        if waits:
+            sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _control_replies(ctx), base, timeout)
+        else:
+            time.sleep(SETTLE_S)
+            sr.latency_s = time.monotonic() - t0
     elif step.type in ("whatsapp_control", "whatsapp_contact"):
         if step.type == "whatsapp_control":
             jid, kw, text = sorted(ctx.control_jids)[0], {}, step.value

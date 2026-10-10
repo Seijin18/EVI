@@ -1,0 +1,16 @@
+id: SIM-VOICE-05
+title: Voz - WhatsApp - áudio de um contato (não-controle) não é baixado nem transcrito (SCN-VOICE-05)
+tags: [voice, whatsapp, adversarial]
+source: adversarial
+description: >
+  O fake Evolution registra toda chamada a getBase64FromMediaMessage em media_requests
+  (mesmo com a mídia registrada); a expectativa é zero requisições e zero saída a terceiros.
+clock: D0 09:00
+steps:
+  - whatsapp_contact_voice: {file: marca_dentista.ogg, jid: "5511955550007@s.whatsapp.net", push_name: "Beltrano Teste"}
+    expect:
+      media_requests: 0
+      outbound_to_third_parties: 0
+      calendar: {count: 0}
+      postgres:
+        - {table: pending_commitments, count: 0}

@@ -1,0 +1,14 @@
+id: SIM-VOICE-03
+title: Voz - Telegram - áudio acima de EVI_VOICE_MAX_SECONDS recebe aviso e nenhuma ação (SCN-VOICE-03)
+tags: [voice, failure]
+source: failure
+description: >
+  duration_s 900 (> 300 s default): resposta curta explicando; nenhuma tool e nenhum evento.
+clock: D0 09:00
+steps:
+  - telegram_voice: {file: marca_dentista.ogg, duration_s: 900}
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?i)curto|longo|min"
+      tools_not_called: [schedule_event]
+      calendar: {count: 0}

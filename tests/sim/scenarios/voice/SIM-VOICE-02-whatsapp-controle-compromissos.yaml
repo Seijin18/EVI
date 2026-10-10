@@ -1,0 +1,17 @@
+id: SIM-VOICE-02
+title: Voz - chat de controle do WhatsApp - "quais meus compromissos de amanhã" (SCN-VOICE-02)
+tags: [voice, whatsapp]
+source: synthetic
+description: >
+  O áudio chega como audioMessage do JID de controle; o agente baixa via
+  getBase64FromMediaMessage, transcreve e responde no próprio chat de controle com o eco.
+clock: D0 09:00
+seed:
+  calendar:
+    - {summary: "Reunião de equipe", start: "D1 10:00", end: "D1 11:00"}
+steps:
+  - whatsapp_control_voice: {file: compromissos.ogg, duration_s: 3}
+    expect:
+      reply_within_s: 90
+      reply_matches: "(?i)entendi"
+      outbound_to_third_parties: 0

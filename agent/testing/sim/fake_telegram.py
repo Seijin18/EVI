@@ -12,6 +12,8 @@ Only the token ``sim-token`` is accepted (401 otherwise, like Telegram).
                   ``"rate_limit"``) - what ``services.send_result.post_with_retry``
                   treats as transient (5xx / transport; a 4xx is NOT retried,
                   so 429 is only for exercising the no-retry path).
+* ``getFile``     file_path for a file registered by the runner (``register_file``);
+* ``GET /file/bot<token>/<path>`` serves the registered bytes (``file_bytes``);
 * any other method -> 500 naming it (fail loudly).
 """
 
@@ -50,6 +52,8 @@ class FakeTelegram:
         self._updates: list[dict] = []
         self._message_seq = 0
         self.sent: list[dict] = []
+        self._files: dict[str, dict] = {}  # file_id -> {"path", "data", "mime"}
+        self._file_seq = 0
         self._faults: dict[str, dict] = {}
 
     def enqueue(self, text: str, chat_id: str | int | None = None, *, from_name: str = "Sim User") -> int:
@@ -76,6 +80,44 @@ class FakeTelegram:
         )
         return self._update_seq
 
+    def register_file(self, data: bytes, mime: str = "audio/ogg") -> str:
+        """Store bytes for getFile/download; returns the file_id."""
+        self._file_seq += 1
+        file_id = f"SIMFILE{self._file_seq}"
+        ext = "oga" if "ogg" in mime else "bin"
+        self._files[file_id] = {"path": f"voice/file_{self._file_seq}.{ext}", "data": bytes(data), "mime": mime}
+        return file_id
+
+    def enqueue_voice(
+        self,
+        data: bytes,
+        chat_id: str | int | None = None,
+        *,
+        duration: int = 3,
+        file_size: int | None = None,
+        mime: str = "audio/ogg",
+        from_name: str = "Sim User",
+    ) -> int:
+        """Register ``data`` and queue a private ``voice`` message from the user; returns its update_id."""
+        file_id = self.register_file(data, mime)
+        uid = self.enqueue("", chat_id, from_name=from_name)
+        msg = self._updates[-1]["message"]
+        del msg["text"]
+        msg["voice"] = {
+            "duration": int(duration),
+            "mime_type": mime,
+            "file_id": file_id,
+            "file_unique_id": f"U{file_id}",
+            "file_size": int(file_size if file_size is not None else len(data)),
+        }
+        return uid
+
+    def file_bytes(self, file_path: str) -> tuple[bytes, str] | None:
+        for f in self._files.values():
+            if f["path"] == file_path.lstrip("/"):
+                return f["data"], f["mime"]
+        return None
+
     def set_fault(self, method: str, kind: str = "transient", count: int = 1) -> None:
         if kind not in FAULTS:
             raise ValueError(f"unknown telegram fault {kind!r}; expected one of {FAULTS}")
@@ -87,6 +129,7 @@ class FakeTelegram:
         return {
             "pending_updates": list(self._updates),
             "sent": list(self.sent),
+            "files": sorted(self._files),
             "faults": dict(self._faults),
         }
 
@@ -117,6 +160,8 @@ class FakeTelegram:
             return 200, _ok(await self._long_poll(params))
         if method == "sendMessage":
             return self._send_message(params)
+        if method == "getFile":
+            return self._get_file(params)
         return 500, {
             "ok": False,
             "error_code": 500,
@@ -138,6 +183,19 @@ class FakeTelegram:
             if out or time.monotonic() >= deadline:
                 return out
             await asyncio.sleep(0.05)
+
+    def _get_file(self, params: dict) -> tuple[int, dict]:
+        f = self._files.get(str(params.get("file_id") or ""))
+        if f is None:
+            return 400, {"ok": False, "error_code": 400, "description": "Bad Request: wrong file_id or the file is temporarily unavailable"}
+        return 200, _ok(
+            {
+                "file_id": params["file_id"],
+                "file_unique_id": f"U{params['file_id']}",
+                "file_size": len(f["data"]),
+                "file_path": f["path"],
+            }
+        )
 
     def _send_message(self, params: dict) -> tuple[int, dict]:
         fault = self._take_fault("sendMessage")

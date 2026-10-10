@@ -1,0 +1,18 @@
+id: SIM-VOICE-01
+title: Voz - Telegram - "marca dentista amanhã às três da tarde" vira evento D1 15:00 (SCN-VOICE-01)
+tags: [voice, critical]
+source: synthetic
+description: >
+  Áudio sintético (eSpeak, fictício) em tests/fixtures/audio/. A resposta começa com o eco
+  "Entendi: <transcrição>" e o evento é criado como se o texto tivesse sido digitado.
+clock: D0 09:00
+steps:
+  - telegram_voice: {file: marca_dentista.ogg, duration_s: 4}
+    expect:
+      reply_within_s: 90
+      reply_matches: "(?i)entendi"
+      tools_called_any: [schedule_event]
+      calendar:
+        created:
+          - summary_contains: "dentista"
+            start: "D1 15:00"

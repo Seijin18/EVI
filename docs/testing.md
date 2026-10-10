@@ -64,6 +64,15 @@ Lembretes: `./scripts/evi-sim run --tag reminders --repeat 3 --llm live` (o loop
 `expect: {reply_within_s, reply_matches, no_reply}`: captura as mensagens enviadas ao Telegram
 do usuário após a mudança de relógio (saída proativa, sem mensagem do usuário), como o passo `job`.
 `postgres` aceita as tabelas `reminders` e `reminder_fires`.
+Voz: `./scripts/evi-sim run --tag voice --repeat 3 --llm live` (sim.env liga `EVI_VOICE_ENABLED`).
+Passos de voz: `telegram_voice: {file, duration_s?}`, `whatsapp_control_voice: {file, duration_s?}` e
+`whatsapp_contact_voice: {file, duration_s?, jid?, push_name?}`, onde `file` é um nome em
+`tests/fixtures/audio/` (OGG/Opus sintético, fictício; geração e conteúdo no `README.md` da
+pasta, via eSpeak NG num container descartável, sem TTS no host). O runner envia os bytes ao fake
+(`POST /_sim/telegram/voice` → `getFile` + `GET /file/bot<token>/<path>`; `POST /_sim/evolution/media`
+→ `getBase64FromMediaMessage`) e dispara o update/webhook. `expect.media_requests: N` confere
+quantas vezes o fake Evolution foi chamado para baixar mídia (`0` prova que o áudio de terceiro
+não foi baixado). `no_reply` vale em `telegram_voice`/`whatsapp_control_voice`.
 O workspace do sim é semeado a cada reset com os arquivos versionados de `EVI_WORKSPACE/`
 (AGENTS/TOOLS/HEARTBEAT/skills) + o `USER.md` fictício de `tests/sim/workspace/`.
 

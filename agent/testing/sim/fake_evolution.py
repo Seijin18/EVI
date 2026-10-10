@@ -8,7 +8,10 @@ Serves exactly what ``messaging.evolution.EvolutionClient`` calls:
 * ``POST /chat/findChats/<instance>``     from seed ``chats``;
 * ``POST /chat/findMessages/<instance>``  from seed ``messages`` (``{jid: [..]}``),
   filtered by ``where.key.remoteJid``;
-* ``POST /chat/fetchProfile/<instance>``  from seed ``profiles`` (``{number: {..}}``).
+* ``POST /chat/fetchProfile/<instance>``  from seed ``profiles`` (``{number: {..}}``);
+* ``POST /chat/getBase64FromMediaMessage/<instance>``  media registered by the runner
+  (``register_media``) and served by ``message.key.id``; every request is logged in
+  ``media_requests`` (so a scenario can prove nothing was fetched).
 
 When ``apikey`` is set (``EVOLUTION_API_KEY``) a request carrying a different
 ``apikey`` header gets 401. Anything else -> 500 naming the URL.
@@ -27,6 +30,7 @@ ENDPOINTS = {
     "chat/findChats",
     "chat/findMessages",
     "chat/fetchProfile",
+    "chat/getBase64FromMediaMessage",
 }
 
 
@@ -47,6 +51,11 @@ class FakeEvolution:
         self._messages: dict[str, list[dict]] = {}
         self._profiles: dict[str, dict] = {}
         self._seq = 0
+        self._media: dict[str, dict] = {}  # message id -> {"data": bytes, "mimetype": str}
+        self.media_requests: list[dict] = []
+
+    def register_media(self, message_id: str, data: bytes, mimetype: str = "audio/ogg; codecs=opus") -> None:
+        self._media[str(message_id)] = {"data": bytes(data), "mimetype": mimetype}
 
     def seed(self, data: dict) -> None:
         """Replace contacts/chats/messages/profiles (captures are kept)."""
@@ -59,6 +68,7 @@ class FakeEvolution:
         return copy.deepcopy(
             {
                 "sent": self.sent,
+                "media_requests": self.media_requests,
                 "contacts": self._contacts,
                 "chats": self._chats,
                 "messages": self._messages,
@@ -86,12 +96,29 @@ class FakeEvolution:
             jid = ((payload.get("where") or {}).get("key") or {}).get("remoteJid")
             rows = self._messages.get(jid, []) if jid else [m for v in self._messages.values() for m in v]
             return 200, {"messages": {"total": len(rows), "pages": 1, "currentPage": 1, "records": copy.deepcopy(rows)}}
+        if endpoint == "chat/getBase64FromMediaMessage":
+            return self._get_media(payload)
         number = str(payload.get("number") or "").split("@")[0]
         return 200, copy.deepcopy(self._profiles.get(number, {"wuid": f"{number}@s.whatsapp.net"}))
 
     @staticmethod
     def _unknown(method: str, path: str) -> tuple[int, Any]:
         return 500, {"error": f"fake evolution: unsupported endpoint {method} {path}"}
+
+    def _get_media(self, payload: dict) -> tuple[int, Any]:
+        import base64
+
+        key = (payload.get("message") or {}).get("key") or {}
+        mid = str(key.get("id") or "")
+        self.media_requests.append({"id": mid, "remoteJid": key.get("remoteJid"), "ts": int(time.time())})
+        media = self._media.get(mid)
+        if media is None:
+            return 404, {"status": 404, "error": "Not Found", "response": {"message": [f"Message not found: {mid}"]}}
+        return 201, {
+            "mediaType": "audioMessage",
+            "mimetype": media["mimetype"],
+            "base64": base64.b64encode(media["data"]).decode("ascii"),
+        }
 
     def _send_text(self, payload: dict) -> tuple[int, Any]:
         number = payload.get("number")
