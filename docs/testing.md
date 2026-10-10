@@ -2,22 +2,92 @@
 
 ## Níveis de verificação
 
-| Nível | O que roda de verdade | O que é falso | Comando | Estado |
+| Nível | O que roda de verdade | O que é falso | Comando | Quando |
 |---|---|---|---|---|
-| L0 unit | funções | tudo em volta | `pytest tests/unit -q` | ativo |
-| L1 integração CLI | módulos + fixtures | LLM, Windmill, rede | `./scripts/evi-test <feature>` | ativo |
-| L1c container smoke | imagem montada | dados | `./scripts/evi-test container` | ativo |
-| **L2 simulação** | imagem de produção, poller Telegram, webhook Evolution, LangGraph, LLM real, scripts Windmill, Postgres | Google, Telegram API, Evolution API, relógio | `./scripts/evi-sim run` | **em implementação** — `openspec/changes/evi-sim-harness/` |
-| L3 staging | + Windmill server e schedules | Google | — | futuro |
-| **L4 uso real** | tudo | nada | relatório semanal, sonda diária, `/bom` `/ruim` | **proposto** — `openspec/queued/evi-usage-validation/` |
+| L0 unit | funções | tudo em volta | `pytest tests/unit -q` | sempre (CI) |
+| L1 `evi-test <feature>` | módulos + fixtures | LLM, Windmill, rede | `./scripts/evi-test <feature>` | sempre (CI) |
+| L1c container smoke | imagem montada, /health, /tools | dados | `./scripts/evi-test container` | CI |
+| **L2 `evi-sim`** | imagem, poller Telegram, webhook Evolution, LangGraph, LLM real, scripts Windmill, Postgres | Google, Telegram API, Evolution API, relógio | `./scripts/evi-sim run` | antes de cada change ser arquivado (`--tag critical --repeat 3 --llm live`); CI em modo replay |
+| L3 staging (futuro) | + Windmill server e schedules | Google | — | release maior |
+| **L4 uso real** | tudo | nada | relatório semanal, sonda diária, `/bom` `/ruim` | contínuo — `evi-usage-validation` (`openspec/queued/`) |
 
-Ciclo pretendido: L2 aprova antes de integrar → L4 mede depois → falha real vira
-cenário L2 (`evi-sim promote`).
+Ciclo: L2 aprova antes de integrar → L4 mede depois → falha real vira cenário L2.
 
 > **Atenção:** `scripts/evi-telegram-verify.sh`, `scripts/evi-inbox-ux-verify.sh` e
 > as flags `--live-*` rodam contra as contas reais (Telegram, Gmail, Calendar) e
-> gravam no Postgres de produção. Use só para diagnóstico pontual, não para validar
-> change.
+> gravam no Postgres de produção. Prefira o L2 `./scripts/evi-sim`; use esses só
+> para diagnóstico pontual, não para validar change.
+
+## evi-sim (L2)
+
+Sobe a imagem de produção num projeto compose isolado (`evi-sim`) com fakes de
+Google, Telegram API e Evolution API, e conduz cenários YAML contra ela.
+
+```bash
+./scripts/evi-sim guard                       # checa isolamento (não toca produção)
+./scripts/evi-sim up [--llm live|record|replay]
+./scripts/evi-sim run [--tag T] [--id SIM-RU-01] [--repeat N] \
+    [--llm live|record|replay] [--max-llm-calls N]
+./scripts/evi-sim report                      # último relatório
+./scripts/evi-sim down                        # derruba e apaga volumes
+```
+
+`run` já faz `guard` + `up`. Gate de change:
+`./scripts/evi-sim run --tag critical --repeat 3 --llm live`. Offline (igual ao CI):
+`./scripts/evi-sim run --tag critical --llm replay`.
+
+### Formato do cenário
+
+Em `tests/sim/scenarios/<source>/*.yaml` (`real-usage`, `failure`, `adversarial`,
+`smoke`, `whatsapp`). Validado por `agent/testing/sim/schema.py`; chave
+desconhecida é erro. Exemplo: `tests/sim/scenarios/real-usage/SIM-RU-01*.yaml`.
+
+- Topo: `id` (único), `title`, `tags` (`critical`, `calendar`...), `source`
+  (`real-usage|failure|adversarial|synthetic`), `clock` (`D0 09:00`), `seed`
+  (`calendar`, `tasks`, `gmail`, `calendars`, `evolution`; datas relativas `D1 10:00`,
+  `D-1`), `steps`.
+- Cada step tem exatamente um tipo: `telegram: "texto"`, `whatsapp_control: "texto"`,
+  `whatsapp_contact: "texto"` ou `{text, jid, from_me, group, push_name}`,
+  `clock: "D1 08:00"` ou `"+2h"`, `job: heartbeat|daily-summary`,
+  `fault: {windmill|telegram: ...}`; mais `expect:` opcional.
+- `expect`: `reply_within_s`, `max_latency_s`, `reply_matches` (regex; único check de
+  texto), `no_reply` (+ `no_reply_window_s`, default 15), `calendar`
+  (`created: [{summary_contains, start, end}]`, `count`), `tasks`
+  (`created: [{title_contains, due}]`, `count`), `gmail` (`deleted_count`,
+  `deleted_ids_include`, `not_deleted`), `tools_called_any`, `tools_not_called`,
+  `outbound_to_third_parties`, `postgres` (`[{table, where, count}]`; tabelas:
+  `pending_commitments`, `whatsapp_contacts`, `messages`, `session_tool_snapshots`).
+  Cenários afirmam estado e efeitos, não redação.
+
+### Critério de aprovação
+
+`critical` e `adversarial`: N/N repetições. Demais: ≥ 2/3. Relatórios em
+`logs/sim/`.
+
+### Cassetes (replay)
+
+Respostas do LLM gravadas em `tests/sim/cassettes/` alimentam o modo `replay` (CI,
+sem chave). **Regravar após qualquer mudança de prompt, docstring de tool ou schema
+de tool:** `./scripts/evi-sim run --tag critical --llm record` e commitar os
+cassetes.
+
+### Isolamento
+
+Projeto compose `evi-sim` (portas 18000/18080), sem `.env` de produção, sem mount
+de `./data` nem `./logs`, e `guard` valida o compose renderizado (projeto, env_file, binds de
+`data`/`logs`, hosts reais como api.telegram.org/googleapis.com) e aborta `up`/`run`
+se algo vazar. Chave do LLM: `EVI_SIM_GEMINI_API_KEY`; se ausente, cai em
+`GEMINI_API_KEY` de produção com aviso — a **cota é compartilhada**. `replay` nunca
+usa chave.
+
+### Novo cenário a partir de falha real
+
+1. Copie o `id`/pedido real (Telegram/WhatsApp) para um YAML em
+   `tests/sim/scenarios/real-usage/` (ou `failure/`), tags `real-usage` (+ `critical`
+   se for regressão que não pode voltar).
+2. Reproduza o estado com `seed` e `clock`; asserte o efeito esperado em `expect`.
+3. `./scripts/evi-sim run --id <ID> --repeat 3 --llm live` deve falhar antes do fix
+   e passar depois; grave o cassete (`--llm record`) e commite.
 
 Tiers legados (ainda válidos):
 

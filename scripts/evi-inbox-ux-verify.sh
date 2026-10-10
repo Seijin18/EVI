@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # Inbox UX E2E: mock harness + optional live Windmill + chat (SCN-UX-INBOX-*)
+# !!! ATENÇÃO: este script toca contas REAIS e dados de PRODUÇÃO (Gmail, Calendar, Postgres de produção).
+# !!! Para validar um change, prefira o L2: ./scripts/evi-sim (ver docs/testing.md).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+echo "================================================================" >&2
+echo "AVISO: evi-inbox-ux-verify.sh toca contas REAIS e dados de PRODUCAO (Gmail, Calendar, Postgres de produção)." >&2
+echo "Para validar um change use o L2: ./scripts/evi-sim (docs/testing.md)." >&2
+echo "================================================================" >&2
 
 echo "==> Recriando agent-api com .env atual..."
 docker compose up -d --build --wait agent-api

@@ -57,6 +57,6 @@
   - Files: `agent/llm.py`, `agent/testing/sim/cassette.py`, `tests/sim/cassettes/`, `.github/workflows/ci.yml`, `tests/unit/test_sim_cassette.py`
   - Verify: `./scripts/evi-sim run --tag critical --llm replay` verde sem `EVI_SIM_GEMINI_API_KEY`; alterar um prompt faz falhar com "cassette stale"
 
-- [ ] 4.2 `docs/testing.md` (níveis L0–L4, quando rodar cada um), aviso de dados reais em `evi-telegram-verify.sh`/`evi-inbox-ux-verify.sh`, sincronizar spec `testing` e arquivar
+- [x] 4.2 `docs/testing.md` (níveis L0–L4, quando rodar cada um), aviso de dados reais em `evi-telegram-verify.sh`/`evi-inbox-ux-verify.sh`, sincronizar spec `testing` e arquivar
   - Files: `docs/testing.md`, `scripts/evi-telegram-verify.sh`, `scripts/evi-inbox-ux-verify.sh`, `CLAUDE.md`, `openspec/BACKLOG.md`
   - Verify: `openspec validate --specs && PYTHONPATH=agent python3 -m pytest tests/unit -q && ./scripts/evi-test smoke && ./scripts/evi-sim run --tag critical --repeat 3 --llm live`

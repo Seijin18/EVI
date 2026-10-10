@@ -100,15 +100,16 @@ seguinte (ler um arquivo antes de editar — use `Read`).
 ## Verificação
 
 ```bash
-PYTHONPATH=agent python3 -m pytest tests/unit -q   # Tier 1 (~280 testes)
+PYTHONPATH=agent python3 -m pytest tests/unit -q   # Tier 1 (~490 testes)
 ./scripts/evi-test smoke                            # Tier 2 offline
 ./scripts/evi-test runtime-v3 && ./scripts/evi-test inbox-ux
+./scripts/evi-sim run --tag critical --llm replay   # L2 offline (equivalente ao CI)
 openspec validate --specs
 ruff check agent/ --select E,W,F --ignore E501      # mesmo gate do CI
 ```
 
-Níveis L0–L4 em [`docs/testing.md`](docs/testing.md). Quando o `evi-sim-harness`
-estiver implementado, mudança de comportamento só fecha com
+Níveis L0–L4 em [`docs/testing.md`](docs/testing.md). O `evi-sim-harness` está
+implementado: mudança de comportamento só fecha com
 `./scripts/evi-sim run --tag critical --repeat 3 --llm live` verde. **Não** usar os
 scripts `*-verify.sh` nem `--live-*` para validar change: eles tocam contas e dados
 reais.

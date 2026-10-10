@@ -196,3 +196,30 @@ Cabe com a stack de dev no ar (16 GB). Sem Qdrant, Neo4j, Windmill ou Evolution 
 ## Out of scope
 
 Ver `proposal.md`.
+
+## As-built (2026-10-10)
+
+- **Tools chamadas** = união de três fontes: audit `telegram.jsonl` do container
+  (turnos Telegram), `session_tool_snapshots` (5 tools) e ops do fake Windmill
+  (`/_sim/calls`, cobre turnos do controle WhatsApp). Nenhuma fonte sozinha é completa.
+- **Contagem de chamadas ao LLM**: o agente não tem contador; `testing/sim/llm_counter.py`
+  registra um callback global do LangChain só na imagem de simulação (`CMD` do
+  `Dockerfile.sim`). Em `record` conta ~2× (wrapper + Gemini).
+- **Relógio**: o `fakes` semeia `/sim/clock` com a hora local (libfaketime aborta com
+  arquivo vazio); o runner grava de forma atômica (temp + mv).
+- **Expectativa extra** `no_reply: true` (janela `no_reply_window_s`, default 15 s).
+- **Cassettes**: chave = sha256 do pedido normalizado; datas ISO viram deslocamento
+  do dia simulado (inclusive dentro de datetimes), hora/dia da semana só nas linhas de
+  cabeçalho de calendário do system prompt, UUIDs e ids de tool call ignorados;
+  nome+descrição+schema das tools entram na chave (mudar docstring exige regravar).
+  Pedir uma chave mais vezes do que gravado também é "cassette stale".
+- **Chave do LLM**: sem `EVI_SIM_GEMINI_API_KEY`, `evi-sim` repassa só a linha
+  `GEMINI_API_KEY` do `.env`, com aviso (decisão do usuário). Em `replay` nenhuma chave
+  é repassada.
+- **Background**: `EVI_HEARTBEAT_ENABLED=false` e `EVI_WHATSAPP_LLM_EXTRACT=false`
+  fixados no `sim.env`; jobs só disparam por passo `job` explícito.
+- **Achados de produto** (fora do escopo, registrados): `delete_emails.py` engole o
+  corpo do erro do Google (OAuth expirado vira `upstream_error`); HTTP 500 do Windmill
+  chega ao `parse_windmill_result` como `unparseable`; o extrator heurístico descarta
+  título genérico "Reunião".
+- **Timeout do Gemini**: a simulação achou uma chamada ao LLM que nunca retornava (turno sem resposta); `EVI_LLM_TIMEOUT_SEC` (default 60 s) adicionado em `agent/llm.py`.

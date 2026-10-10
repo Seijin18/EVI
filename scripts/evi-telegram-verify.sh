@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # Telegram E2E: sendMessage, webhook reply, digest (SCN-TG-02, SCN-WA-12)
+# !!! ATENÇÃO: este script toca contas REAIS e dados de PRODUÇÃO (Telegram, Postgres de produção).
+# !!! Para validar um change, prefira o L2: ./scripts/evi-sim (ver docs/testing.md).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+echo "================================================================" >&2
+echo "AVISO: evi-telegram-verify.sh toca contas REAIS e dados de PRODUCAO (Telegram, Postgres de produção)." >&2
+echo "Para validar um change use o L2: ./scripts/evi-sim (docs/testing.md)." >&2
+echo "================================================================" >&2
 
 if ! grep -q '^TELEGRAM_BOT_TOKEN=.\+' .env 2>/dev/null; then
   echo "ERRO: salve TELEGRAM_BOT_TOKEN no .env (Ctrl+S) e rode:"
