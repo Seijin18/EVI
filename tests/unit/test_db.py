@@ -460,3 +460,166 @@ def test_failed_send_releases_claim_for_immediate_retry(briefing_days):
     assert db.claim_briefing(day, "evening") is not None
     db.record_briefing(day, "evening", False, {})
     assert db.claim_briefing(day, "evening") is not None
+
+
+# --- reminders (evi-reminders) ---------------------------------------------
+
+
+@pytest.fixture
+def rem_ids():
+    import db
+
+    db.reset_db_init_for_tests()
+    db.init_db()
+    ids: list = []
+    yield ids
+    with db._conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM reminders WHERE id = ANY(%s)", (ids,))
+        conn.commit()
+
+
+def _mk(ids, due, repeat=None, text="x"):
+    import db
+
+    rid = db.create_reminder(text, due, repeat, f"chat-{_uid()}", "agent")
+    ids.append(rid)
+    return rid
+
+
+def _t(minutes):
+    from datetime import datetime, timedelta, timezone
+
+    return datetime.now(timezone.utc) + timedelta(minutes=minutes)
+
+
+@pytest.mark.ephemeral_db
+def test_reminders_migration_twice_and_create_get_list(rem_ids):
+    import db
+
+    db.reset_db_init_for_tests()
+    db.init_db()
+    db.reset_db_init_for_tests()
+    db.init_db()
+    rid = _mk(rem_ids, _t(60), repeat="daily", text="beber agua")
+    row = db.get_reminder(rid)
+    assert row["status"] == "pending" and row["repeat"] == "daily"
+    assert row["due_at"].tzinfo is not None
+    assert db.get_reminder(-1) is None
+    assert rid in [r["id"] for r in db.list_reminders(chat_id=row["chat_id"])]
+    assert db.list_reminders(chat_id=row["chat_id"], statuses=("sent",)) == []
+
+
+@pytest.mark.ephemeral_db
+def test_scn_rem_02_concurrent_claims_are_disjoint(rem_ids):
+    """SCN-REM-02: two ticks claiming at once never get the same reminder id."""
+    import threading
+
+    import db
+
+    ids = [_mk(rem_ids, _t(-10 + i * 0.01)) for i in range(30)]
+    barrier = threading.Barrier(2)
+    results: list = [None, None]
+
+    def tick(i):
+        barrier.wait()
+        results[i] = {r["id"] for r in db.claim_due(_t(1), limit=30) if r["id"] in ids}
+
+    threads = [threading.Thread(target=tick, args=(i,)) for i in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert results[0].isdisjoint(results[1])
+    assert results[0] | results[1] == set(ids)
+    assert all(db.get_reminder(i)["status"] == "firing" for i in ids)
+
+
+@pytest.mark.ephemeral_db
+def test_claim_due_only_due_pending_ordered(rem_ids):
+    import db
+
+    late = _mk(rem_ids, _t(-30))
+    soon = _mk(rem_ids, _t(-5))
+    future = _mk(rem_ids, _t(60))
+    got = [r["id"] for r in db.claim_due(_t(0), limit=1000) if r["id"] in rem_ids]
+    assert got == [late, soon]
+    assert db.get_reminder(future)["status"] == "pending"
+    assert db.get_reminder(late)["claimed_at"] is not None
+    assert [r for r in db.claim_due(_t(0)) if r["id"] in rem_ids] == []
+
+
+@pytest.mark.ephemeral_db
+def test_finish_fired_one_off_vs_recurring(rem_ids):
+    import db
+
+    one = _mk(rem_ids, _t(-1))
+    rec = _mk(rem_ids, _t(-1), repeat="daily")
+    db.claim_due(_t(0), limit=1000)
+    fired = _t(0)
+    db.finish_fired(one, fired, 42)
+    row = db.get_reminder(one)
+    assert row["status"] == "sent" and row["drift_s"] == 42 and row["fired_at"] is not None
+    nxt = _t(24 * 60)
+    db.finish_fired(rec, fired, 7, next_due_at=nxt)
+    row = db.get_reminder(rec)
+    assert row["status"] == "pending" and row["due_at"] == nxt and row["drift_s"] == 7
+    assert row["fired_at"] is not None
+
+
+@pytest.mark.ephemeral_db
+def test_release_and_requeue_stuck(rem_ids):
+    import db
+
+    a = _mk(rem_ids, _t(-1))
+    b = _mk(rem_ids, _t(-1))
+    db.claim_due(_t(0), limit=1000)
+    db.release_reminder(a)
+    assert db.get_reminder(a)["status"] == "pending"
+    assert db.requeue_stuck(older_than_minutes=5) >= 0
+    assert db.get_reminder(b)["status"] == "firing"  # fresh claim not requeued
+    with db._conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE reminders SET claimed_at = now() - interval '10 minutes' "
+                        "WHERE id = %s", (b,))
+        conn.commit()
+    assert db.requeue_stuck(older_than_minutes=5) >= 1
+    assert db.get_reminder(b)["status"] == "pending"
+
+
+@pytest.mark.ephemeral_db
+def test_snooze_complete_cancel(rem_ids):
+    import db
+
+    r = _mk(rem_ids, _t(-1))
+    db.claim_due(_t(0), limit=1000)
+    assert db.snooze_reminder(r, _t(10)) is False  # firing: not snoozable
+    db.finish_fired(r, _t(0), 1)
+    until = _t(15)
+    assert db.snooze_reminder(r, until) is True
+    row = db.get_reminder(r)
+    assert row["status"] == "pending" and row["due_at"] == until
+    assert db.cancel_reminder(r) is True
+    assert db.get_reminder(r)["status"] == "cancelled"
+    assert db.cancel_reminder(r) is False
+    assert db.snooze_reminder(r, _t(5)) is False
+    assert db.complete_reminder(r) is False
+
+    rec = _mk(rem_ids, _t(60), repeat="weekly")
+    assert db.complete_reminder(rec) is True
+    assert db.get_reminder(rec)["status"] == "done"
+    assert db.cancel_reminder(rec) is False
+
+
+@pytest.mark.ephemeral_db
+def test_reminder_stats(rem_ids):
+    import db
+
+    ids = [_mk(rem_ids, _t(-1)) for _ in range(4)]
+    db.claim_due(_t(0), limit=1000)
+    for rid, d in zip(ids, (1, 2, 400, 3)):
+        db.finish_fired(rid, _t(0), d)
+    since, until = _window()
+    st = db.reminder_stats(since, until)
+    assert st["created"] >= 4 and st["fired"] >= 4 and st["late"] >= 1
+    assert {1, 2, 400, 3} <= set(st["drifts"]) and st["p95_drift_s"] >= 3
