@@ -17,7 +17,7 @@
 
 ## 2. Tools e medida
 
-- [ ] 2.1 Tools `create_reminder`, `list_reminders`, `cancel_reminder`, `snooze_reminder`, `complete_reminder` + registro + regras no `AGENTS.md`
+- [x] 2.1 Tools `create_reminder`, `list_reminders`, `cancel_reminder`, `snooze_reminder`, `complete_reminder` + registro + regras no `AGENTS.md`
   - SCN-REM-01, SCN-REM-04
   - Files: `agent/tools/reminder_tools.py`, `agent/tools/registry.py`, `EVI_WORKSPACE/AGENTS.md`, `tests/unit/test_reminder_tools.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reminder_tools.py -q` (inclui teste de que `get_all_tools()` expõe as 5 tools) — data no passado e `repeat` inválido recusados com mensagem clara; flag desligada não grava

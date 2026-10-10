@@ -15,6 +15,13 @@ from tools.commitment_tools import (
     list_pending_commitments,
     list_scheduled_today,
 )
+from tools.reminder_tools import (
+    cancel_reminder,
+    complete_reminder,
+    create_reminder,
+    list_reminders,
+    snooze_reminder,
+)
 from tools.task_tool import create_task, list_tasks
 from tools.graph_tool import query_conversation_graph
 from tools.contact_tool import (
@@ -53,4 +60,9 @@ def get_all_tools():
         set_whatsapp_contact_name,
         list_recent_whatsapp_messages,
         summarize_whatsapp_messages,
+        create_reminder,
+        list_reminders,
+        cancel_reminder,
+        snooze_reminder,
+        complete_reminder,
     ]
