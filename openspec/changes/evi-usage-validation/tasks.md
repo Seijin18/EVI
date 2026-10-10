@@ -27,12 +27,12 @@
   - Files: `agent/services/usage_signals.py`, `tests/unit/test_usage_signals.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_usage_signals.py -q` — inclui os pares reais "Você consegue listar meus compromissos?" → "Listar compromissos" (reformulação) e "Esse número na verdade é de…" (correção)
 
-- [ ] 2.3 KPIs + relatório semanal (Markdown + resumo Telegram) + `/jobs/usage-report` + script Windmill
+- [x] 2.3 KPIs + relatório semanal (Markdown + resumo Telegram) + `/jobs/usage-report` + script Windmill
   - SCN-USE-05
   - Files: `agent/services/usage_report.py`, `agent/main.py`, `windmill/f/integrations/usage_report.py`, `tests/unit/test_usage_report.py`, `.gitignore`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_usage_report.py -q` — turnos `is_test` fora dos KPIs; Δ contra semana anterior e linha de base
 
-- [ ] 2.4 Sonda diária somente-leitura + aviso único por integração/dia + `/jobs/probe` + script Windmill
+- [x] 2.4 Sonda diária somente-leitura + aviso único por integração/dia + `/jobs/probe` + script Windmill
   - SCN-USE-06
   - Files: `agent/services/probe.py`, `agent/main.py`, `windmill/f/integrations/probe.py`, `tests/unit/test_probe.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_probe.py -q` — nenhuma tool de escrita é importada pelo módulo; OAuth expirado gera 1 aviso mesmo com 2 execuções no dia

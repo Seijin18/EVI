@@ -9,6 +9,7 @@ data/
 # Personal / local runtime
 watched_folders/
 EVI_WORKSPACE/memory/
+EVI_WORKSPACE/reports/
 EVI_WORKSPACE/MEMORY.md
 EVI_WORKSPACE/USER.md
 

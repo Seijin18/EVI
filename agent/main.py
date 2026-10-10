@@ -655,6 +655,33 @@ def heartbeat_job(_: None = Depends(verify_api_key)):
     return run_heartbeat()
 
 
+@app.post("/jobs/usage-report")
+def usage_report_job(week: Optional[str] = None, _: None = Depends(verify_api_key)):
+    """Windmill cron target (Sunday 20h): weekly usage report. `?week=YYYY-Www` overrides."""
+    from services.usage_report import generate_report
+
+    try:
+        return generate_report(week=week)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/jobs/usage-signals")
+def usage_signals_job(_: None = Depends(verify_api_key)):
+    """Windmill cron target (nightly): recompute implicit signals (last 2 days) + prune."""
+    from services.usage_report import run_signals_job
+
+    return {"ok": True, **run_signals_job()}
+
+
+@app.post("/jobs/probe")
+def probe_job(_: None = Depends(verify_api_key)):
+    """Windmill cron target (06:30): read-only integration probe, one warning/day per failing check."""
+    from services.probe import run_probe
+
+    return run_probe()
+
+
 class ImportContactsRequest(BaseModel):
     path: str
     apply: bool = False

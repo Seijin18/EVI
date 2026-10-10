@@ -1,0 +1,8 @@
+summary: Weekly EVI usage report
+description: POST agent-api /jobs/usage-report (ISO week anterior; Markdown em EVI_WORKSPACE/reports + resumo Telegram). Agendar domingo 20h.
+lock: '!inline f/integrations/usage_report.script.lock'
+kind: script
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties: {}

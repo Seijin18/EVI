@@ -1,0 +1,8 @@
+summary: EVI implicit usage signals
+description: POST agent-api /jobs/usage-signals (recompute signals for last 2 days + turn_log retention prune). Agendar diariamente.
+lock: '!inline f/integrations/usage_signals.script.lock'
+kind: script
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties: {}
