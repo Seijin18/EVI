@@ -46,7 +46,7 @@ The fake Windmill SHALL support per-scenario faults `oauth_expired`, `timeout`, 
 - **AND** with a transient Telegram failure the reply is still delivered after retry
 
 ### Requirement: LLM nondeterminism is measured as a pass rate
-`evi-sim run --repeat N` SHALL run each scenario N times and report the pass rate per scenario and per tag. Scenarios tagged `critical` or `adversarial` pass only at N/N; others at ≥ 2/3. The runner SHALL count LLM calls, stop at `--max-llm-calls`, write `logs/sim/<ts>.jsonl` and `logs/sim/<ts>.md`, and use `EVI_SIM_GEMINI_API_KEY`, never the production key.
+`evi-sim run --repeat N` SHALL run each scenario N times and report the pass rate per scenario and per tag. Scenarios tagged `critical` or `adversarial` pass only at N/N; others at ≥ 2/3. The runner SHALL count LLM calls, stop at `--max-llm-calls`, write `logs/sim/<ts>.jsonl` and `logs/sim/<ts>.md`, and forward only the Gemini key (`EVI_SIM_GEMINI_API_KEY` when set, otherwise `GEMINI_API_KEY` from `.env` with a warning) — no other production secret.
 
 #### Scenario: SCN-SIM-07
 - **WHEN** a `critical` scenario passes 2 of 3 runs

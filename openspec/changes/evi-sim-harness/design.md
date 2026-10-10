@@ -159,7 +159,7 @@ entra no repositório.
   latências, chamadas ao LLM, motivo de falha) + `logs/sim/<ts>.md`.
 - **Orçamento de cota**: o Gemini free tier tem limite diário de requisições. O runner
   conta chamadas por cenário, para em `--max-llm-calls` (default 200) e usa
-  `EVI_SIM_GEMINI_API_KEY` (projeto separado), nunca a chave de produção.
+  `EVI_SIM_GEMINI_API_KEY` (projeto separado) quando definida; sem ela, repassa `GEMINI_API_KEY` do `.env` com aviso (decisão do usuário, 2026-10-10 — cota compartilhada).
 
 ### Record/replay para a CI
 
