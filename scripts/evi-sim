@@ -60,8 +60,14 @@ case "$cmd" in
   down)
     "${DC[@]}" down -v --remove-orphans
     ;;
-  run|report)
-    echo "evi-sim: '$cmd' not implemented yet (task 3.1)" >&2
+  run)
+    if [[ "$("${DC[@]}" ps --format '{{.Health}}' agent-api 2>/dev/null)" != "healthy" ]]; then
+      "$0" up
+    fi
+    PYTHONPATH="${ROOT}/agent" "$PY" -m testing.sim.runner run "$@"
+    ;;
+  report)
+    echo "evi-sim: 'report' not implemented yet (task 3.2)" >&2
     exit 2
     ;;
   *)

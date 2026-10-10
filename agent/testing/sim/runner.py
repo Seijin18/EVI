@@ -1,0 +1,369 @@
+"""evi-sim scenario runner (task 3.1).
+
+    PYTHONPATH=agent python -m testing.sim.runner run [--tag a,b] [--id X] [--repeat N]
+                                                      [--llm live] [--scenarios-dir DIR]
+
+Per scenario: reset (fakes + agent tables + session memory + audit logs), set clock,
+seed, then run the steps. The runner never calls /chat: Telegram steps are enqueued in
+the fake Bot API and picked up by the agent's real poller (SCN-SIM-02); WhatsApp steps
+POST a payload built from the real Evolution fixture to the agent's real
+``/webhooks/evolution``.
+
+Tools called (union, per scenario since reset):
+  1. ``telegram.jsonl`` audit log in the agent container (every tool call of a Telegram
+     turn, kind == "call");
+  2. ``session_tool_snapshots`` rows (only a handful of tools are snapshotted);
+  3. fake-Windmill ``/_sim/calls`` ops (op name == script name, used as a fallback so
+     WhatsApp-control turns, which are not audited, still show their Google tools).
+"""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import json
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from testing.sim import schema
+from testing.sim.schema import Scenario, Step
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_SCENARIOS_DIR = REPO_ROOT / "tests" / "sim" / "scenarios"
+SIM_ENV = REPO_ROOT / "tests" / "sim" / "sim.env"
+FIXTURE = REPO_ROOT / "tests" / "fixtures" / "evolution" / "messages_upsert.json"
+COMPOSE = ["docker", "compose", "-p", "evi-sim", "--env-file", "/dev/null", "-f", str(REPO_ROOT / "docker-compose.sim.yml")]
+AUDIT_LOG = "/tmp/evi-sim-logs"
+DEFAULT_REPLY_TIMEOUT_S = 120
+SETTLE_S = 2.0
+DEFAULT_CONTACT_JID = "5511999999999@s.whatsapp.net"
+GROUP_JID = "120363000000000001@g.us"
+
+
+def read_env(path: Path = SIM_ENV) -> dict[str, str]:
+    env: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            env[k.strip()] = v.strip()
+    return env
+
+
+@dataclass
+class Ctx:
+    fakes_url: str = "http://127.0.0.1:18080"
+    agent_url: str = "http://127.0.0.1:18000"
+    env: dict = field(default_factory=read_env)
+
+    @property
+    def tz(self) -> str:
+        return self.env.get("EVI_TIMEZONE", schema.DEFAULT_TZ)
+
+    @property
+    def chat_id(self) -> str:
+        return self.env["TELEGRAM_CHAT_ID"]
+
+    @property
+    def control_jids(self) -> set[str]:
+        return {j.strip() for j in self.env.get("EVI_WHATSAPP_CONTROL_JIDS", "").split(",") if j.strip()}
+
+    def today(self) -> "datetime.date":
+        return datetime.now(ZoneInfo(self.tz)).date()
+
+    # ------------------------------------------------------------------ http
+    def _http(self, method: str, url: str, body: dict | None = None, timeout: float = 30):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                raw = r.read()
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError(f"{method} {url} -> HTTP {exc.code}: {exc.read()[:300]!r}") from exc
+        return json.loads(raw) if raw else None
+
+    def fakes(self, method: str, path: str, body: dict | None = None):
+        return self._http(method, self.fakes_url + path, body)
+
+    def agent(self, method: str, path: str, body: dict | None = None, timeout: float = 300):
+        return self._http(method, self.agent_url + path, body, timeout)
+
+    # ---------------------------------------------------------------- docker
+    def exec(self, service: str, *cmd: str, input_: str | None = None) -> str:
+        proc = subprocess.run(
+            [*COMPOSE, "exec", "-T", service, *cmd], input=input_, capture_output=True, text=True, timeout=120
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"exec {service} {cmd[0]} failed: {proc.stderr.strip()[:300]}")
+        return proc.stdout
+
+    def psql(self, sql: str) -> str:
+        return self.exec("postgres", "psql", "-U", "evisim", "-d", "evisim", "-At", "-c", sql)
+
+    def set_clock(self, dt: datetime) -> None:
+        """Write ``@YYYY-MM-DD HH:MM:SS`` (container-local TZ) atomically: libfaketime
+        aborts on an empty/missing file, so write to a temp file and mv."""
+        stamp = dt.astimezone(ZoneInfo(self.tz)).strftime("@%Y-%m-%d %H:%M:%S")
+        self.exec("fakes", "sh", "-c", f"printf '%s' '{stamp}' > /sim/clock.tmp && mv /sim/clock.tmp /sim/clock")
+
+    def now(self) -> datetime:
+        return datetime.now(ZoneInfo(self.tz))
+
+
+# --------------------------------------------------------------------------- result
+@dataclass
+class StepResult:
+    index: int
+    type: str
+    latency_s: float | None = None
+    reply: str | None = None
+    failures: list[str] = field(default_factory=list)
+
+
+@dataclass
+class Result:
+    scenario_id: str
+    passed: bool = False
+    failures: list[str] = field(default_factory=list)
+    steps: list[StepResult] = field(default_factory=list)
+    tools_called: list[str] = field(default_factory=list)
+    outbound: dict = field(default_factory=dict)
+    duration_s: float = 0.0
+
+
+# --------------------------------------------------------------------------- reset
+def reset_world(ctx: Ctx) -> None:
+    ctx.fakes("POST", "/_sim/reset")
+    tables = [t for t in ctx.psql("SELECT tablename FROM pg_tables WHERE schemaname='public'").split() if t]
+    if tables:
+        ctx.psql("TRUNCATE " + ", ".join(f'"{t}"' for t in tables) + " RESTART IDENTITY CASCADE")
+    ctx.exec("agent-api", "sh", "-c", f"mkdir -p {AUDIT_LOG} && find {AUDIT_LOG} -type f -delete")
+    sessions = [f"telegram-{ctx.chat_id}"] + [f"whatsapp-{j}" for j in sorted(ctx.control_jids)]
+    for sid in sessions:
+        ctx.agent("POST", "/reset", {"session_id": sid}, timeout=30)
+
+
+# --------------------------------------------------------------------------- observations
+def tools_called(ctx: Ctx) -> list[str]:
+    names: set[str] = set()
+    try:
+        raw = ctx.exec("agent-api", "sh", "-c", f"cat {AUDIT_LOG}/telegram.jsonl 2>/dev/null || true")
+    except RuntimeError:
+        raw = ""
+    for line in raw.splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        for t in entry.get("tools") or []:
+            if t.get("kind") == "call" and t.get("tool"):
+                names.add(t["tool"])
+    names.update(n for n in ctx.psql("SELECT DISTINCT tool_name FROM session_tool_snapshots").split() if n)
+    names.update(c["op"] for c in ctx.fakes("GET", "/_sim/calls") or [] if c.get("op"))
+    return sorted(names)
+
+
+def pg_count(ctx: Ctx, row: dict) -> int:
+    table = row["table"]
+    if table not in schema.PG_TABLES:
+        raise RuntimeError(f"table {table!r} not allowed")
+    clauses = []
+    for col, val in (row.get("where") or {}).items():
+        if val is None:
+            clauses.append(f"{col} IS NULL")
+        elif isinstance(val, bool):
+            clauses.append(f"{col} = {'TRUE' if val else 'FALSE'}")
+        elif isinstance(val, (int, float)):
+            clauses.append(f"{col} = {val}")
+        else:
+            clauses.append(f"{col}::text = '{str(val).replace(chr(39), chr(39) * 2)}'")
+    sql = f"SELECT count(*) FROM {table}" + (" WHERE " + " AND ".join(clauses) if clauses else "")
+    return int(ctx.psql(sql).strip() or 0)
+
+
+def observe(ctx: Ctx, step_obs: dict, exp: dict) -> dict:
+    state = ctx.fakes("GET", "/_sim/state")
+    obs = {
+        "google": state["google"],
+        "evolution_sent": state["evolution_sent"],
+        "telegram_sent": state["telegram_sent"],
+        "control_jids": ctx.control_jids,
+        "chat_id": ctx.chat_id,
+        "base": ctx.today(),
+        "tz": ctx.tz,
+        "tools_called": tools_called(ctx) if ("tools_called_any" in exp or "tools_not_called" in exp) else [],
+        "postgres": [pg_count(ctx, r) for r in exp.get("postgres") or []],
+    }
+    obs.update(step_obs)
+    return obs
+
+
+# --------------------------------------------------------------------------- steps
+def _wait_reply(ctx: Ctx, fetch, baseline: int, timeout_s: float) -> tuple[str | None, float | None]:
+    """Poll ``fetch()`` (list of reply texts, in order) until a new one shows up."""
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < timeout_s:
+        msgs = fetch()
+        if len(msgs) > baseline:
+            time.sleep(SETTLE_S)  # let multi-part replies land
+            msgs = fetch()
+            return "\n".join(msgs[baseline:]), time.monotonic() - t0
+        time.sleep(0.5)
+    return None, None
+
+
+def _telegram_replies(ctx: Ctx) -> list[str]:
+    sent = ctx.fakes("GET", "/_sim/telegram/sent") or []
+    return [m.get("text", "") for m in sent if str(m.get("chat_id")) == str(ctx.chat_id)]
+
+
+def _control_replies(ctx: Ctx) -> list[str]:
+    sent = ctx.fakes("GET", "/_sim/evolution/sent") or []
+    return [m.get("text", "") for m in sent if m.get("jid") in ctx.control_jids]
+
+
+def build_webhook_payload(text: str, jid: str, *, from_me: bool = False, group: bool = False, push_name: str = "Sim") -> dict:
+    payload = copy.deepcopy(json.loads(FIXTURE.read_text(encoding="utf-8")))
+    msg = payload["data"]["messages"][0]
+    msg["key"] = {"id": f"SIM{uuid.uuid4().hex[:16].upper()}", "remoteJid": GROUP_JID if group else jid, "fromMe": from_me}
+    if group:
+        msg["key"]["participant"] = jid
+    msg["messageTimestamp"] = int(time.time())
+    msg["message"] = {"conversation": text}
+    msg["pushName"] = push_name
+    return payload
+
+
+def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
+    sr = StepResult(idx, step.type)
+    exp = step.expect
+    step_obs: dict = {}
+    timeout = float(exp.get("reply_within_s") or DEFAULT_REPLY_TIMEOUT_S)
+    t0 = time.monotonic()
+    if step.type == "telegram":
+        base = len(_telegram_replies(ctx))
+        ctx.fakes("POST", "/_sim/telegram/updates", {"text": step.value})
+        sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _telegram_replies(ctx), base, timeout)
+    elif step.type in ("whatsapp_control", "whatsapp_contact"):
+        if step.type == "whatsapp_control":
+            jid, kw, text = sorted(ctx.control_jids)[0], {}, step.value
+        else:
+            v = step.value if isinstance(step.value, dict) else {"text": step.value}
+            jid, text = v.get("jid", DEFAULT_CONTACT_JID), v["text"]
+            kw = {"from_me": bool(v.get("from_me")), "group": bool(v.get("group")), "push_name": v.get("push_name", "Sim")}
+        base = len(_control_replies(ctx))
+        ctx.agent("POST", "/webhooks/evolution", build_webhook_payload(text, jid, **kw))
+        if step.type == "whatsapp_control" and "reply_within_s" in exp:
+            sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _control_replies(ctx), base, timeout)
+        else:
+            time.sleep(SETTLE_S)
+            sr.latency_s = time.monotonic() - t0
+    elif step.type == "clock":
+        v = str(step.value)
+        if schema.is_relative(v):
+            ctx.set_clock(schema.parse_relative(v, ctx.today(), ctx.tz))
+        else:
+            ctx.set_clock(ctx.now() + schema.parse_delta(v))
+    elif step.type == "job":
+        ctx.agent("POST", f"/jobs/{step.value}", {})
+        sr.latency_s = time.monotonic() - t0
+    elif step.type == "fault":
+        if "windmill" in step.value:
+            f = step.value["windmill"]
+            if f == "clear":
+                ctx.fakes("DELETE", "/_sim/faults")
+            else:
+                ctx.fakes("POST", "/_sim/faults", f)
+        if "telegram" in step.value:
+            ctx.fakes("POST", "/_sim/telegram/faults", step.value["telegram"])
+    if exp:
+        step_obs = {"reply": sr.reply, "latency_s": sr.latency_s}
+        sr.failures = schema.eval_expect(exp, observe(ctx, step_obs, exp))
+    return sr
+
+
+def run_scenario(scn: Scenario, ctx: Ctx) -> Result:
+    res = Result(scn.id)
+    t0 = time.monotonic()
+    try:
+        reset_world(ctx)
+        base = ctx.today()
+        ctx.set_clock(schema.parse_relative(scn.clock, base, ctx.tz) if scn.clock else ctx.now())
+        seed = schema.resolve_seed(scn.seed, base, ctx.tz)
+        if seed:
+            ctx.fakes("POST", "/_sim/seed", {"google": {k: v for k, v in seed.items() if k != "evolution"}, **({"evolution": seed["evolution"]} if "evolution" in seed else {})})
+        for i, step in enumerate(scn.steps):
+            sr = run_step(ctx, scn, i, step)
+            res.steps.append(sr)
+            res.failures += [f"step {i} ({step.type}): {f}" for f in sr.failures]
+        state = ctx.fakes("GET", "/_sim/state")
+        res.outbound = {
+            "evolution_sent": len(state["evolution_sent"]),
+            "telegram_sent": len(state["telegram_sent"]),
+            "third_parties": schema.count_third_party_outbound(
+                state["evolution_sent"], state["telegram_sent"], ctx.control_jids, ctx.chat_id
+            ),
+        }
+        res.tools_called = tools_called(ctx)
+    except Exception as exc:  # infra error = failure with the reason, not a crash
+        res.failures.append(f"runner error: {type(exc).__name__}: {exc}")
+    res.duration_s = time.monotonic() - t0
+    res.passed = not res.failures
+    return res
+
+
+# --------------------------------------------------------------------------- CLI
+def _csv(v: str | None) -> list[str] | None:
+    return [x.strip() for x in v.split(",") if x.strip()] if v else None
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    if args.llm != "live":
+        print("evi-sim: only --llm live is supported for now (record/replay comes in task 4.1)", file=sys.stderr)
+        return 2
+    try:
+        scenarios = schema.load_scenarios(args.scenarios_dir, tags=_csv(args.tag), ids=_csv(args.id))
+    except schema.ScenarioError as exc:
+        print(f"evi-sim: {exc}", file=sys.stderr)
+        return 2
+    if not scenarios:
+        print("evi-sim: no scenarios matched", file=sys.stderr)
+        return 2
+    ctx = Ctx()
+    results: list[Result] = []
+    for scn in scenarios:
+        for n in range(args.repeat):
+            res = run_scenario(scn, ctx)
+            results.append(res)
+            label = f"{scn.id}" + (f" #{n + 1}" if args.repeat > 1 else "")
+            print(f"{'PASS' if res.passed else 'FAIL'} {label} ({res.duration_s:.1f}s)")
+            for f in res.failures:
+                print(f"    - {f}")
+    failed = [r for r in results if not r.passed]
+    print(f"{len(results) - len(failed)}/{len(results)} passed")
+    return 1 if failed else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="python -m testing.sim.runner")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    r = sub.add_parser("run")
+    r.add_argument("--tag")
+    r.add_argument("--id")
+    r.add_argument("--repeat", type=int, default=1)
+    r.add_argument("--llm", default="live")
+    r.add_argument("--scenarios-dir", default=str(DEFAULT_SCENARIOS_DIR))
+    args = p.parse_args(argv)
+    return cmd_run(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

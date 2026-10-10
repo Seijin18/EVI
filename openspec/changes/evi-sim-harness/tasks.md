@@ -29,7 +29,7 @@
 
 ## 3. Runner e corpus
 
-- [ ] 3.1 Schema YAML de cenário + runner (relógio, passos, asserções de estado/efeitos/latência, reset entre cenários)
+- [x] 3.1 Schema YAML de cenário + runner (relógio, passos, asserções de estado/efeitos/latência, reset entre cenários)
   - SCN-SIM-04
   - Files: `agent/testing/sim/schema.py`, `agent/testing/sim/runner.py`, `tests/unit/test_sim_schema.py`, `scripts/evi-sim`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_schema.py -q` e `./scripts/evi-sim run --id SIM-SMOKE-01` (cenário trivial "Oi" → resposta capturada no fake Telegram)

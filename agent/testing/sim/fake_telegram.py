@@ -35,6 +35,9 @@ class FakeTelegram:
     def __init__(self, token: str = SIM_TOKEN, default_chat_id: str | int | None = None) -> None:
         self.token = token
         self._default_chat_id = default_chat_id
+        # update ids stay monotonic across reset(): the agent's poller keeps its
+        # getUpdates offset, so restarting at 1 would make it drop every new update
+        self._update_seq = 0
         self.reset()
 
     @property
@@ -45,7 +48,6 @@ class FakeTelegram:
     # ------------------------------------------------------------- control
     def reset(self) -> None:
         self._updates: list[dict] = []
-        self._update_seq = 0
         self._message_seq = 0
         self.sent: list[dict] = []
         self._faults: dict[str, dict] = {}

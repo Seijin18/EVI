@@ -1,0 +1,10 @@
+id: SIM-SMOKE-01
+title: Smoke - saudação simples responde sem efeitos colaterais
+tags: [smoke]
+source: synthetic
+steps:
+  - telegram: "Oi"
+    expect:
+      reply_within_s: 90
+      outbound_to_third_parties: 0
+      tools_not_called: [delete_emails, delete_emails_by_query]
