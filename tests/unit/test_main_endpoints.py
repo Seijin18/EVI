@@ -162,3 +162,61 @@ def test_daily_summary_job(client):
 def test_heartbeat_job(client):
     with patch("services.heartbeat.run_heartbeat", return_value={"ok": True, "ran": False}):
         assert client.post("/jobs/heartbeat").json()["ok"] is True
+
+
+# --- POST /jobs/briefing (SCN-BRIEF-04) -------------------------------------
+
+
+def test_briefing_job_requires_api_key(client, monkeypatch):
+    monkeypatch.setenv("EVI_API_KEY", "secret")
+    monkeypatch.setenv("EVI_BRIEFING_ENABLED", "true")
+    with patch("services.briefing.deliver_briefing") as deliver:
+        assert client.post("/jobs/briefing?kind=morning").status_code == 401
+        assert client.post("/jobs/briefing", headers={"x-api-key": "bad"}).status_code == 401
+        deliver.assert_not_called()
+        deliver.return_value = {"status": "sent"}
+        ok = client.post("/jobs/briefing?kind=morning", headers={"x-api-key": "secret"})
+    assert ok.status_code == 200
+
+
+def test_briefing_job_disabled_sends_nothing(client, monkeypatch):
+    monkeypatch.delenv("EVI_BRIEFING_ENABLED", raising=False)
+    with patch("services.briefing.deliver_briefing") as deliver:
+        r = client.post("/jobs/briefing?kind=morning")
+    assert r.status_code == 200 and r.json()["status"] == "disabled"
+    deliver.assert_not_called()
+
+
+def test_briefing_job_bad_kind_is_400(client, monkeypatch):
+    monkeypatch.setenv("EVI_BRIEFING_ENABLED", "true")
+    with patch("services.briefing.deliver_briefing") as deliver:
+        assert client.post("/jobs/briefing?kind=noon").status_code == 400
+    deliver.assert_not_called()
+
+
+def test_briefing_job_second_call_same_day_is_already_sent_and_sends_once(client, monkeypatch):
+    monkeypatch.setenv("EVI_BRIEFING_ENABLED", "true")
+    sent = []
+
+    def fake_deliver(kind="morning", force=False, now=None):
+        if sent and not force:
+            return {"status": "already_sent", "kind": kind}
+        sent.append(kind)
+        return {"status": "sent", "kind": kind}
+
+    with patch("services.briefing.deliver_briefing", side_effect=fake_deliver) as deliver:
+        first = client.post("/jobs/briefing?kind=morning").json()
+        second = client.post("/jobs/briefing?kind=morning").json()
+        forced = client.post("/jobs/briefing?kind=morning&force=true").json()
+    assert first["status"] == "sent" and second["status"] == "already_sent"
+    assert forced["status"] == "sent" and len(sent) == 2
+    assert deliver.call_args_list[1].kwargs == {"kind": "morning", "force": False}
+    assert deliver.call_args_list[2].kwargs == {"kind": "morning", "force": True}
+
+
+def test_briefing_job_failure_is_http_200_status_failed(client, monkeypatch):
+    monkeypatch.setenv("EVI_BRIEFING_ENABLED", "true")
+    with patch("services.briefing.deliver_briefing", side_effect=RuntimeError("boom")):
+        r = client.post("/jobs/briefing?kind=evening")
+    assert r.status_code == 200
+    assert r.json()["status"] == "failed" and r.json()["kind"] == "evening"

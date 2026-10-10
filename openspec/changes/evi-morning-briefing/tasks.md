@@ -37,7 +37,7 @@
   - Files: `agent/services/briefing.py`, `tests/unit/test_briefing.py`, `agent/services/metrics.py`, `tests/unit/test_metrics.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_metrics.py -q` — snapshot contém `{n, ref}` para cada item; falha de envio grava `ok=false` e permite reenvio; resposta na sessão em até 3 h incrementa `replied`
 
-- [ ] 2.6 `POST /jobs/briefing` (`kind`, `force`, auth, `disabled`, idempotência)
+- [x] 2.6 `POST /jobs/briefing` (`kind`, `force`, auth, `disabled`, idempotência)
   - SCN-BRIEF-04, SCN-AUTH-02
   - Files: `agent/main.py`, `tests/unit/test_main_endpoints.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_main_endpoints.py -q` — sem API key → 401; segundo POST no mesmo dia → `already_sent`

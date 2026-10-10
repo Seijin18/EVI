@@ -688,6 +688,28 @@ def probe_job(_: None = Depends(verify_api_key)):
     return run_probe()
 
 
+@app.post("/jobs/briefing")
+def briefing_job(kind: str = "morning", force: bool = False, _: None = Depends(verify_api_key)):
+    """Windmill cron target: deliver the morning/evening briefing to Telegram.
+
+    Idempotent per (local day, kind); `?force=true` resends. Send failures come back as
+    `{"status": "failed"}` with HTTP 200 (never a 5xx), so a Windmill retry is the caller's choice.
+    """
+    from services.briefing import deliver_briefing
+    from services.heartbeat import _briefing_enabled
+
+    if kind not in {"morning", "evening"}:
+        raise HTTPException(status_code=400, detail="kind must be 'morning' or 'evening'")
+    if not _briefing_enabled():
+        return {"status": "disabled", "kind": kind}
+    try:
+        result = deliver_briefing(kind=kind, force=force)
+    except Exception as exc:
+        soft_fail("jobs.briefing", exc)
+        return {"status": "failed", "kind": kind, "reason": str(exc)[:200]}
+    return {"kind": kind, **result}
+
+
 class ImportContactsRequest(BaseModel):
     path: str
     apply: bool = False
