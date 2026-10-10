@@ -5,6 +5,7 @@ status transitions were only ever verified by running the product. These skip
 without `DATABASE_URL`, and CI provides an ephemeral Postgres service.
 """
 
+import datetime as dt
 import os
 import sys
 import uuid
@@ -313,3 +314,84 @@ def test_probe_log_notified_flag():
     assert not db.probe_already_notified(dt.date(2099, 1, 2), chk)
     rows = [r for r in db.list_probes(day, day) if r["check_name"] == chk]
     assert rows and rows[0]["ok"] is False and rows[0]["reason"] == "timeout"
+
+
+# --- briefing_log (evi-morning-briefing) ---------------------------------------
+
+
+@pytest.fixture
+def briefing_days():
+    import db
+
+    db.reset_db_init_for_tests()
+    db.init_db()
+    days = [dt.date(2001, 1, 1), dt.date(2001, 1, 2), dt.date(2001, 1, 3)]
+
+    def _clean():
+        with db._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM briefing_log WHERE day = ANY(%s)", (days,))
+            conn.commit()
+
+    _clean()
+    yield days
+    _clean()
+
+
+@pytest.mark.ephemeral_db
+def test_briefing_migration_idempotent(briefing_days):
+    import db
+
+    db.reset_db_init_for_tests()
+    db.init_db()
+    db.reset_db_init_for_tests()
+    db.init_db()
+    assert db.get_briefing(briefing_days[0], "morning") is None
+
+
+@pytest.mark.ephemeral_db
+def test_briefing_unique_and_failed_send_can_retry(briefing_days):
+    import db
+
+    day = briefing_days[0]
+    assert not db.briefing_sent_today(day, "morning")
+    id1 = db.record_briefing(day, "morning", False, {"agenda": {"count": 0, "error": "boom"}})
+    assert not db.briefing_sent_today(day, "morning")  # ok=false does not block a retry
+    id2 = db.record_briefing(day, "morning", True, {"agenda": {"count": 3, "error": None}})
+    assert id2 == id1  # UPSERT, not a second row
+    assert db.briefing_sent_today(day, "morning")
+    row = db.get_briefing(day, "morning")
+    assert row["ok"] is True and row["sections"]["agenda"]["count"] == 3
+    # force resend overwrites too
+    db.record_briefing(day, "morning", True, {"agenda": {"count": 5, "error": None}})
+    assert db.get_briefing(day, "morning")["sections"]["agenda"]["count"] == 5
+    with db._conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM briefing_log WHERE day = %s AND kind = 'morning'", (day,))
+            assert cur.fetchone()[0] == 1
+
+
+@pytest.mark.ephemeral_db
+def test_briefing_sent_today_scoped_by_day_and_kind(briefing_days):
+    import db
+
+    d1, d2, _ = briefing_days
+    db.record_briefing(d1, "morning", True, {})
+    assert db.briefing_sent_today(d1, "morning")
+    assert not db.briefing_sent_today(d1, "evening")
+    assert not db.briefing_sent_today(d2, "morning")
+
+
+@pytest.mark.ephemeral_db
+def test_mark_briefing_replied_first_mark_only(briefing_days):
+    import db
+
+    day = briefing_days[2]
+    assert db.mark_briefing_replied(day, "morning") is False  # no row
+    db.record_briefing(day, "morning", True, {})
+    assert db.get_briefing(day, "morning")["replied_at"] is None
+    assert db.mark_briefing_replied(day, "morning") is True
+    first = db.get_briefing(day, "morning")["replied_at"]
+    assert first is not None
+    assert db.mark_briefing_replied(day, "morning") is False
+    assert db.get_briefing(day, "morning")["replied_at"] == first

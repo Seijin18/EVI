@@ -12,7 +12,7 @@
 
 ## 2. Briefing
 
-- [ ] 2.1 Tabela `briefing_log` + `record_briefing` / `briefing_sent_today`
+- [x] 2.1 Tabela `briefing_log` + `record_briefing` / `briefing_sent_today`
   - SCN-BRIEF-04
   - Files: `agent/db.py`, `tests/unit/test_db.py`
   - Verify: `DATABASE_URL=<PG efêmero> EVI_TEST_EPHEMERAL_DB=1 PYTHONPATH=agent python3 -m pytest tests/unit/test_db.py -q` (marcador `ephemeral_db`; segunda migração idempotente; `UNIQUE(day, kind)`)

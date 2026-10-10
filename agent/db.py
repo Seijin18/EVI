@@ -1,5 +1,6 @@
 """Postgres session persistence (MVP)."""
 
+import json
 import os
 import threading
 from contextlib import contextmanager
@@ -124,6 +125,16 @@ def _run_migrations() -> None:
                     day DATE NOT NULL,
                     check_name VARCHAR(64) NOT NULL,
                     PRIMARY KEY (day, check_name)
+                );
+                CREATE TABLE IF NOT EXISTS briefing_log (
+                    id SERIAL PRIMARY KEY,
+                    day DATE NOT NULL,
+                    kind VARCHAR(16) NOT NULL,
+                    sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    ok BOOLEAN NOT NULL,
+                    sections JSONB NOT NULL,
+                    replied_at TIMESTAMPTZ,
+                    UNIQUE (day, kind)
                 );
                 """
             )
@@ -789,6 +800,74 @@ def list_probes(since, until) -> List[Dict[str, Any]]:
             )
             rows = cur.fetchall()
     return [dict(r) for r in rows]
+
+
+# --- briefing_log (evi-morning-briefing) --------------------------------------
+# One row per (day, kind). `day` is the local (EVI_TIMEZONE) date supplied by the
+# caller (from now_local()). A failed send (ok=false) is overwritten by a retry.
+
+
+def record_briefing(day, kind: str, ok: bool, sections: Dict[str, Any]) -> int:
+    """UPSERT the (day, kind) briefing row; a retry or force resend overwrites
+    ok/sections/sent_at. Returns the row id. replied_at is reset on overwrite."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO briefing_log (day, kind, ok, sections)
+                VALUES (%s, %s, %s, %s::jsonb)
+                ON CONFLICT (day, kind) DO UPDATE
+                SET ok = EXCLUDED.ok,
+                    sections = EXCLUDED.sections,
+                    sent_at = now(),
+                    replied_at = NULL
+                RETURNING id
+                """,
+                (day, kind, ok, json.dumps(sections or {})),
+            )
+            row_id = int(cur.fetchone()[0])
+        conn.commit()
+    return row_id
+
+
+def briefing_sent_today(day, kind: str) -> bool:
+    """True only if a successful (ok=true) briefing exists for (day, kind)."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT EXISTS (SELECT 1 FROM briefing_log "
+                "WHERE day = %s AND kind = %s AND ok)",
+                (day, kind),
+            )
+            return bool(cur.fetchone()[0])
+
+
+def get_briefing(day, kind: str) -> Dict[str, Any] | None:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM briefing_log WHERE day = %s AND kind = %s",
+                (day, kind),
+            )
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def mark_briefing_replied(day, kind: str) -> bool:
+    """Set replied_at once (only if NULL, on an ok=true row). True on first mark."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE briefing_log SET replied_at = now()
+                WHERE day = %s AND kind = %s AND ok AND replied_at IS NULL
+                RETURNING 1
+                """,
+                (day, kind),
+            )
+            marked = cur.fetchone() is not None
+        conn.commit()
+    return marked
 
 
 # Removed with the dev bridge (2026-08-12): create_dev_job, get_dev_job,
