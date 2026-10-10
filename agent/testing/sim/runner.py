@@ -1,13 +1,22 @@
 """evi-sim scenario runner (task 3.1).
 
     PYTHONPATH=agent python -m testing.sim.runner run [--tag a,b] [--id X] [--repeat N]
-                                                      [--llm live] [--scenarios-dir DIR]
+                                                      [--llm live] [--max-llm-calls N]
+                                                      [--scenarios-dir DIR]
 
 Per scenario: reset (fakes + agent tables + session memory + audit logs), set clock,
 seed, then run the steps. The runner never calls /chat: Telegram steps are enqueued in
 the fake Bot API and picked up by the agent's real poller (SCN-SIM-02); WhatsApp steps
 POST a payload built from the real Evolution fixture to the agent's real
 ``/webhooks/evolution``.
+
+LLM calls: counted INSIDE the agent container by ``testing.sim.llm_counter`` (a global
+LangChain callback installed by the sim image's entrypoint, appending a line per chat-model
+call to ``/tmp/evi-sim-llm-calls``). The agent has no metrics counter for LLM calls
+(``EVI_METRICS_ENABLED`` only exposes HTTP/webhook metrics), and Gemini traffic leaves the
+container directly, so this hook is the one signal that sees every call (turns, background
+extractors, summaries). Per attempt = line-count delta; the budget is checked between
+attempts (see ``testing.sim.report``).
 
 Tools called (union, per scenario since reset):
   1. ``telegram.jsonl`` audit log in the agent container (every tool call of a Telegram
@@ -33,7 +42,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from testing.sim import schema
+from testing.sim import report, schema
 from testing.sim.schema import Scenario, Step
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -42,6 +51,9 @@ SIM_ENV = REPO_ROOT / "tests" / "sim" / "sim.env"
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "evolution" / "messages_upsert.json"
 COMPOSE = ["docker", "compose", "-p", "evi-sim", "--env-file", "/dev/null", "-f", str(REPO_ROOT / "docker-compose.sim.yml")]
 AUDIT_LOG = "/tmp/evi-sim-logs"
+LLM_COUNT_FILE = "/tmp/evi-sim-llm-calls"  # written by testing.sim.llm_counter in the container
+DEFAULT_MAX_LLM_CALLS = 200
+SIM_LOG_DIR = REPO_ROOT / "logs" / "sim"
 DEFAULT_REPLY_TIMEOUT_S = 120
 SETTLE_S = 2.0
 DEFAULT_CONTACT_JID = "5511999999999@s.whatsapp.net"
@@ -137,6 +149,7 @@ class Result:
     tools_called: list[str] = field(default_factory=list)
     outbound: dict = field(default_factory=dict)
     duration_s: float = 0.0
+    llm_calls: int = 0
 
 
 # --------------------------------------------------------------------------- reset
@@ -146,6 +159,9 @@ def reset_world(ctx: Ctx) -> None:
     if tables:
         ctx.psql("TRUNCATE " + ", ".join(f'"{t}"' for t in tables) + " RESTART IDENTITY CASCADE")
     ctx.exec("agent-api", "sh", "-c", f"mkdir -p {AUDIT_LOG} && find {AUDIT_LOG} -type f -delete")
+    for d in (ctx.env.get("EVI_WORKSPACE"), ctx.env.get("EVI_CONTACT_MEMORY_DIR")):
+        if d and d.startswith("/tmp/evi-sim-"):  # only the sim container's own dirs
+            ctx.exec("agent-api", "sh", "-c", f"mkdir -p '{d}' && find '{d}' -mindepth 1 -delete")
     sessions = [f"telegram-{ctx.chat_id}"] + [f"whatsapp-{j}" for j in sorted(ctx.control_jids)]
     for sid in sessions:
         ctx.agent("POST", "/reset", {"session_id": sid}, timeout=30)
@@ -247,6 +263,8 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
     exp = step.expect
     step_obs: dict = {}
     timeout = float(exp.get("reply_within_s") or DEFAULT_REPLY_TIMEOUT_S)
+    if exp.get("no_reply"):
+        timeout = float(exp.get("no_reply_window_s") or schema.DEFAULT_NO_REPLY_WINDOW_S)
     t0 = time.monotonic()
     if step.type == "telegram":
         base = len(_telegram_replies(ctx))
@@ -261,7 +279,7 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
             kw = {"from_me": bool(v.get("from_me")), "group": bool(v.get("group")), "push_name": v.get("push_name", "Sim")}
         base = len(_control_replies(ctx))
         ctx.agent("POST", "/webhooks/evolution", build_webhook_payload(text, jid, **kw))
-        if step.type == "whatsapp_control" and "reply_within_s" in exp:
+        if step.type == "whatsapp_control" and ("reply_within_s" in exp or exp.get("no_reply")):
             sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _control_replies(ctx), base, timeout)
         else:
             time.sleep(SETTLE_S)
@@ -290,9 +308,18 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
     return sr
 
 
+def llm_call_count(ctx: Ctx) -> int:
+    try:
+        out = ctx.exec("agent-api", "sh", "-c", f"cat {LLM_COUNT_FILE} 2>/dev/null | wc -l")
+        return int(out.strip() or 0)
+    except (RuntimeError, ValueError):
+        return 0
+
+
 def run_scenario(scn: Scenario, ctx: Ctx) -> Result:
     res = Result(scn.id)
     t0 = time.monotonic()
+    calls0 = llm_call_count(ctx)
     try:
         reset_world(ctx)
         base = ctx.today()
@@ -316,6 +343,7 @@ def run_scenario(scn: Scenario, ctx: Ctx) -> Result:
     except Exception as exc:  # infra error = failure with the reason, not a crash
         res.failures.append(f"runner error: {type(exc).__name__}: {exc}")
     res.duration_s = time.monotonic() - t0
+    res.llm_calls = max(0, llm_call_count(ctx) - calls0)
     res.passed = not res.failures
     return res
 
@@ -329,6 +357,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.llm != "live":
         print("evi-sim: only --llm live is supported for now (record/replay comes in task 4.1)", file=sys.stderr)
         return 2
+    if args.repeat < 1:
+        print("evi-sim: --repeat must be >= 1", file=sys.stderr)
+        return 2
     try:
         scenarios = schema.load_scenarios(args.scenarios_dir, tags=_csv(args.tag), ids=_csv(args.id))
     except schema.ScenarioError as exc:
@@ -338,18 +369,30 @@ def cmd_run(args: argparse.Namespace) -> int:
         print("evi-sim: no scenarios matched", file=sys.stderr)
         return 2
     ctx = Ctx()
-    results: list[Result] = []
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    records: list[dict] = []
+    total_calls = 0
+    budget_hit = False
     for scn in scenarios:
-        for n in range(args.repeat):
+        for n in range(1, args.repeat + 1):
+            label = f"{scn.id}" + (f" #{n}" if args.repeat > 1 else "")
+            if args.max_llm_calls and total_calls >= args.max_llm_calls:
+                budget_hit = True
+                records.append(report.skipped_record(scn.id, scn.tags, n))
+                print(f"SKIP {label} (budget: {total_calls}/{args.max_llm_calls} LLM calls)")
+                continue
             res = run_scenario(scn, ctx)
-            results.append(res)
-            label = f"{scn.id}" + (f" #{n + 1}" if args.repeat > 1 else "")
-            print(f"{'PASS' if res.passed else 'FAIL'} {label} ({res.duration_s:.1f}s)")
+            total_calls += res.llm_calls
+            records.append(report.attempt_record(scn.id, scn.tags, n, res))
+            print(f"{'PASS' if res.passed else 'FAIL'} {label} ({res.duration_s:.1f}s, {res.llm_calls} LLM calls)")
             for f in res.failures:
                 print(f"    - {f}")
-    failed = [r for r in results if not r.passed]
-    print(f"{len(results) - len(failed)}/{len(results)} passed")
-    return 1 if failed else 0
+    summary = report.summarize(records, args.repeat)
+    meta = {"ts": ts, "repeat": args.repeat, "max_llm_calls": args.max_llm_calls, "llm_calls": total_calls, "budget_hit": budget_hit}
+    jsonl, md = report.write_reports(records, summary, meta, SIM_LOG_DIR, ts)
+    print(report.console_summary(summary, meta))
+    print(f"report: {jsonl}\n        {md}")
+    return 0 if summary["ok"] else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -360,8 +403,13 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--id")
     r.add_argument("--repeat", type=int, default=1)
     r.add_argument("--llm", default="live")
+    r.add_argument("--max-llm-calls", type=int, default=DEFAULT_MAX_LLM_CALLS)
     r.add_argument("--scenarios-dir", default=str(DEFAULT_SCENARIOS_DIR))
+    rp = sub.add_parser("report")
+    rp.add_argument("path", nargs="?")
     args = p.parse_args(argv)
+    if args.cmd == "report":
+        return report.cmd_report(args.path, SIM_LOG_DIR)
     return cmd_run(args)
 
 

@@ -34,7 +34,7 @@
   - Files: `agent/testing/sim/schema.py`, `agent/testing/sim/runner.py`, `tests/unit/test_sim_schema.py`, `scripts/evi-sim`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_schema.py -q` e `./scripts/evi-sim run --id SIM-SMOKE-01` (cenário trivial "Oi" → resposta capturada no fake Telegram)
 
-- [ ] 3.2 Repetição, taxa de aprovação por tag, orçamento de chamadas ao LLM, relatório JSONL + Markdown
+- [x] 3.2 Repetição, taxa de aprovação por tag, orçamento de chamadas ao LLM, relatório JSONL + Markdown
   - SCN-SIM-07
   - Files: `agent/testing/sim/runner.py`, `agent/testing/sim/report.py`, `tests/unit/test_sim_report.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_report.py -q` — `critical` 2/3 reprova; `--max-llm-calls` interrompe com relatório parcial

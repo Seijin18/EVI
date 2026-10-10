@@ -18,3 +18,6 @@ COPY . /app
 ENV LD_PRELOAD=/usr/local/lib/libfaketime.so.1 \
     FAKETIME_TIMESTAMP_FILE=/sim/clock \
     FAKETIME_NO_CACHE=1
+
+# Count every LLM call the agent makes (read by the runner for --max-llm-calls).
+CMD ["python", "-c", "import testing.sim.llm_counter, uvicorn; uvicorn.run('main:app', host='0.0.0.0', port=8000)"]

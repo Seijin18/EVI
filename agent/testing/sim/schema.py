@@ -35,8 +35,11 @@ EXPECT_KEYS = {
     "outbound_to_third_parties",
     "postgres",
     "max_latency_s",
+    "no_reply",
+    "no_reply_window_s",
     "judge",
 }
+DEFAULT_NO_REPLY_WINDOW_S = 15
 CALENDAR_KEYS = {"created", "count"}
 TASKS_KEYS = {"created", "count"}
 GMAIL_KEYS = {"deleted_count", "deleted_ids_include", "not_deleted"}
@@ -140,10 +143,17 @@ def _check_keys(d: Any, allowed: set[str], path: str, where: str) -> None:
             raise _err(path, f"{where}.{k}" if where else str(k), f"unknown key (allowed: {', '.join(sorted(allowed))})")
 
 
-def _validate_expect(exp: Any, path: str, where: str) -> dict:
+def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> dict:
     if exp is None:
         return {}
     _check_keys(exp, EXPECT_KEYS, path, where)
+    if "no_reply_window_s" in exp and not exp.get("no_reply"):
+        raise _err(path, f"{where}.no_reply_window_s", "only valid together with no_reply: true")
+    if exp.get("no_reply"):
+        if step_type not in ("telegram", "whatsapp_control"):
+            raise _err(path, f"{where}.no_reply", "only valid on telegram/whatsapp_control steps")
+        if "reply_within_s" in exp or "reply_matches" in exp:
+            raise _err(path, where, "no_reply cannot be combined with reply_within_s/reply_matches")
     for key, allowed in (("calendar", CALENDAR_KEYS), ("tasks", TASKS_KEYS), ("gmail", GMAIL_KEYS)):
         if key in exp:
             _check_keys(exp[key], allowed, path, f"{where}.{key}")
@@ -213,7 +223,7 @@ def parse_scenario(data: Any, path: str = "<memory>") -> Scenario:
                 raise _err(path, f"{where}.{kind}", "must be a string or mapping")
         elif kind == "fault":
             _check_keys(value, {"windmill", "telegram"}, path, f"{where}.fault")
-        steps.append(Step(kind, value, _validate_expect(st.get("expect"), path, f"{where}.expect")))
+        steps.append(Step(kind, value, _validate_expect(st.get("expect"), path, f"{where}.expect", kind)))
     return Scenario(
         id=str(data["id"]),
         title=str(data.get("title") or data["id"]),
@@ -345,6 +355,8 @@ def eval_expect(exp: dict, obs: dict) -> list[str]:
     parallel to ``exp['postgres']``).
     """
     fails: list[str] = []
+    if exp.get("no_reply") and obs.get("reply") is not None:
+        fails.append(f"no_reply: agent replied ({str(obs['reply'])[:120]!r})")
     base, tz = obs.get("base") or date.today(), obs.get("tz") or DEFAULT_TZ
     google = obs.get("google") or {}
     if "reply_within_s" in exp:

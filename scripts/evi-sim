@@ -67,8 +67,7 @@ case "$cmd" in
     PYTHONPATH="${ROOT}/agent" "$PY" -m testing.sim.runner run "$@"
     ;;
   report)
-    echo "evi-sim: 'report' not implemented yet (task 3.2)" >&2
-    exit 2
+    PYTHONPATH="${ROOT}/agent" "$PY" -m testing.sim.runner report "$@"
     ;;
   *)
     echo "usage: evi-sim {guard|up|down|run|report}" >&2
