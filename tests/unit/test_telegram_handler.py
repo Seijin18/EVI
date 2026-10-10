@@ -255,3 +255,80 @@ def test_voice_audio_uses_own_mime_and_other_chat_skipped(voice_env, monkeypatch
         monkeypatch.setenv("TELEGRAM_CHAT_ID", "999")
         out = process_telegram_update(update, lambda m, s, input_kind="text": {})
     assert out["skipped"] == "chat not allowed"
+
+
+# --- SCN-INJ-00: only the owner's chat reaches the agent ---------------------
+
+
+def _text(chat_id, text="olá"):
+    return {"message": {"text": text, "chat": {"id": chat_id}}}
+
+
+def _run_guard(update, env, monkeypatch):
+    import services.telegram_handler as th
+
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.delenv("TELEGRAM_ALLOWED_CHAT_IDS", raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    calls = []
+
+    def chat(m, s, **k):
+        calls.append(m)
+        return {"response": "ok"}
+
+    with (
+        _DIRECT_OFF,
+        patch("services.telegram_handler.send_telegram_message", return_value=True) as send,
+        patch("services.telegram_handler._persist_turn"),
+        patch("services.telegram_handler.log_telegram_turn"),
+    ):
+        out = th.process_telegram_update(update, chat)
+    return out, calls, send
+
+
+def test_stranger_text_ignored(monkeypatch):
+    out, calls, send = _run_guard(_text(666), {"TELEGRAM_CHAT_ID": "111"}, monkeypatch)
+    assert out == {"ok": True, "skipped": "chat not allowed"}
+    assert calls == []
+    send.assert_not_called()
+
+
+def test_stranger_command_ignored(monkeypatch):
+    out, calls, send = _run_guard(_text(666, "/ajuda"), {"TELEGRAM_CHAT_ID": "111"}, monkeypatch)
+    assert out["skipped"] == "chat not allowed"
+    assert calls == []
+    send.assert_not_called()
+
+
+def test_owner_chat_allowed(monkeypatch):
+    out, calls, send = _run_guard(_text(111), {"TELEGRAM_CHAT_ID": " 111 "}, monkeypatch)
+    assert calls == ["olá"]
+    send.assert_called_once()
+
+
+def test_extra_allowed_chat_id(monkeypatch):
+    env = {"TELEGRAM_CHAT_ID": "111", "TELEGRAM_ALLOWED_CHAT_IDS": "222, 333"}
+    out, calls, _ = _run_guard(_text(333), env, monkeypatch)
+    assert calls == ["olá"]
+    out, calls, _ = _run_guard(_text(444), env, monkeypatch)
+    assert out["skipped"] == "chat not allowed" and calls == []
+
+
+def test_unset_owner_allows_all_and_warns_once(monkeypatch, caplog):
+    import services.telegram_handler as th
+
+    monkeypatch.setattr(th, "_warned_open", False)
+    with caplog.at_level("WARNING", logger="services.telegram_handler"):
+        _, calls, _ = _run_guard(_text(5), {}, monkeypatch)
+        _run_guard(_text(6), {}, monkeypatch)
+    assert calls == ["olá"]
+    warns = [r for r in caplog.records if "TELEGRAM_CHAT_ID not set" in r.getMessage()]
+    assert len(warns) == 1
+
+
+def test_disallowed_log_has_chat_id_not_text(monkeypatch, caplog):
+    with caplog.at_level("INFO", logger="services.telegram_handler"):
+        _run_guard(_text(666, "segredo-xyz"), {"TELEGRAM_CHAT_ID": "111"}, monkeypatch)
+    joined = " ".join(r.getMessage() for r in caplog.records)
+    assert "666" in joined and "segredo-xyz" not in joined

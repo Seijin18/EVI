@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Callable, Dict
 
 from llm import extract_llm_text
@@ -16,6 +17,25 @@ from services.direct_task import try_direct_task
 from services.telegram_schedule import try_direct_schedule
 
 ChatInvoke = Callable[[str, str], Dict[str, Any]]
+
+_log = logging.getLogger(__name__)
+_warned_open = False
+
+
+def _chat_allowed(chat_id: Any) -> bool:
+    """Only the owner's chat (TELEGRAM_CHAT_ID + optional TELEGRAM_ALLOWED_CHAT_IDS)."""
+    global _warned_open
+    owner = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if not owner:
+        if not _warned_open:
+            _warned_open = True
+            _log.warning("TELEGRAM_CHAT_ID not set; accepting any chat")
+        return True
+    allowed = {owner}
+    allowed.update(
+        p.strip() for p in os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "").split(",") if p.strip()
+    )
+    return str(chat_id).strip() in allowed
 
 
 def _persist_turn(session_id: str, user_text: str, assistant_text: str) -> None:
@@ -95,9 +115,6 @@ def _voice_turn(
 
     chat_id = message.get("chat", {}).get("id", "telegram")
     session_id = f"telegram-{chat_id}"
-    configured = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-    if configured and str(chat_id) != configured:
-        return {"ok": True, "skipped": "chat not allowed"}
 
     def fail(msg: str, detail: str = "") -> Dict[str, Any]:
         return _reply_direct(
@@ -174,6 +191,10 @@ def process_telegram_update(
 ) -> Dict[str, Any]:
     """Process one Telegram update dict; invoke_chat(message, session_id) -> {response: ...}."""
     message = update.get("message") or {}
+    sender = message.get("chat", {}).get("id", "telegram")
+    if not _chat_allowed(sender):
+        _log.info("telegram update from disallowed chat %s ignored", sender)
+        return {"ok": True, "skipped": "chat not allowed"}
     if "text" not in message:
         attachment = _voice_attachment(message)
         if attachment:
