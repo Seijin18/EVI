@@ -5,6 +5,10 @@ to the DB, writes `EVI_WORKSPACE/reports/usage-YYYY-Www.md` (conversation text �
 local only, gitignored) and sends a <= 10-line Telegram summary (KPIs and turn ids,
 never user text). Weeks are ISO weeks in EVI_TIMEZONE (local Mon 00:00 to next Mon 00:00). Every section soft-fails to
 "indisponível" instead of failing the report.
+
+Action rates per type (evi-reply-debts 2.4) are approximated from CURRENT state
+(see db.action_rates_by_type): a debt that was answered or acknowledged after the
+week still counts as acted, and a conversation with a newer inbound drops out.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ UNAVAILABLE = "indisponível"
 MAX_REVIEW = 5
 REVIEW_TEXT_CHARS = 80
 # Review priority: ruim > tool_failed > correction > rephrase (cant_do last).
+ACTION_TYPES = (("reply_debt", "dívida de resposta"), ("promise", "promessa"), ("dated", "compromisso datado"))
 REVIEW_PRIORITY = ("ruim", "tool_failed", "correction", "rephrase", "cant_do")
 
 
@@ -298,6 +303,18 @@ def render_markdown(r: Dict[str, Any]) -> str:
             f"p95 do desvio: {_fmt_drift(rm['p95_drift_s'])}"
         )
     L.append("")
+    L.append("## WhatsApp: ação por tipo")
+    ar = r.get("action_rates")
+    if ar is None:
+        L.append(UNAVAILABLE)
+    else:
+        L.append("| tipo | mostrados | com ação | % |")
+        L.append("|---|---|---|---|")
+        for key, label in ACTION_TYPES:
+            v = ar.get(key) or {"shown": 0, "acted": 0}
+            pct = f"{v['acted'] * 100 / v['shown']:.0f}%" if v["shown"] else "—"
+            L.append(f"| {label} | {v['shown']} | {v['acted']} | {pct} |")
+    L.append("")
     L.append("## Formatos novos do Evolution")
     sh = r.get("shapes")
     if sh is None:
@@ -362,6 +379,15 @@ def render_telegram(r: Dict[str, Any]) -> str:
         L.append(
             f"Lembretes: {rm['created']} criados / {rm['fired']} disp. / {rm['late']} atras. "
             f"(p95 {_fmt_drift(rm['p95_drift_s'])})"
+        )
+    ar = r.get("action_rates")
+    if ar and any((v.get("shown") or 0) > 0 for v in ar.values()):
+        L.append(
+            "Ação: "
+            + " · ".join(
+                f"{short} {(ar.get(k) or {}).get('acted', 0)}/{(ar.get(k) or {}).get('shown', 0)}"
+                for k, short in (("reply_debt", "dívidas"), ("promise", "promessas"), ("dated", "datados"))
+            )
         )
     rev = r["review"]
     if rev:
@@ -507,6 +533,15 @@ def build_report(week_start: datetime, now: datetime | None = None) -> Dict[str,
         return {k: st[k] for k in ("created", "fired", "late", "p95_drift_s")}  # counts only, no text
 
     r["reminders"] = _section("reminders", _reminders)
+
+    def _action_rates():
+        import os
+
+        return db.action_rates_by_type(
+            week_start, end, float(os.getenv("EVI_REPLY_DEBT_HOURS", "4") or 4)
+        )
+
+    r["action_rates"] = _section("action_rates", _action_rates)
 
     def _shapes():
         from services.payload_shapes import list_new_shapes

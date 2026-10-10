@@ -27,7 +27,7 @@
   - Files: `agent/services/briefing.py`, `agent/services/commitment_capture_notify.py`, `agent/services/commitment_review/deliver.py`, `tests/unit/test_briefing.py`, `tests/unit/test_commitment_capture_notify.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_commitment_capture_notify.py tests/unit/test_commitment_review_digest.py -q` e `./scripts/evi-test briefing`
 
-- [ ] 2.4 Taxa de ação por tipo no relatório semanal
+- [x] 2.4 Taxa de ação por tipo no relatório semanal
   - SCN-DEBT-08
   - Files: `agent/services/usage_report.py`, `tests/unit/test_usage_report.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_usage_report.py -q`

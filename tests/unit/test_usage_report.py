@@ -326,3 +326,56 @@ def test_scn_rem_06_weekly_report_reminders(tmp_path, monkeypatch):
                 cur.execute("DELETE FROM reminder_fires WHERE reminder_id = ANY(%s)", (ids,))
                 cur.execute("DELETE FROM reminders WHERE id = ANY(%s)", (ids,))
             conn.commit()
+
+
+def test_action_rates_section_renders_and_telegram_line():
+    turns = seeded_week()
+    r = {
+        "label": "2026-W40", "start": MON, "end": MON + timedelta(days=7),
+        "kpis": ur.compute_kpis(turns), "prev_kpis": None, "base_kpis": None,
+        "baseline_range": None, "commitments": None, "probes": None, "review": [],
+        "action_rates": {
+            "reply_debt": {"shown": 10, "acted": 4},
+            "promise": {"shown": 0, "acted": 0},
+            "dated": {"shown": 3, "acted": 3},
+        },
+    }
+    md = ur.render_markdown(r)
+    assert "## WhatsApp: ação por tipo" in md
+    assert "| dívida de resposta | 10 | 4 | 40% |" in md
+    assert "| promessa | 0 | 0 | — |" in md
+    tg = ur.render_telegram(r)
+    assert "Ação: dívidas 4/10 · promessas 0/0 · datados 3/3" in tg and len(tg.splitlines()) <= 10
+    r["action_rates"] = {k: {"shown": 0, "acted": 0} for k in ("reply_debt", "promise", "dated")}
+    assert "Ação:" not in ur.render_telegram(r)
+    r["action_rates"] = None
+    assert ur.UNAVAILABLE in ur.render_markdown(r).split("ação por tipo")[1].split("##")[0]
+    assert "Ação:" not in ur.render_telegram(r)
+
+
+@needs_db
+def test_scn_debt_08_action_rate_for_reply_debts(tmp_path, monkeypatch):
+    import db
+
+    db.reset_db_init_for_tests()
+    db.init_db()
+    monkeypatch.setenv("EVI_WORKSPACE", str(tmp_path))
+    monkeypatch.setattr(ur, "prune_turn_log", lambda days=180: 0)
+    start = ur.parse_week("2020-W22")
+    jids = [f"debt08-{i}@s.whatsapp.net" for i in range(10)]
+    try:
+        for i, jid in enumerate(jids):
+            t_in = start + timedelta(days=1, hours=i)
+            db.record_inbound(jid, t_in, "segredo", f"m{i}")
+            if i < 4:
+                db.record_outbound(jid, t_in + timedelta(hours=6))
+        rep = ur.build_report(start, start + timedelta(days=8))
+        assert rep["action_rates"]["reply_debt"] == {"shown": 10, "acted": 4}
+        md = ur.render_markdown(rep)
+        assert "| dívida de resposta | 10 | 4 | 40% |" in md
+        assert "segredo" not in md
+    finally:
+        with db._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM wa_conversation_state WHERE jid = ANY(%s)", (jids,))
+            conn.commit()

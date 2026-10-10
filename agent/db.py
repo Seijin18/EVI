@@ -1320,3 +1320,47 @@ def list_debt_candidates(now, min_age, max_age, limit: int = 200) -> List[Dict[s
                 (now - min_age, now - max_age, limit),
             )
             return [dict(r) for r in cur.fetchall()]
+
+
+def action_rates_by_type(since, until, debt_hours: float) -> Dict[str, Dict[str, int]]:
+    """Counts only (no text): shown / acted per item type for the weekly report.
+
+    reply_debt: conversations whose last inbound fell in [since, until) and was
+    still unanswered ``debt_hours`` later (so it became a debt); acted = answered
+    (last_out_at > last_in_at) or acknowledged since. Uses CURRENT state, so a
+    conversation that got a newer inbound later drops out of the older week.
+    promise: type='promise' created in the week; acted = done/dismissed/scheduled.
+    dated: other types, not 'undated', not evi-test; acted = scheduled/confirmed.
+    """
+    out: Dict[str, Dict[str, int]] = {}
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*), COUNT(*) FILTER (WHERE "
+                "last_out_at > last_in_at OR acknowledged_at >= last_in_at) "
+                "FROM wa_conversation_state "
+                "WHERE last_in_at >= %s AND last_in_at < %s "
+                "AND last_in_at + make_interval(secs => %s) <= LEAST(%s, now()) "
+                "AND (last_out_at IS NULL OR last_out_at <= last_in_at "
+                "OR last_out_at > last_in_at + make_interval(secs => %s))",
+                (since, until, debt_hours * 3600, until, debt_hours * 3600),
+            )
+            shown, acted = cur.fetchone()
+            out["reply_debt"] = {"shown": int(shown), "acted": int(acted)}
+            cur.execute(
+                "SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('done','dismissed','scheduled')) "
+                "FROM pending_commitments WHERE type = 'promise' AND source <> 'evi-test' "
+                "AND created_at >= %s AND created_at < %s",
+                (since, until),
+            )
+            shown, acted = cur.fetchone()
+            out["promise"] = {"shown": int(shown), "acted": int(acted)}
+            cur.execute(
+                "SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'scheduled') "
+                "FROM pending_commitments WHERE type <> 'promise' AND status <> 'undated' "
+                "AND source <> 'evi-test' AND created_at >= %s AND created_at < %s",
+                (since, until),
+            )
+            shown, acted = cur.fetchone()
+            out["dated"] = {"shown": int(shown), "acted": int(acted)}
+    return out
