@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# EVI simulation harness CLI. Subcommands: guard | up | down | run | report
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+PY="${ROOT}/.venv/bin/python"
+[[ -x "$PY" ]] || PY="python3"
+
+DC=(docker compose -p evi-sim --env-file /dev/null -f "${ROOT}/docker-compose.sim.yml")
+
+_guard() { PYTHONPATH="${ROOT}/agent" "$PY" -m testing.sim.guard; }
+
+_load_gemini_key() {
+  if [[ -n "${EVI_SIM_GEMINI_API_KEY:-}" ]]; then
+    return
+  fi
+  local line=""
+  [[ -f "${ROOT}/.env" ]] && line="$(grep -m1 '^GEMINI_API_KEY=' "${ROOT}/.env" || true)"
+  line="${line#GEMINI_API_KEY=}"
+  line="${line%\"}"; line="${line#\"}"; line="${line%\'}"; line="${line#\'}"
+  if [[ -n "$line" ]]; then
+    echo "evi-sim: using production GEMINI_API_KEY (EVI_SIM_GEMINI_API_KEY not set)" >&2
+    export EVI_SIM_GEMINI_API_KEY="$line"
+  else
+    echo "evi-sim: no Gemini key found (set EVI_SIM_GEMINI_API_KEY); LLM calls will fail" >&2
+  fi
+}
+
+_wait_healthy() {
+  local deadline=$((SECONDS + 120)) svc
+  for svc in postgres fakes agent-api; do
+    until [[ "$("${DC[@]}" ps --format '{{.Health}}' "$svc" 2>/dev/null)" == "healthy" ]]; do
+      if (( SECONDS >= deadline )); then
+        echo "evi-sim: $svc did not become healthy" >&2
+        "${DC[@]}" ps >&2 || true
+        return 1
+      fi
+      sleep 2
+    done
+  done
+}
+
+cmd="${1:-}"
+shift || true
+case "$cmd" in
+  guard)
+    _guard
+    ;;
+  up)
+    _guard
+    _load_gemini_key
+    if ! docker image inspect evi-agent-api:latest >/dev/null 2>&1; then
+      echo "evi-sim: base image evi-agent-api:latest missing, building it" >&2
+      docker build -t evi-agent-api:latest "${ROOT}/agent"
+    fi
+    "${DC[@]}" up -d --build
+    _wait_healthy
+    echo "evi-sim: up (agent-api http://127.0.0.1:18000, fakes http://127.0.0.1:18080)"
+    ;;
+  down)
+    "${DC[@]}" down -v --remove-orphans
+    ;;
+  run|report)
+    echo "evi-sim: '$cmd' not implemented yet (task 3.1)" >&2
+    exit 2
+    ;;
+  *)
+    echo "usage: evi-sim {guard|up|down|run|report}" >&2
+    exit 64
+    ;;
+esac

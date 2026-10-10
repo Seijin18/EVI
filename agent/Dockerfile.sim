@@ -1,0 +1,20 @@
+# Simulation image (evi-sim): the production agent-api image plus libfaketime so
+# the runner can move the clock through /sim/clock. Built with context ./agent.
+# BASE_IMAGE is the image built by the main compose (docker compose build agent-api);
+# scripts/evi-sim builds it first when it is absent.
+ARG BASE_IMAGE=evi-agent-api:latest
+FROM ${BASE_IMAGE}
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends faketime \
+    && rm -rf /var/lib/apt/lists/* \
+    && FT="$(find /usr/lib -name 'libfaketime.so.1' | head -n1)" \
+    && test -n "$FT" && ln -sf "$FT" /usr/local/lib/libfaketime.so.1
+
+# Refresh the code layer: the base image may be older than the working tree
+# (e.g. testing/sim/ was added after it was built).
+COPY . /app
+
+ENV LD_PRELOAD=/usr/local/lib/libfaketime.so.1 \
+    FAKETIME_TIMESTAMP_FILE=/sim/clock \
+    FAKETIME_NO_CACHE=1

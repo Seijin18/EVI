@@ -5,7 +5,7 @@
   - Files: `agent/services/telegram_notify.py`, `agent/services/telegram_poller.py`, `tests/unit/test_telegram_poller.py`, `.env.example`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_poller.py tests/unit/test_send_result.py -q` — sem a env, URL idêntica à atual
 
-- [ ] 1.2 `docker-compose.sim.yml` + `Dockerfile.sim` (libfaketime) + `tests/sim/sim.env` + guarda de isolamento sobre o config renderizado
+- [x] 1.2 `docker-compose.sim.yml` + `Dockerfile.sim` (libfaketime) + `tests/sim/sim.env` + guarda de isolamento sobre o config renderizado
   - SCN-SIM-01
   - Files: `docker-compose.sim.yml`, `agent/Dockerfile.sim`, `tests/sim/sim.env`, `scripts/evi-sim`, `agent/testing/sim/guard.py`
   - Verify: `./scripts/evi-sim guard` passa; com `./data` montado ou token real injetado no env, aborta com o motivo; `./scripts/evi-sim up && ./scripts/evi-sim down` não toca volumes do projeto `evi`

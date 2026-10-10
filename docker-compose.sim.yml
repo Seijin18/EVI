@@ -1,0 +1,81 @@
+# EVI simulation stack. ALWAYS run as: docker compose -p evi-sim --env-file /dev/null -f docker-compose.sim.yml
+# (scripts/evi-sim does this and runs the isolation guard first). Never reads ./.env,
+# never mounts ./data or ./logs. See openspec/changes/evi-sim-harness/design.md.
+name: evi-sim
+
+services:
+  agent-api:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile.sim
+    env_file:
+      - tests/sim/sim.env
+    environment:
+      GEMINI_API_KEY: ${EVI_SIM_GEMINI_API_KEY:-}
+    ports: ["127.0.0.1:18000:8000"]
+    volumes:
+      - sim-clock:/sim
+    mem_limit: 1g
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fakes:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python3 -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:8000/health'', timeout=3)"',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  fakes:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile.sim
+    # Seeds /sim/clock (libfaketime aborts on an empty/missing file) before the
+    # agent-api, which waits for this service to be healthy, starts.
+    command:
+      - sh
+      - -c
+      - 'if [ ! -s /sim/clock ]; then LD_PRELOAD= date "+@%Y-%m-%d %H:%M:%S" > /sim/clock; fi; exec python -m testing.sim.fakes'
+    env_file:
+      - tests/sim/sim.env
+    ports: ["127.0.0.1:18080:18080"]
+    volumes:
+      - sim-clock:/sim
+      - ./windmill:/windmill:ro
+    mem_limit: 256m
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python3 -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:18080/health'', timeout=3)"',
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: evisim
+      POSTGRES_USER: evisim
+      POSTGRES_PASSWORD: evisim
+    volumes:
+      - sim-pgdata:/var/lib/postgresql/data
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evisim -d evisim"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  sim-clock:
+  sim-pgdata:
