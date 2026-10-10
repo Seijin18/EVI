@@ -152,6 +152,7 @@ def _run_migrations() -> None:
                 CREATE INDEX IF NOT EXISTS reminders_due
                     ON reminders (status, due_at);
                 ALTER TABLE reminders ADD COLUMN IF NOT EXISTS anchor_day SMALLINT;
+                ALTER TABLE reminders ADD COLUMN IF NOT EXISTS snooze_until TIMESTAMPTZ;
                 CREATE TABLE IF NOT EXISTS reminder_fires (
                     id SERIAL PRIMARY KEY,
                     reminder_id INTEGER NOT NULL,
@@ -951,9 +952,13 @@ def mark_briefing_replied(day, kind: str) -> bool:
 
 
 # --- reminders (evi-reminders) ------------------------------------------------
-# status: pending | firing | sent | done | cancelled. All datetimes are aware.
+# status: pending | firing | sent | done | cancelled | failed. All datetimes are aware.
+# due_at holds the series schedule (anchor for recurrence); snooze_until, when set,
+# overrides it for ONE delivery: effective fire time = COALESCE(snooze_until, due_at).
 # claim_due() is the only way a tick takes ownership of a due row (SKIP LOCKED),
 # so two concurrent ticks never fire the same reminder.
+
+_EFFECTIVE = "COALESCE(snooze_until, due_at)"
 
 
 def create_reminder(text: str, due_at, repeat: str | None, chat_id: str,
@@ -998,7 +1003,7 @@ def list_reminders(chat_id: str | None = None, statuses=("pending",),
             cur.execute(
                 "SELECT * FROM reminders WHERE status = ANY(%s) "
                 "AND (%s::text IS NULL OR chat_id = %s) "
-                "ORDER BY due_at, id LIMIT %s",
+                f"ORDER BY {_EFFECTIVE}, id LIMIT %s",
                 (list(statuses), chat_id, chat_id, limit),
             )
             rows = cur.fetchall()
@@ -1006,33 +1011,36 @@ def list_reminders(chat_id: str | None = None, statuses=("pending",),
 
 
 def claim_due(now, limit: int = 20) -> List[Dict[str, Any]]:
-    """Atomically move due 'pending' rows to 'firing' and return them."""
+    """Atomically move due 'pending' rows (effective time <= now) to 'firing'."""
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 "UPDATE reminders SET status = 'firing', claimed_at = now() "
                 "WHERE id IN (SELECT id FROM reminders "
-                "             WHERE status = 'pending' AND due_at <= %s "
-                "             ORDER BY due_at FOR UPDATE SKIP LOCKED LIMIT %s) "
+                f"             WHERE status = 'pending' AND {_EFFECTIVE} <= %s "
+                f"             ORDER BY {_EFFECTIVE} FOR UPDATE SKIP LOCKED LIMIT %s) "
                 "RETURNING *",
                 (now, limit),
             )
             rows = cur.fetchall()
         conn.commit()
-    return sorted((dict(r) for r in rows), key=lambda r: (r["due_at"], r["id"]))
+    return sorted(
+        (dict(r) for r in rows),
+        key=lambda r: (r["snooze_until"] or r["due_at"], r["id"]),
+    )
 
 
 _FIRE_LOG_SQL = (
     "INSERT INTO reminder_fires (reminder_id, due_at, fired_at, drift_s) "
-    "SELECT id, due_at, %s, %s FROM reminders WHERE id = %s"
+    f"SELECT id, {_EFFECTIVE}, %s, %s FROM reminders WHERE id = %s"
 )
 
 
 def log_reminder_fire(reminder_id: int, fired_at, drift_s: int) -> None:
     """Per-occurrence fire log (a recurring row is overwritten on every fire).
 
-    due_at is read from the row, so call before it advances. finish_fired() does
-    this in its own transaction; this is for callers that need it standalone.
+    The scheduled time is read from the row, so call before it advances. finish_fired()
+    does this in its own transaction; this is for callers that need it standalone.
     """
     with _conn() as conn:
         with conn.cursor() as cur:
@@ -1040,27 +1048,37 @@ def log_reminder_fire(reminder_id: int, fired_at, drift_s: int) -> None:
         conn.commit()
 
 
-def finish_fired(reminder_id: int, fired_at, drift_s: int, next_due_at=None) -> None:
+def finish_fired(reminder_id: int, fired_at, drift_s: int, next_due_at=None) -> bool:
     """Record a delivered occurrence: one-off -> 'sent'; recurring -> 'pending' at next_due_at.
 
-    Also appends the occurrence to reminder_fires (same transaction, before due_at moves).
+    Only acts on a 'firing' row (False otherwise, nothing logged). Also appends the
+    occurrence to reminder_fires (same transaction, before due_at moves) and clears
+    snooze_until.
     """
     with _conn() as conn:
         with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM reminders WHERE id = %s AND status = 'firing' FOR UPDATE",
+                (reminder_id,),
+            )
+            if cur.fetchone() is None:
+                conn.rollback()
+                return False
             cur.execute(_FIRE_LOG_SQL, (fired_at, drift_s, reminder_id))
             if next_due_at is None:
                 cur.execute(
-                    "UPDATE reminders SET status = 'sent', fired_at = %s, drift_s = %s "
-                    "WHERE id = %s",
+                    "UPDATE reminders SET status = 'sent', snooze_until = NULL, "
+                    "fired_at = %s, drift_s = %s WHERE id = %s AND status = 'firing'",
                     (fired_at, drift_s, reminder_id),
                 )
             else:
                 cur.execute(
-                    "UPDATE reminders SET status = 'pending', due_at = %s, "
-                    "fired_at = %s, drift_s = %s WHERE id = %s",
+                    "UPDATE reminders SET status = 'pending', due_at = %s, snooze_until = NULL, "
+                    "fired_at = %s, drift_s = %s WHERE id = %s AND status = 'firing'",
                     (next_due_at, fired_at, drift_s, reminder_id),
                 )
         conn.commit()
+    return True
 
 
 def release_reminder(reminder_id: int) -> None:
@@ -1069,6 +1087,18 @@ def release_reminder(reminder_id: int) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE reminders SET status = 'pending' "
+                "WHERE id = %s AND status = 'firing'",
+                (reminder_id,),
+            )
+        conn.commit()
+
+
+def fail_reminder(reminder_id: int) -> None:
+    """Undeliverable for good (e.g. Telegram not configured): 'firing' -> 'failed'."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE reminders SET status = 'failed' "
                 "WHERE id = %s AND status = 'firing'",
                 (reminder_id,),
             )
@@ -1089,36 +1119,72 @@ def requeue_stuck(older_than_minutes: int = 5) -> int:
     return n
 
 
-def _transition(reminder_id: int, new_status: str, from_statuses, due_at=None) -> bool:
+def _transition(reminder_id: int, new_status: str, from_statuses, chat_id=None) -> bool:
     with _conn() as conn:
         with conn.cursor() as cur:
-            if due_at is None:
-                cur.execute(
-                    "UPDATE reminders SET status = %s WHERE id = %s AND status = ANY(%s)",
-                    (new_status, reminder_id, list(from_statuses)),
-                )
-            else:
-                cur.execute(
-                    "UPDATE reminders SET status = %s, due_at = %s "
-                    "WHERE id = %s AND status = ANY(%s)",
-                    (new_status, due_at, reminder_id, list(from_statuses)),
-                )
+            cur.execute(
+                "UPDATE reminders SET status = %s WHERE id = %s AND status = ANY(%s) "
+                "AND (%s::text IS NULL OR chat_id = %s)",
+                (new_status, reminder_id, list(from_statuses), chat_id, chat_id),
+            )
             ok = cur.rowcount > 0
         conn.commit()
     return ok
 
 
-def snooze_reminder(reminder_id: int, until) -> bool:
-    return _transition(reminder_id, "pending", ("sent", "pending"), due_at=until)
+def snooze_reminder(reminder_id: int, until, chat_id: str | None = None) -> bool:
+    """Re-deliver ONE occurrence at ``until`` without touching the series schedule.
+
+    Sets snooze_until only (due_at keeps the series anchor); a delivered one-off goes
+    back from 'sent' to 'pending'. chat_id=None means no ownership filter.
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE reminders SET status = 'pending', snooze_until = %s "
+                "WHERE id = %s AND status IN ('sent', 'pending') "
+                "AND (%s::text IS NULL OR chat_id = %s)",
+                (until, reminder_id, chat_id, chat_id),
+            )
+            ok = cur.rowcount > 0
+        conn.commit()
+    return ok
 
 
-def complete_reminder(reminder_id: int) -> bool:
-    """'done' (a recurring reminder stops recurring)."""
-    return _transition(reminder_id, "done", ("pending", "firing", "sent"))
+def complete_reminder(reminder_id: int, chat_id: str | None = None) -> Dict[str, Any] | None:
+    """'feito'. One-off -> 'done'. Recurring: only acknowledges this occurrence (status
+    and series untouched; a pending snooze for it is dropped). Returns None when there
+    is nothing to complete, else {"recurring": bool, "next_due_at": effective next fire
+    (recurring only)}. Stopping a series is cancel_reminder's job."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "UPDATE reminders SET status = 'done', snooze_until = NULL "
+                "WHERE id = %s AND repeat IS NULL "
+                "AND status IN ('pending', 'firing', 'sent') "
+                "AND (%s::text IS NULL OR chat_id = %s) RETURNING id",
+                (reminder_id, chat_id, chat_id),
+            )
+            if cur.fetchone():
+                conn.commit()
+                return {"recurring": False, "next_due_at": None}
+            cur.execute(
+                "UPDATE reminders SET snooze_until = CASE WHEN status = 'pending' "
+                "AND due_at > now() THEN NULL ELSE snooze_until END "
+                "WHERE id = %s AND repeat IS NOT NULL "
+                "AND status IN ('pending', 'firing', 'sent') "
+                "AND (%s::text IS NULL OR chat_id = %s) RETURNING due_at, snooze_until",
+                (reminder_id, chat_id, chat_id),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    if not row:
+        return None
+    return {"recurring": True, "next_due_at": row["snooze_until"] or row["due_at"]}
 
 
-def cancel_reminder(reminder_id: int) -> bool:
-    return _transition(reminder_id, "cancelled", ("pending", "sent"))
+def cancel_reminder(reminder_id: int, chat_id: str | None = None) -> bool:
+    return _transition(reminder_id, "cancelled", ("pending", "sent"), chat_id)
 
 
 def reminder_stats(since, until) -> Dict[str, Any]:

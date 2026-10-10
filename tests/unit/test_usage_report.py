@@ -306,6 +306,10 @@ def test_scn_rem_06_weekly_report_reminders(tmp_path, monkeypatch):
             rid = db.create_reminder(f"segredo {i}", due, None, "chat-rem06", "test")
             ids.append(rid)
             drift = 240 if i == 4 else 2 + i
+            with db._conn() as conn:  # finish_fired only acts on a claimed ('firing') row
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE reminders SET status = 'firing' WHERE id = %s", (rid,))
+                conn.commit()
             db.finish_fired(rid, due + timedelta(seconds=drift), drift)
         with db._conn() as conn:
             with conn.cursor() as cur:

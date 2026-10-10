@@ -159,6 +159,8 @@ def test_format_late_same_day_and_other_day():
 def fake_db(monkeypatch):
     m = MagicMock()
     m.claim_due.return_value = []
+    R._pending_finish.clear()
+    R._warned_not_configured = False
     monkeypatch.setattr(R, "db", m)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     return m
@@ -183,6 +185,7 @@ def test_fire_one_off_late_scn_rem_05(fake_db, monkeypatch):
     assert "atrasado" in sent_text and "18:00" in sent_text
     assert send.call_args.args[1] == "42"
     fake_db.finish_fired.assert_called_once_with(7, now, 3 * 3600, next_due_at=None)
+    fake_db.init_db.assert_called_once()
     fake_db.save_tool_snapshot.assert_called_once_with(
         "telegram-42", "last_reminder", {"id": 7, "text": "tomar remédio"})
     assert mem.add.call_args.args[0].content == sent_text
@@ -248,3 +251,92 @@ def test_metrics_helper_records(monkeypatch):
     monkeypatch.setenv("EVI_METRICS_ENABLED", "true")
     metrics.record_reminder_fired(True, 400)
     metrics.record_reminder_fired(False, 2)
+
+
+# --- review fixes: snooze, finish retry, NOT_CONFIGURED, per-send clock ---------
+
+def test_snoozed_recurring_fire_keeps_series_and_measures_drift_from_snooze(fake_db):
+    """daily 08:00 + 'adia 1h': row already rescheduled to tomorrow 08:00, snooze_until 09:00."""
+    tomorrow = datetime(2026, 10, 11, 8, 0, tzinfo=SP)
+    snooze = datetime(2026, 10, 10, 9, 0, tzinfo=SP)
+    now = datetime(2026, 10, 10, 9, 0, 10, tzinfo=SP)
+    fake_db.claim_due.return_value = [_row(repeat="daily", due_at=tomorrow, snooze_until=snooze)]
+    send = MagicMock(return_value=True)
+    out = R.fire_due(now=now, send=send)
+    assert out["late"] == 0 and send.call_args.args[0] == "⏰ Lembrete: tomar remédio"
+    (rid, fired_at, drift), kw = fake_db.finish_fired.call_args
+    assert drift == 10 and kw["next_due_at"] == tomorrow  # not advanced twice
+
+
+def test_snoozed_weekly_keeps_weekday(fake_db):
+    nxt_week = datetime(2026, 10, 13, 7, 30, tzinfo=SP)  # Tuesday
+    snooze = datetime(2026, 10, 11, 7, 30, tzinfo=SP)  # "para amanhã" (Sunday)
+    fake_db.claim_due.return_value = [_row(repeat="weekly", due_at=nxt_week, snooze_until=snooze)]
+    R.fire_due(now=snooze + timedelta(seconds=3), send=lambda t, c: True)
+    assert fake_db.finish_fired.call_args.kwargs["next_due_at"] == nxt_week
+    assert nxt_week.weekday() == 1
+
+
+def test_snoozed_pending_recurring_past_due_advances_from_anchor(fake_db):
+    due = datetime(2026, 10, 10, 8, 0, tzinfo=SP)
+    snooze = datetime(2026, 10, 10, 9, 0, tzinfo=SP)
+    fake_db.claim_due.return_value = [_row(repeat="daily", due_at=due, snooze_until=snooze)]
+    R.fire_due(now=snooze, send=lambda t, c: True)
+    assert fake_db.finish_fired.call_args.kwargs["next_due_at"] == datetime(2026, 10, 11, 8, 0, tzinfo=SP)
+
+
+def test_finish_failure_retried_then_pending_finish_without_resend(fake_db):
+    now = datetime(2026, 10, 10, 18, 0, 5, tzinfo=SP)
+    fake_db.claim_due.return_value = [_row()]
+    fake_db.finish_fired.side_effect = RuntimeError("db down")
+    send = MagicMock(return_value=True)
+    R.fire_due(now=now, send=send)
+    assert fake_db.finish_fired.call_count == 3 and send.call_count == 1
+    assert len(R._pending_finish) == 1
+    # next tick: db back; finish happens first, before requeue_stuck, no resend
+    order = []
+    fake_db.finish_fired.reset_mock(side_effect=True)
+    fake_db.finish_fired.side_effect = lambda *a, **k: order.append("finish")
+    fake_db.requeue_stuck.side_effect = lambda *a, **k: order.append("requeue")
+    fake_db.claim_due.return_value = []
+    R.fire_due(now=now + timedelta(seconds=30), send=send)
+    assert order == ["finish", "requeue"] and send.call_count == 1
+    assert R._pending_finish == []
+
+
+def test_finish_succeeds_on_retry(fake_db):
+    fake_db.claim_due.return_value = [_row()]
+    fake_db.finish_fired.side_effect = [RuntimeError("x"), None]
+    R.fire_due(now=datetime(2026, 10, 10, 18, 0, 5, tzinfo=SP), send=lambda t, c: True)
+    assert fake_db.finish_fired.call_count == 2 and R._pending_finish == []
+
+
+def test_not_configured_marks_failed_not_released(fake_db):
+    from services.send_result import SendResult, NOT_CONFIGURED
+
+    fake_db.claim_due.return_value = [_row(id=1), _row(id=2)]
+    send = MagicMock(return_value=SendResult.fail(NOT_CONFIGURED, detail="missing"))
+    out = R.fire_due(now=datetime(2026, 10, 10, 18, 1, tzinfo=SP), send=send)
+    assert out["failed"] == 2 and out["sent"] == 0
+    assert [c.args[0] for c in fake_db.fail_reminder.call_args_list] == [1, 2]
+    fake_db.release_reminder.assert_not_called()
+    fake_db.finish_fired.assert_not_called()
+
+
+def test_transport_failure_still_releases(fake_db):
+    from services.send_result import SendResult, TRANSPORT
+
+    fake_db.claim_due.return_value = [_row()]
+    R.fire_due(now=NOW, send=lambda t, c: SendResult.fail(TRANSPORT))
+    fake_db.release_reminder.assert_called_once_with(7)
+    fake_db.fail_reminder.assert_not_called()
+
+
+def test_fired_at_and_drift_reread_after_each_send(fake_db, monkeypatch):
+    t0 = datetime(2026, 10, 10, 18, 0, 1, tzinfo=SP)
+    clock = iter([t0, t0 + timedelta(seconds=10), t0 + timedelta(seconds=20)])
+    monkeypatch.setattr(R, "now_local", lambda: next(clock))
+    fake_db.claim_due.return_value = [_row(id=1), _row(id=2)]
+    R.fire_due(send=lambda t, c: True)
+    drifts = [c.args[2] for c in fake_db.finish_fired.call_args_list]
+    assert drifts == [11, 21]

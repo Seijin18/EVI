@@ -35,7 +35,9 @@ def is_test_session(session_id: str | None) -> bool:
 class TurnCollector(BaseCallbackHandler):
     """Collects tool outcomes, tool timings and LLM call count for one turn."""
 
-    def __init__(self) -> None:
+    def __init__(self, channel: str | None = None, is_test: bool = False) -> None:
+        self.channel = channel
+        self.is_test = bool(is_test)
         self._lock = threading.Lock()
         self._windmill: list[dict[str, Any]] = []
         self._calls: list[dict[str, Any]] = []
@@ -103,9 +105,23 @@ class TurnCollector(BaseCallbackHandler):
 _current: ContextVar[TurnCollector | None] = ContextVar("evi_turn_collector", default=None)
 
 
-def start_turn() -> tuple[TurnCollector, Any]:
-    collector = TurnCollector()
+def start_turn(
+    channel: str | None = None, session_id: str | None = None, is_test: bool = False
+) -> tuple[TurnCollector, Any]:
+    collector = TurnCollector(channel, bool(is_test) or is_test_session(session_id))
     return collector, _current.set(collector)
+
+
+def current_channel() -> str | None:
+    """Channel of the turn in progress (None outside a /chat turn)."""
+    collector = _current.get()
+    return collector.channel if collector is not None else None
+
+
+def current_is_test() -> bool:
+    """True when the turn in progress is a test turn (header or test session id)."""
+    collector = _current.get()
+    return bool(collector.is_test) if collector is not None else False
 
 
 def end_turn(token: Any) -> None:

@@ -25,9 +25,10 @@ CREATE TABLE IF NOT EXISTS reminders (
   text TEXT NOT NULL,
   due_at TIMESTAMPTZ NOT NULL,
   repeat VARCHAR(16),                 -- NULL | daily | weekdays | weekly | monthly
-  status VARCHAR(16) NOT NULL DEFAULT 'pending',  -- pending | firing | sent | done | cancelled
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',  -- pending | firing | sent | done | cancelled | failed
   chat_id VARCHAR(64) NOT NULL,
-  created_from VARCHAR(16) NOT NULL,  -- telegram | whatsapp_control | api
+  created_from VARCHAR(16) NOT NULL,  -- canal real do turno: telegram | whatsapp_control | api
+  snooze_until TIMESTAMPTZ,           -- adiamento de UMA ocorrência; NULL = sem adiamento
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   fired_at TIMESTAMPTZ,
   drift_s INTEGER
@@ -36,11 +37,14 @@ CREATE INDEX IF NOT EXISTS reminders_due ON reminders (status, due_at);
 ```
 
 `claim_due(now)`: `UPDATE reminders SET status='firing' WHERE id IN (SELECT id FROM
-reminders WHERE status='pending' AND due_at <= now FOR UPDATE SKIP LOCKED LIMIT 20)
+reminders WHERE status='pending' AND COALESCE(snooze_until, due_at) <= now FOR UPDATE SKIP LOCKED LIMIT 20)
 RETURNING *` — dois ticks concorrentes nunca disparam o mesmo lembrete. Depois do
 envio: sem recorrência → `sent` (+ `fired_at`, `drift_s`); com recorrência → volta a
 `pending` com o próximo `due_at`. Envio que falhou → volta a `pending` (tenta no
-próximo tick). Linha presa em `firing` há mais de 5 min (processo morreu no meio)
+próximo tick); se o resultado for `not_configured` (sem token/chat), vira `failed` e
+é logado uma vez. `finish_fired` só age em linha `firing`; se o envio passou mas o
+`finish_fired` falhou, ele é repetido até 3x no tick e, persistindo, fica numa lista em
+memória terminada no início do tick seguinte (antes do `requeue_stuck`), sem reenviar. Linha presa em `firing` há mais de 5 min (processo morreu no meio)
 volta a `pending` no tick seguinte.
 
 ### 3. Atrasado nunca é descartado
@@ -65,6 +69,20 @@ com o cabeçalho de calendário que já está no prompt (mesmo caminho do
 futuro (até 1 min no passado é tolerado e dispara já), no máximo 1 ano à frente,
 `repeat` no enum. Resposta curta com a hora local confirmada ("Lembrete para sex
 10/10 às 18:00: pagar o boleto").
+
+### 5b. Adiar e concluir recorrentes
+
+`due_at` guarda o agendamento da série (âncora de hora/dia da semana); o adiamento vai
+em `snooze_until` e o horário efetivo é `COALESCE(snooze_until, due_at)` (usado por
+`claim_due`, listagem, atraso/drift). "adia 1h" num diário 08:00 reentrega aquela
+ocorrência às 09:00 e a próxima continua amanhã 08:00: no disparo adiado limpa-se
+`snooze_until` e mantém-se o `due_at` (já a próxima ocorrência) — não avança duas
+vezes; se o `due_at` ainda não passou à frente, a recorrência é calculada a partir
+da âncora, nunca do horário do adiamento. Avulso adiado volta de `sent` a `pending`
+com `snooze_until`. "feito" num recorrente confirma só a ocorrência (status e série
+intactos; `complete_reminder` devolve a flag e a tool diz "o próximo é <data>");
+parar a série é só `cancel_reminder`. `snooze`/`complete`/`cancel` filtram por
+`chat_id` (`TELEGRAM_CHAT_ID`).
 
 ### 6. Responder ao lembrete
 
@@ -96,8 +114,11 @@ Nenhum container novo. Uma thread e uma consulta indexada a cada 30 s.
   o `SKIP LOCKED` evita disparo duplo no mesmo banco; o smoke usa banco próprio.
 - **Clock do container**: `due_at` é `TIMESTAMPTZ`; comparação com `now()` do Python
   em UTC aware, nunca com hora ingênua.
-- **Lembrete de teste em produção**: sessões de teste (`is_test`) não criam lembretes
-  reais quando `X-Evi-Test`; harnesses usam a simulação.
+- **Lembrete de teste em produção**: turnos de teste (`X-Evi-Test` ou
+  sessão com prefixo de teste) não criam lembretes: `create_reminder` responde "Lembrete
+  de teste não agendado" via `turn_log.current_is_test()`; a simulação usa sessões
+  normais (`telegram-<chat>`). `created_from` vem de `turn_log.current_channel()`
+  (fallback `api`); sem `TELEGRAM_CHAT_ID` a tool recusa criar.
 
 ## Out of scope
 

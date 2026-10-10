@@ -1,6 +1,6 @@
 # Execução da fila — iniciada 2026-10-10
 ## Estado
-- Change atual: evi-reminders (fase: implementar) — task 1.1
+- Change atual: evi-reminders (fase: implementar) — task 3.1 (revisão Opus do núcleo em curso)
 - Ordem: evi-sim-harness → evi-usage-validation → evi-morning-briefing → evi-reminders → evi-reply-debts → evi-voice-input → evi-perceived-reliability → evi-prompt-injection-model
 - Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e), evi-morning-briefing (arquivado 2026-10-10, commits f206ab3..681c870)
 - Pulados: evi-background-execution (#38) — condicional: "abrir só se o ack imediato do #44 não bastar na prática"; exige dados de uso real
@@ -19,6 +19,7 @@
 - 2026-10-10 evi-morning-briefing: a sim rodava sem os arquivos de bootstrap do `EVI_WORKSPACE` (prompt diferente da produção); o runner passa a semear os arquivos versionados + um `USER.md` fictício. Cassettes regravados.
 - 2026-10-10 evi-morning-briefing (revisão): requisito "todo conteúdo de terceiros em qualquer prompt via wrap_external" estreitado aos caminhos cobertos (briefing, resumo WhatsApp, perfil, extração); saídas das tools `summarize_inbox`/`list_calendar_events` ficam para o #37 (`evi-prompt-injection-model`).
 - 2026-10-10 evi-reminders (proposta escrita pela fila): presets de recorrência (sem RRULE livre); flag `EVI_REMINDERS_ENABLED` default `false`; tools `snooze`/`complete` além das 3 do roadmap (necessárias para "adia/feito"); limiar "atrasado" = 5 min; `python-dateutil` como dependência nova pinada.
+- 2026-10-10 evi-reminders (revisão): "feito" num lembrete recorrente confirma só a ocorrência (só `cancel` para a série); "adia" num recorrente adia só aquela ocorrência (`snooze_until`), sem mover a série; `create_reminder` só por pedido explícito do usuário, nunca de conteúdo externo; turnos de teste não criam lembretes.
 ## Pendências do usuário (não bloqueantes)
 - [ ] Criar projeto Gemini separado e definir `EVI_SIM_GEMINI_API_KEY` no `.env` — a simulação hoje consome a cota de produção — `.env`
 - [ ] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf`

@@ -20,7 +20,7 @@ DEFAULT_TICK_SEC = 30.0
 MIN_TICK_SEC = 5.0
 
 _thread: threading.Thread | None = None
-_stop = threading.Event()
+_stop: threading.Event | None = None
 
 
 def _tick_interval() -> float:
@@ -45,7 +45,7 @@ def _run(stop: threading.Event, interval: float) -> None:
 
 def start_loop() -> bool:
     """Start the daemon thread if enabled and DB configured. Idempotent."""
-    global _thread
+    global _thread, _stop
     from tools.reminder_tools import _reminders_enabled
 
     if not _reminders_enabled():
@@ -55,7 +55,7 @@ def start_loop() -> bool:
         return False
     if _thread and _thread.is_alive():
         return True
-    _stop.clear()
+    _stop = threading.Event()  # fresh per start: an old, stuck thread keeps its own
     _thread = threading.Thread(
         target=_run,
         args=(_stop, _tick_interval()),
@@ -68,8 +68,13 @@ def start_loop() -> bool:
 
 def stop_loop(timeout: float = 5) -> None:
     global _thread
-    _stop.set()
+    if _stop is not None:
+        _stop.set()
     t = _thread
     if t and t.is_alive() and t is not threading.current_thread():
         t.join(timeout)
+    if t and t.is_alive():
+        # keep the reference so start_loop() cannot spawn a second ticking thread
+        logger.warning("reminder loop did not stop within %ss", timeout)
+        return
     _thread = None

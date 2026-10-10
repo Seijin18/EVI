@@ -32,7 +32,7 @@ A reminder delivered more than 5 minutes after `due_at` SHALL carry the mark "at
 - **THEN** the reminder is delivered once with "atrasado" and "18:00"
 
 ### Requirement: Replying to a reminder acts on it
-After delivery, the reminder text SHALL be appended to the Telegram session history (memory and persisted messages) and a tool snapshot `last_reminder` with its id SHALL be stored. "feito" SHALL complete it and "adia 1h" / "adia para amanhã" SHALL snooze it through `complete_reminder` / `snooze_reminder`, resolved by the LLM from that snapshot.
+After delivery, the reminder text SHALL be appended to the Telegram session history (memory and persisted messages) and a tool snapshot `last_reminder` with its id SHALL be stored. "feito" SHALL complete it and "adia 1h" / "adia para amanhã" SHALL snooze it through `complete_reminder` / `snooze_reminder`, resolved by the LLM from that snapshot. Snoozing a recurring reminder SHALL affect only that occurrence (the series keeps its schedule); "feito" on a recurring reminder SHALL confirm only that occurrence; `cancel_reminder` stops the series.
 
 #### Scenario: SCN-REM-04
 - **GIVEN** a reminder just delivered

@@ -599,17 +599,77 @@ def test_snooze_complete_cancel(rem_ids):
     until = _t(15)
     assert db.snooze_reminder(r, until) is True
     row = db.get_reminder(r)
-    assert row["status"] == "pending" and row["due_at"] == until
+    assert row["status"] == "pending" and row["snooze_until"] == until
     assert db.cancel_reminder(r) is True
     assert db.get_reminder(r)["status"] == "cancelled"
     assert db.cancel_reminder(r) is False
     assert db.snooze_reminder(r, _t(5)) is False
-    assert db.complete_reminder(r) is False
+    assert db.complete_reminder(r) is None
 
-    rec = _mk(rem_ids, _t(60), repeat="weekly")
-    assert db.complete_reminder(rec) is True
-    assert db.get_reminder(rec)["status"] == "done"
-    assert db.cancel_reminder(rec) is False
+    one = _mk(rem_ids, _t(60))
+    assert db.complete_reminder(one) == {"recurring": False, "next_due_at": None}
+    assert db.get_reminder(one)["status"] == "done"
+
+
+@pytest.mark.ephemeral_db
+def test_complete_recurring_only_acknowledges(rem_ids):
+    import db
+
+    due = _t(60)
+    rec = _mk(rem_ids, due, repeat="weekly")
+    res = db.complete_reminder(rec)
+    assert res["recurring"] is True and res["next_due_at"] == due
+    row = db.get_reminder(rec)
+    assert row["status"] == "pending" and row["due_at"] == due
+    assert db.cancel_reminder(rec) is True  # only cancel stops the series
+    assert db.get_reminder(rec)["status"] == "cancelled"
+
+
+@pytest.mark.ephemeral_db
+def test_snooze_recurring_keeps_series_and_claims_on_snooze_time(rem_ids):
+    """daily 08:00 + 'adia 1h': fires at the snooze time, due_at (series) untouched."""
+    import db
+
+    rec = _mk(rem_ids, _t(-1), repeat="daily")
+    db.claim_due(_t(0), limit=1000)
+    tomorrow = _t(24 * 60)
+    db.finish_fired(rec, _t(0), 1, next_due_at=tomorrow)
+    snooze = _t(30)
+    assert db.snooze_reminder(rec, snooze) is True
+    row = db.get_reminder(rec)
+    assert row["due_at"] == tomorrow and row["snooze_until"] == snooze
+    assert [r for r in db.claim_due(_t(10), limit=1000) if r["id"] == rec] == []
+    got = [r for r in db.claim_due(_t(31), limit=1000) if r["id"] == rec]
+    assert len(got) == 1 and got[0]["snooze_until"] == snooze
+    db.finish_fired(rec, _t(31), 5, next_due_at=got[0]["due_at"])
+    row = db.get_reminder(rec)
+    assert row["status"] == "pending" and row["snooze_until"] is None and row["due_at"] == tomorrow
+
+
+@pytest.mark.ephemeral_db
+def test_finish_fired_requires_firing_and_chat_filter(rem_ids):
+    import db
+
+    r = _mk(rem_ids, _t(60))  # pending, never claimed
+    assert db.finish_fired(r, _t(0), 1) is False
+    assert db.get_reminder(r)["status"] == "pending"
+    chat = db.get_reminder(r)["chat_id"]
+    assert db.snooze_reminder(r, _t(5), chat_id="other") is False
+    assert db.cancel_reminder(r, chat_id="other") is False
+    assert db.complete_reminder(r, chat_id="other") is None
+    assert db.snooze_reminder(r, _t(5), chat_id=chat) is True
+    assert db.complete_reminder(r, chat_id=chat)["recurring"] is False
+
+
+@pytest.mark.ephemeral_db
+def test_fail_reminder(rem_ids):
+    import db
+
+    r = _mk(rem_ids, _t(-1))
+    db.claim_due(_t(0), limit=1000)
+    db.fail_reminder(r)
+    assert db.get_reminder(r)["status"] == "failed"
+    assert [x for x in db.claim_due(_t(5), limit=1000) if x["id"] == r] == []
 
 
 @pytest.mark.ephemeral_db

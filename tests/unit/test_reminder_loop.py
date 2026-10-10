@@ -109,3 +109,38 @@ def test_lifespan_starts_and_stops(monkeypatch, tmp_path):
             sp.assert_not_called()
         sp.assert_called_once()
         psp.assert_called_once()
+
+
+def test_stuck_thread_stays_referenced_and_no_second_thread():
+    release = threading.Event()
+    started = threading.Event()
+    calls = []
+
+    def blocking():
+        calls.append(1)
+        started.set()
+        release.wait(5)
+
+    with patch("services.reminders.fire_due", side_effect=blocking):
+        assert reminder_loop.start_loop()
+        assert started.wait(2)
+        t = reminder_loop._thread
+        reminder_loop.stop_loop(timeout=0.05)
+        assert t.is_alive() and reminder_loop._thread is t  # not dropped while alive
+        assert reminder_loop.start_loop() is True
+        assert reminder_loop._thread is t and len(calls) == 1  # no second thread
+        release.set()
+        t.join(2)
+        assert not t.is_alive()
+        reminder_loop.stop_loop()
+        assert reminder_loop._thread is None
+
+
+def test_restart_uses_fresh_event():
+    with patch("services.reminders.fire_due"):
+        reminder_loop.start_loop()
+        first = reminder_loop._stop
+        reminder_loop.stop_loop()
+        assert first.is_set()
+        reminder_loop.start_loop()
+        assert reminder_loop._stop is not first and not reminder_loop._stop.is_set()

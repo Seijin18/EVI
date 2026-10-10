@@ -37,9 +37,13 @@ def fake(monkeypatch):
         lambda *a: calls["create"].append(a) or 1,
     )
     monkeypatch.setattr(db, "list_reminders", lambda **k: calls["rows"])
-    monkeypatch.setattr(db, "snooze_reminder", lambda i, u: calls["snooze"].append((i, u)) or True)
-    monkeypatch.setattr(db, "complete_reminder", lambda i: i == 1)
-    monkeypatch.setattr(db, "cancel_reminder", lambda i: i == 1)
+    monkeypatch.setattr(
+        db, "snooze_reminder", lambda i, u, c=None: calls["snooze"].append((i, u, c)) or True)
+    monkeypatch.setattr(
+        db, "complete_reminder",
+        lambda i, c=None: ({"recurring": i == 2, "next_due_at": datetime(2026, 10, 11, 11, 0, tzinfo=timezone.utc)}
+                           if i in (1, 2) else None))
+    monkeypatch.setattr(db, "cancel_reminder", lambda i, c=None: i == 1)
     monkeypatch.setattr(rt, "_validate", lambda t, d, r: _stub_validate(t, d, r, NOW))
     return calls
 
@@ -48,7 +52,39 @@ def test_create_ok(fake):
     out = rt.create_reminder.invoke({"text": "pagar o boleto", "due_at": "2026-10-10T18:00:00"})
     assert out == "Lembrete para sáb 10/10 às 18:00: pagar o boleto"
     assert len(fake["create"]) == 1
-    assert fake["create"][0][3:] == ("42", "telegram")
+    assert fake["create"][0][3:] == ("42", "api")  # outside a turn: fallback channel
+
+
+def test_create_uses_turn_channel(fake):
+    from services import turn_log
+
+    _, token = turn_log.start_turn("whatsapp_control", "whatsapp-1")
+    try:
+        rt.create_reminder.invoke({"text": "x", "due_at": "2026-10-10T18:00:00"})
+    finally:
+        turn_log.end_turn(token)
+    assert fake["create"][0][3:] == ("42", "whatsapp_control")
+
+
+def test_test_turn_writes_nothing(fake):
+    from services import turn_log
+
+    for kw in ({"is_test": True}, {"session_id": "evi-test-1"}):
+        _, token = turn_log.start_turn("api", **kw)
+        try:
+            out = rt.create_reminder.invoke({"text": "x", "due_at": "2026-10-10T18:00:00"})
+        finally:
+            turn_log.end_turn(token)
+        assert out == "Lembrete de teste não agendado (sessão de teste)."
+    assert not fake["create"]
+    # sim sessions use normal ids, not test prefixes
+    assert not turn_log.is_test_session("telegram-42")
+
+
+def test_empty_chat_id_refused(fake, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "")
+    out = rt.create_reminder.invoke({"text": "x", "due_at": "2026-10-10T18:00:00"})
+    assert out == "Lembretes precisam de TELEGRAM_CHAT_ID configurado." and not fake["create"]
 
 
 def test_create_repeat_suffix(fake):
@@ -94,10 +130,15 @@ def test_cancel_complete_messages(fake):
     assert "não encontrado" in rt.complete_reminder.invoke({"reminder_id": 9})
 
 
+def test_complete_recurring_only_acknowledges(fake):
+    out = rt.complete_reminder.invoke({"reminder_id": 2})
+    assert out == "Ok, marcado como feito hoje; o próximo é dom 11/10 às 08:00."
+
+
 def test_snooze(fake):
     out = rt.snooze_reminder.invoke({"reminder_id": 1, "until": "2026-10-10T19:00:00"})
     assert "adiado para sáb 10/10 às 19:00" in out
-    assert fake["snooze"][0][0] == 1
+    assert fake["snooze"][0][0] == 1 and fake["snooze"][0][2] == "42"
     past = rt.snooze_reminder.invoke({"reminder_id": 1, "until": "2026-10-01T19:00:00"})
     assert "passou" in past and len(fake["snooze"]) == 1
 
