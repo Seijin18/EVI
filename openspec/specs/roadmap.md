@@ -66,9 +66,10 @@ record/replay do LLM para a CI.
 
 **Pronto quando:** cenários `critical` 3/3 com LLM real e verdes em replay na CI.
 
-### Etapa V2 — Validação com base no uso real — `evi-usage-validation` — **ativo**
+### Etapa V2 — Validação com base no uso real — `evi-usage-validation` — **Done** (2026-10-10)
 
-Change: [`evi-usage-validation`](../changes/evi-usage-validation/proposal.md).
+Change: [`evi-usage-validation`](../changes/archive/2026-10-10-evi-usage-validation/proposal.md).
+As-built: `turn_log` em todo turno, `/bom` `/ruim`, sinais implícitos diários, relatório semanal (segunda 00:30), sonda diária somente-leitura, `evi-sim promote`, captura de formatos do Evolution. Ativação em produção depende dos schedules no Windmill.
 
 **Por quê.** Nada mede se o EVI funciona para o usuário depois de integrado; os
 sinais da revisão de 2026-10-10 só apareceram por consulta manual ao Postgres.
@@ -83,9 +84,9 @@ real" (KPI, limiar, janela).
 **Dependência.** V1 (o `promote` escreve cenários do simulador).
 **Pronto quando:** 2 relatórios semanais seguidos entregues; 1 falha real promovida.
 
-### Etapa 18 — Briefing matinal + guarda de injeção mínima — proposto
+### Etapa 18 — Briefing matinal + guarda de injeção mínima — **ativo**
 
-Change completo em [`openspec/queued/evi-morning-briefing/`](../queued/evi-morning-briefing/proposal.md).
+Change: [`evi-morning-briefing`](../changes/evi-morning-briefing/proposal.md).
 Recuado para depois de V1/V2: nasce com cenários de simulação (`SIM-BRIEF-*`) e
 com linha de base de uso para medir o efeito.
 Briefing determinístico no Telegram (agenda, tarefas, e-mails que pedem ação,
