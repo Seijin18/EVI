@@ -93,3 +93,19 @@ Nenhum container novo. Uma tabela pequena (uma linha por conversa direta).
 ## Out of scope
 
 Ver `proposal.md`.
+
+## As-built (2026-10-10)
+
+- `list_reply_debts`/`dismiss_reply_debt` funcionam com a flag desligada (só leitura +
+  reconhecimento); `dismiss_reply_debt` aceita `briefing_items` ("respondido 1").
+- Promessas: só `due_date` (+ `event_time`), perguntas e negações não contam.
+- Achado lateral corrigido: a data de referência das mensagens era o horário UTC
+  ("amanhã" às 22:30 em São Paulo virava o dia errado) — agora data local, também para
+  a extração antiga.
+- Briefing com a flag: 3 grupos × 3 itens, "+N" por grupo.
+- Relatório: taxa de ação por tipo usa o estado atual das conversas (aproximação
+  documentada).
+- Simulação: o timestamp do webhook passou a seguir o relógio simulado; `reply_not_matches`.
+- `schedule_event` com `end_time` opcional (1 h) — o modelo sem raciocínio às vezes
+  pedia o horário de término (flake do SIM-RU-01).
+- Timeout do LLM: 30 s por tentativa, no máximo 2 tentativas (`EVI_LLM_TIMEOUT_SEC`, `EVI_LLM_MAX_RETRIES`); o SIM-RU-05 travava porque a biblioteca repetia até 6 vezes.
