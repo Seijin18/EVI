@@ -123,3 +123,18 @@ Nenhum container novo. Uma thread e uma consulta indexada a cada 30 s.
 ## Out of scope
 
 Ver `proposal.md`.
+
+## As-built (2026-10-10)
+
+- Recorrência sem `dateutil` (aritmética de datas locais + `anchor_day` para o mensal).
+- `snooze_until` adia só uma ocorrência; "feito" em recorrente confirma só a do dia;
+  `cancel_reminder` encerra a série. Status `failed` quando o Telegram não está configurado.
+- `reminder_fires` registra cada ocorrência (estatística correta para recorrentes).
+- `finish_fired` protegido por `status='firing'`, com retentativa em memória sem reenvio.
+- Turnos de teste não criam lembretes; `created_from` vem do canal real do turno;
+  `create_reminder` só por pedido explícito (regra no `AGENTS.md`).
+- O lifespan agora também para o poller do Telegram no shutdown.
+- Passos `clock` do runner da simulação afirmam mensagens proativas (`SIM-REM-01..05`).
+- Achado lateral corrigido no mesmo change: com `EVI_GEMINI_THINKING_BUDGET=0` o modelo
+  passava o número do briefing como id; `confirm/dismiss_commitments` ganharam
+  `briefing_items`, resolvidos no código pelo snapshot `morning_briefing`.

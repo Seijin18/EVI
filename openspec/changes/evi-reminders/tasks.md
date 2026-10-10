@@ -34,6 +34,6 @@
   - Files: `tests/sim/scenarios/reminders/`, `tests/sim/sim.env`, `.env.example`, `docs/testing.md`, `tests/sim/cassettes/`
   - Verify: `./scripts/evi-sim run --tag reminders --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --llm replay`
 
-- [ ] 3.2 Sincronizar specs com o as-built, atualizar `BACKLOG.md`/`Progress.md`/roadmap e arquivar
+- [x] 3.2 Sincronizar specs com o as-built, atualizar `BACKLOG.md`/`Progress.md`/roadmap e arquivar
   - Files: `openspec/changes/evi-reminders/`, `openspec/BACKLOG.md`, `Progress.md`, `openspec/specs/roadmap.md`
   - Verify: `openspec validate --specs && PYTHONPATH=agent python3 -m pytest tests/unit -q && ./scripts/evi-sim run --tag critical --repeat 3 --llm live && ./scripts/evi-sim run --tag critical --llm replay`
