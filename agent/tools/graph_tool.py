@@ -6,6 +6,7 @@ import json
 
 from langchain_core.tools import tool
 
+from services.untrusted import wrap_external
 from services.graph_sync import graph_enabled, run_cypher
 
 
@@ -43,4 +44,5 @@ def query_conversation_graph(
         )
     if not rows:
         return "No graph results."
-    return json.dumps(rows, ensure_ascii=False, indent=2)
+    # Commitment titles come from third-party messages: wrap the whole result.
+    return wrap_external(json.dumps(rows, ensure_ascii=False, indent=2), "grafo", 4000)

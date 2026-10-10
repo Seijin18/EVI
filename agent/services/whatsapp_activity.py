@@ -14,7 +14,8 @@ def format_recent_messages(rows: list[dict], *, header: str = "") -> str:
         ts = (r.get("ts") or "")[:16].replace("T", " ")
         chat = r.get("chat_label") or "?"
         preview = r.get("preview") or r.get("text") or ""
-        lines.append(f"• {ts} — {chat}: {preview[:220]}")
+        item = wrap_external(f"{chat}: {preview[:220]}", "whatsapp", max_chars=300)
+        lines.append(f"• {ts} — {item}")
     return "\n".join(lines)
 
 

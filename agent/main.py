@@ -99,7 +99,11 @@ def _compact_session(session_id: str) -> None:
 
 
 def _telegram_invoke_chat(
-    message: str, session_id: str, is_test: bool = False, input_kind: str = "text"
+    message: str,
+    session_id: str,
+    is_test: bool = False,
+    input_kind: str = "text",
+    forwarded: bool = False,
 ) -> Dict[str, Any]:
     return _run_chat(
         ChatRequest(message=message, session_id=session_id),
@@ -107,6 +111,7 @@ def _telegram_invoke_chat(
         "telegram",
         is_test,
         input_kind,
+        forwarded,
     )
 
 
@@ -264,6 +269,7 @@ def _run_chat(
     channel: str,
     is_test: bool = False,
     input_kind: str = "text",
+    forwarded: bool = False,
 ) -> Dict[str, Any]:
     """Single entry for every turn (HTTP, Telegram, WhatsApp control); `channel`
     is only used to label the turn_log row."""
@@ -273,7 +279,7 @@ def _run_chat(
     from services.session_lane import session_lane
 
     with session_lane(session_id):
-        return _chat_impl(request, session_id, channel, is_test, input_kind)
+        return _chat_impl(request, session_id, channel, is_test, input_kind, forwarded)
 
 
 def _chat_impl(
@@ -282,11 +288,18 @@ def _chat_impl(
     channel: str = "api",
     is_test: bool = False,
     input_kind: str = "text",
+    forwarded: bool = False,
 ) -> Dict[str, Any]:
     from services.turn_log import end_turn, record_turn, start_turn
 
+    # A forwarded message is not the user's own words: it can never confirm or
+    # justify a deletion, so the guard sees an empty user text for this turn.
     collector, token = start_turn(
-        channel, session_id, is_test, input_kind, user_text=request.message
+        channel,
+        session_id,
+        is_test,
+        input_kind,
+        user_text="" if forwarded else request.message,
     )
     started = time.monotonic()
     reply: Optional[str] = None
@@ -310,6 +323,22 @@ def _chat_impl(
             error=error,
             is_test=is_test,
         )
+
+
+def _append_delete_preview(text: str, collector) -> str:
+    """When this turn staged an e-mail deletion, append a fixed, code-built preview
+    after the model's text (the model is not trusted to show what will be deleted)."""
+    pend = getattr(collector, "pending_preview", None)
+    if not pend:
+        return text
+    count = int(pend.get("count") or 0)
+    shown = [s for s in (pend.get("subjects") or []) if s][:5]
+    lines = [f"🗑️ Vou mover {count} e-mail(s) para a lixeira:"]
+    lines += [f"• {s}" for s in shown]
+    if count > len(shown):
+        lines.append(f"… e mais {count - len(shown)} outros")
+    lines.append("Responda «sim» para confirmar.")
+    return f"{text}\n\n" + "\n".join(lines)
 
 
 def _chat_turn(request: ChatRequest, session_id: str, collector) -> Dict[str, Any]:
@@ -350,6 +379,8 @@ def _chat_turn(request: ChatRequest, session_id: str, collector) -> Dict[str, An
             ai_content = extract_llm_text(output_messages[-1].content)
         else:
             ai_content = "The agent returned an empty response."
+
+        ai_content = _append_delete_preview(ai_content, collector)
 
         tool_audit = summarize_tool_calls(output_messages)
         persist_tool_snapshots(session_id, output_messages)
@@ -422,7 +453,7 @@ def telegram_webhook(
     flagged = _header_is_test(x_evi_test)
     return process_telegram_update(
         payload,
-        (lambda m, sid, input_kind="text": _telegram_invoke_chat(m, sid, True, input_kind)) if flagged else _telegram_invoke_chat,
+        (lambda m, sid, input_kind="text", forwarded=False: _telegram_invoke_chat(m, sid, True, input_kind, forwarded)) if flagged else _telegram_invoke_chat,
         reset_session=_reset_session,
         compact_session=_compact_session,
     )

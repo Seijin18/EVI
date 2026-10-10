@@ -113,7 +113,7 @@ def _voice_turn(
 
     from services import transcribe as tr
 
-    chat_id = message.get("chat", {}).get("id", "telegram")
+    chat_id = (message.get("chat") or {}).get("id", "telegram")
     session_id = f"telegram-{chat_id}"
 
     def fail(msg: str, detail: str = "") -> Dict[str, Any]:
@@ -191,7 +191,7 @@ def process_telegram_update(
 ) -> Dict[str, Any]:
     """Process one Telegram update dict; invoke_chat(message, session_id) -> {response: ...}."""
     message = update.get("message") or {}
-    sender = message.get("chat", {}).get("id", "telegram")
+    sender = (message.get("chat") or {}).get("id", "telegram")
     if not _chat_allowed(sender):
         _log.info("telegram update from disallowed chat %s ignored", sender)
         return {"ok": True, "skipped": "chat not allowed"}
@@ -202,8 +202,11 @@ def process_telegram_update(
         return {"ok": True, "skipped": "no text"}
 
     text = message["text"]
-    chat_id = message.get("chat", {}).get("id", "telegram")
+    chat_id = (message.get("chat") or {}).get("id", "telegram")
     session_id = f"telegram-{chat_id}"
+    forwarded = any(
+        message.get(k) for k in ("forward_origin", "forward_from", "forward_from_chat", "forward_date")
+    )
 
     from services.chat_commands import try_chat_command
 
@@ -269,7 +272,11 @@ def process_telegram_update(
             )
 
     try:
-        result = invoke_chat(text, session_id)
+        result = (
+            invoke_chat(text, session_id, forwarded=True)  # type: ignore[call-arg]
+            if forwarded
+            else invoke_chat(text, session_id)
+        )
     except Exception as exc:
         detail = str(exc)
         ai_content = (

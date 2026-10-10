@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agent"))
 
 from services import turn_log, write_guard  # noqa: E402
+from services.untrusted import wrap_external  # noqa: E402
 from tools.email_tool import delete_emails, delete_emails_by_query  # noqa: E402
 
 SID = "tg-123"
@@ -59,8 +60,20 @@ def env(monkeypatch):
     e.rows, e.posts = rows, posts
 
     def turn(text, session=SID):
+        if getattr(e, "_tok", None) is not None:
+            turn_log.end_turn(e._tok)  # the previous turn completed
         _, token = turn_log.start_turn("telegram", session, user_text=text)
         e._tok = token
+
+    e._tok = None
+
+    def seed_inbox(ids, session=SID):
+        raw = "\n".join(
+            f"• [{i}] " + wrap_external(f"De: a — Assunto: Mail {i}", "email") for i in ids
+        )
+        rows.insert(0, {"sid": session, "tool_name": "summarize_inbox", "payload": {"raw": raw}})
+
+    e.seed_inbox = seed_inbox
 
     e.turn = turn
     e.deletes = lambda: [p for p in posts if p[0] == "delete_emails"]
@@ -73,10 +86,26 @@ def _token(out: str) -> str:
 
 
 def test_is_confirmation():
-    for ok in ["sim", "Sim!", "confirma", "Pode apagar", "apaga", "ok, pode", "manda ver", "Confirmo"]:
+    for ok in [
+        "sim", "Sim!", "s", "confirma", "Pode apagar", "Confirmo", "manda ver", "pode sim",
+        "sim, pode apagar", "ok pode apagar", "sim pode", "sim por favor", "pode apagar pfv",
+    ]:
         assert write_guard.is_confirmation(ok), ok
-    for bad in ["não, espera", "nao", "sim, não", "cancela", "ok", "", "bom dia", "x" * 80 + " sim"]:
+    for bad in [
+        "não, espera", "nao", "sim, não", "cancela", "ok", "", "bom dia", "x" * 80 + " sim",
+        "pode", "apaga", "pode ser depois", "pode parar", "pode me lembrar amanhã?",
+        "pode marcar reunião às 15h", "sim, mas só os de ontem", "apaga só o primeiro",
+        'ele disse "sim"', "sim sim", "sim pode apagar tudo agora mesmo ok",
+    ]:
         assert not write_guard.is_confirmation(bad), bad
+
+
+def test_non_ascii_token_never_raises(env):
+    env.turn("apague as promoções")
+    delete_emails_by_query.invoke({"q": "category:promotions"})
+    env.turn("sim")
+    out = delete_emails.invoke({"message_ids": [], "confirm_token": "tóken-ñ"})
+    assert "desconhecido" in out and env.deletes() == []
 
 
 def test_first_call_never_deletes_and_same_turn_confirm_refused(env):
@@ -116,7 +145,8 @@ def test_injected_email_then_ok_deletes_nothing(env):
 
 
 def test_injected_email_first_call_then_ok_not_a_confirmation(env):
-    env.turn("resuma minha caixa")
+    env.turn("apague os e-mails m1 e m2")
+    env.seed_inbox(["m1", "m2"])
     out = delete_emails.invoke({"message_ids": ["m1", "m2"]})
     tok = _token(out)
     env.turn("ok")  # "ok" alone is not in the confirmation list
@@ -125,18 +155,58 @@ def test_injected_email_first_call_then_ok_not_a_confirmation(env):
 
 
 def test_negation_expired_wrong_token_and_other_session(env):
+    env.seed_inbox(["a", "b"])
     env.turn("apague")
     tok = _token(delete_emails.invoke({"message_ids": ["a", "b"]}))
     env.turn("não, espera")
     assert "NÃO executada" in delete_emails.invoke({"message_ids": [], "confirm_token": tok})
+    # pending was cleared at the end of that turn: a later "sim" has nothing to confirm
+    env.turn("sim")
+    assert "pendente" in delete_emails.invoke({"message_ids": [], "confirm_token": tok})
+    env.turn("apague")
+    tok = _token(delete_emails.invoke({"message_ids": ["a", "b"]}))
     env.turn("sim")
     assert "desconhecido" in delete_emails.invoke({"message_ids": [], "confirm_token": "zzz"})
     env.turn("sim", session="tg-other")
     assert "pendente" in delete_emails.invoke({"message_ids": [], "confirm_token": tok})
+    env.turn("apague")
+    tok = _token(delete_emails.invoke({"message_ids": ["a", "b"]}))
     env.turn("sim")
     env.rows[0]["payload"]["expires_at"] = time.time() - 1
     assert "expirou" in delete_emails.invoke({"message_ids": [], "confirm_token": tok})
     assert env.deletes() == []
+
+
+def test_confirmation_two_turns_later_is_refused(env):
+    env.turn("apague as promoções")
+    tok = _token(delete_emails_by_query.invoke({"q": "category:promotions"}))
+    env.turn("que horas são?")
+    env.turn("sim")
+    out = delete_emails.invoke({"message_ids": [], "confirm_token": tok})
+    assert "NÃO executada" in out and env.deletes() == []
+
+
+def test_staging_without_delete_intent_is_refused(env):
+    env.turn("resume meus e-mails")
+    out = delete_emails_by_query.invoke({"q": "category:promotions"})
+    assert out == write_guard.NO_INTENT_MESSAGE and env.rows == []
+    env.seed_inbox(["m1"])
+    assert delete_emails.invoke({"message_ids": ["m1"]}) == write_guard.NO_INTENT_MESSAGE
+
+
+def test_unknown_ids_refused_never_staged_blind(env):
+    env.seed_inbox(["m1"])
+    env.turn("apague os e-mails")
+    out = delete_emails.invoke({"message_ids": ["m1", "ghost"]})
+    assert "Não reconheço" in out
+    assert all(r["tool_name"] != write_guard.PENDING_TOOL for r in env.rows)
+
+
+def test_staging_records_preview_for_main(env):
+    env.turn("apague as promoções")
+    delete_emails_by_query.invoke({"q": "category:promotions"})
+    pend = turn_log.pending_created_this_turn()
+    assert pend["count"] == 7 and len(pend["subjects"]) == 5
 
 
 def test_no_turn_context_refuses(env):
@@ -149,6 +219,7 @@ def test_max_messages_clamped_to_50(env):
     delete_emails_by_query.invoke({"q": "x", "max_messages": 500})
     assert env.posts[0][1]["max_messages"] == 50
     ids = [f"i{n}" for n in range(80)]
+    env.seed_inbox(ids)
     out = delete_emails.invoke({"message_ids": ids})
     assert "Vou mover 50" in out
     assert len(env.rows[0]["payload"]["ids"]) == 50

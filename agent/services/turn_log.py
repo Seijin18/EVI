@@ -69,6 +69,9 @@ class TurnCollector(BaseCallbackHandler):
         from services.slow_ack import SlowAck
 
         self._slow_ack = SlowAck(self)
+        # Set by delete_emails when it stages a deletion in this turn: main appends a
+        # code-built preview to the reply (the model's text is not trusted to show it).
+        self.pending_preview: dict[str, Any] | None = None
         self.llm_calls = 0
         self.tokens_in = 0
         self.tokens_out = 0
@@ -196,6 +199,19 @@ def current_is_test() -> bool:
     return bool(collector.is_test) if collector is not None else False
 
 
+def note_pending_created(count: int, subjects: list[str]) -> None:
+    """Called when a pending deletion is staged in the turn in progress."""
+    collector = _current.get()
+    if collector is not None:
+        collector.pending_preview = {"count": int(count), "subjects": list(subjects)}
+
+
+def pending_created_this_turn() -> dict[str, Any] | None:
+    """``{count, subjects}`` when this turn staged a deletion, else None."""
+    collector = _current.get()
+    return getattr(collector, "pending_preview", None) if collector is not None else None
+
+
 def end_turn(token: Any) -> None:
     collector = _current.get()
     if collector is not None:
@@ -203,6 +219,12 @@ def end_turn(token: Any) -> None:
             collector.close()
         except Exception as exc:
             soft_fail("turn_log.end_turn.close", exc)
+        try:
+            from services import write_guard
+
+            write_guard.on_turn_end(collector.session_id, collector.turn_seq)
+        except Exception as exc:
+            soft_fail("turn_log.end_turn.write_guard", exc)
     try:
         _current.reset(token)
     except ValueError:  # token from another context; leave the var as is

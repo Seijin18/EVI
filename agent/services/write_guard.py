@@ -50,12 +50,16 @@ BLOCKED_MESSAGE = "ação bloqueada: turno não iniciado pelo usuário"
 PENDING_TOOL = "pending_delete"
 TTL_SEC = 600
 MAX_DELETE = 50
-MAX_CONFIRM_CHARS = 60
+MAX_CONFIRM_CHARS = 30
 
+# Closed set of accepted confirmations (normalized: no accents/case/punctuation),
+# optionally followed by "por favor"/"pfv". Anything else is NOT a confirmation.
 _CONFIRM_RE = re.compile(
-    r"\b(sim|confirma|confirmo|confirmado|pode apagar|apaga|pode|ok pode|manda ver)\b"
+    r"^(sim|s|confirmo|confirma|pode apagar|sim pode apagar|ok pode apagar|sim pode"
+    r"|manda ver|pode sim)( (por favor|pfv))?$"
 )
-_NEGATION_RE = re.compile(r"\b(nao|espera|aguarda|cancela|cancelar|para|pare|calma)\b")
+_DELETE_INTENT_RE = re.compile(r"apag|delet|exclu|lixeira|limp|remov|jog\w* fora|joga fora")
+NO_INTENT_MESSAGE = "Só apago e-mails quando você pede."
 
 
 def _normalize(text: str) -> str:
@@ -65,15 +69,46 @@ def _normalize(text: str) -> str:
 
 
 def is_confirmation(text: str | None) -> bool:
-    """True for a short, explicit yes ("sim", "pode apagar", "manda ver") with no
-    negation ("não", "espera", "cancela"). Accent/case-insensitive."""
-    raw = str(text or "")
-    if not raw.strip() or len(raw.strip()) > MAX_CONFIRM_CHARS:
+    """True only when the whole (normalized) message is one of the closed-set yes
+    phrases ("sim", "pode apagar", "manda ver"...). Quoted text, qualifiers
+    ("sim, mas só os de ontem") and everything else are False."""
+    raw = str(text or "").strip()
+    if not raw or len(raw) > MAX_CONFIRM_CHARS:
         return False
-    norm = _normalize(raw)
-    if _NEGATION_RE.search(norm):
-        return False
-    return bool(_CONFIRM_RE.search(norm))
+    return bool(_CONFIRM_RE.match(_normalize(raw)))
+
+
+def pending_created_this_turn():
+    """Re-export of turn_log.pending_created_this_turn (lazy: avoids an import cycle)."""
+    from services.turn_log import pending_created_this_turn as _p
+
+    return _p()
+
+
+def has_delete_intent(text: str | None) -> bool:
+    """True when the user's own message of this turn talks about deleting."""
+    return bool(_DELETE_INTENT_RE.search(_normalize(text or "")))
+
+
+# In-process bookkeeping so a confirmation only counts in the turn IMMEDIATELY after
+# the staging turn (fail-closed after a restart: unknown last turn -> refuse).
+_staged: dict[str, int] = {}  # session -> turn that created the pending delete
+_last_turn: dict[str, int] = {}  # session -> seq of the last completed turn
+_MAX_SESSIONS = 2000
+
+
+def on_turn_end(session_id: str | None, turn_seq: int | None) -> None:
+    """Called by turn_log.end_turn. Records the completed turn and clears a pending
+    delete created in an EARLIER turn and not consumed in this one."""
+    if not session_id or turn_seq is None:
+        return
+    if len(_last_turn) > _MAX_SESSIONS:
+        _last_turn.clear()
+    _last_turn[session_id] = turn_seq
+    staged = _staged.get(session_id)
+    if staged is not None and staged < turn_seq:
+        _staged.pop(session_id, None)
+        clear_pending(session_id)
 
 
 @dataclass
@@ -118,10 +153,12 @@ def create_pending(
     except Exception as exc:
         soft_fail("write_guard.create_pending", exc)
         return None
+    _staged[session_id] = turn_seq
     return token
 
 
 def clear_pending(session_id: str) -> None:
+    _staged.pop(session_id, None)
     try:
         from db import init_db, save_tool_snapshot
 
@@ -129,6 +166,14 @@ def clear_pending(session_id: str) -> None:
         save_tool_snapshot(session_id, PENDING_TOOL, {"cleared": True})
     except Exception as exc:
         soft_fail("write_guard.clear_pending", exc)
+
+
+def _token_matches(expected: str, given: str) -> bool:
+    """Constant-time compare on bytes; never raises on non-ASCII input."""
+    try:
+        return secrets.compare_digest(expected.encode("utf-8"), given.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def check_confirmation(
@@ -148,12 +193,15 @@ def check_confirmation(
         return Check(False, "não consegui verificar a confirmação pendente")
     if not pending or pending.get("cleared") or not pending.get("token"):
         return Check(False, "não há exclusão pendente para confirmar; peça a prévia primeiro")
-    if not secrets.compare_digest(str(pending["token"]), str(token or "")):
+    if not _token_matches(str(pending["token"]), str(token or "")):
         return Check(False, "token de confirmação desconhecido; peça a prévia primeiro")
     if (now if now is not None else time.time()) > float(pending.get("expires_at", 0)):
         return Check(False, "a confirmação expirou (10 min); peça a prévia novamente")
-    if turn_seq <= int(pending.get("created_turn", 0)):
+    created = int(pending.get("created_turn", 0))
+    if turn_seq <= created:
         return Check(False, "preciso da confirmação do usuário em uma nova mensagem")
+    if _last_turn.get(session_id) != created:
+        return Check(False, "a confirmação precisa ser a mensagem logo após a prévia")
     if not is_confirmation(user_text):
         return Check(False, "a mensagem do usuário neste turno não é uma confirmação explícita")
     ids = [str(i) for i in pending.get("ids") or []]

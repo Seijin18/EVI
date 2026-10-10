@@ -15,6 +15,7 @@ from services.contact_filesystem import (
     search_contacts,
 )
 from services.contact_learning import learn_contact
+from services.untrusted import wrap_external
 from services.contact_registry import assign_contact_name, format_contact_names, sync_evolution_contacts
 from services.whatsapp_activity import list_recent_whatsapp, summarize_whatsapp
 from services.whatsapp_backfill import backfill_contact_full
@@ -41,10 +42,13 @@ def _format_contact_block(contact: dict) -> list[str]:
     except Exception:
         db_row = None
     title = format_contact_names(db_row or contact, label)
-    lines = [f"**{title}**"]
+    lines = [f"**{wrap_external(title, 'whatsapp', 120)}**"]
     aliases = contact.get("aliases") or (db_row or {}).get("aliases") or []
     if aliases:
-        lines.append(f"Também conhecido como: {', '.join(aliases)}")
+        lines.append(
+            "Também conhecido como: "
+            + wrap_external(", ".join(str(a) for a in aliases), "whatsapp", 200)
+        )
     phone = _format_phone_hint(jid)
     if phone:
         lines.append(f"Telefone: {phone}")
@@ -53,7 +57,7 @@ def _format_contact_block(contact: dict) -> list[str]:
     if profile:
         lines.append("")
         lines.append("Perfil:")
-        lines.append(profile)
+        lines.append(wrap_external(profile, "perfil_contato", 1200))
 
     timeline = read_timeline_tail(jid, limit=5)
     if timeline:
@@ -62,7 +66,7 @@ def _format_contact_block(contact: dict) -> list[str]:
         for entry in timeline:
             preview = (entry.get("text_preview") or "")[:200]
             ts = entry.get("ts", "")[:16]
-            lines.append(f"- {ts}: {preview}")
+            lines.append(f"- {ts}: {wrap_external(preview, 'whatsapp', 220)}")
 
     try:
         from db import init_db, list_commitments_for_chat
@@ -74,9 +78,9 @@ def _format_contact_block(contact: dict) -> list[str]:
             lines.append("Compromissos registrados:")
             for r in rows:
                 status = r.get("status") or "?"
-                title = r.get("title") or "(sem título)"
+                ctitle = wrap_external(r.get("title") or "(sem título)", "perfil_contato", 200)
                 cid = r.get("id")
-                lines.append(f"- [{cid}] ({status}) {title}")
+                lines.append(f"- [{cid}] ({status}) {ctitle}")
     except Exception as exc:
         from services.soft_fail import soft_fail
         soft_fail("contact_tool._format_contact_block", exc)
@@ -122,7 +126,7 @@ def list_whatsapp_contacts(limit: int = 25, refresh_from_evolution: bool = True)
         hint = f" — {', '.join(extra)}" if extra else ""
         phone = _format_phone_hint(c["jid"])
         phone_bit = f" ({phone})" if phone else ""
-        lines.append(f"• {label}{phone_bit}{hint}")
+        lines.append(f"• {wrap_external(label, 'whatsapp', 120)}{phone_bit}{hint}")
     return "\n".join(lines)
 
 
@@ -148,7 +152,7 @@ def get_whatsapp_contact_info(name_or_phone: str) -> str:
             label = c.get("label") or "?"
             phone = _format_phone_hint(c["jid"])
             phone_bit = f" ({phone})" if phone else ""
-            lines.append(f"• {label}{phone_bit}")
+            lines.append(f"• {wrap_external(label, 'whatsapp', 120)}{phone_bit}")
         lines.append("Peça detalhes de um nome específico.")
         return "\n".join(lines)
 

@@ -73,11 +73,12 @@ def format_task_result(title: str, raw: str) -> str:
 
 
 def format_list_tasks_result(raw: str) -> str:
-    if "failed" in raw.lower():
-        hint = format_windmill_oauth_error(raw, "listar tarefas", "WINDMILL_GTASKS_RESOURCE")
-        return hint or f"Não foi possível listar tarefas. {raw[:300]}"
-
     blob = _parse_json_blob(raw)
+    if blob is None:
+        # Not JSON: a transport/Windmill error. Never echo the raw text unwrapped.
+        hint = format_windmill_oauth_error(raw, "listar tarefas", "WINDMILL_GTASKS_RESOURCE")
+        return hint or "Não foi possível listar tarefas (resposta inesperada do Google Tasks)."
+
     if blob and blob.get("status") == "error":
         detail = str(blob.get("detail", raw))[:200]
         return f"Erro ao listar tarefas: {detail}"
@@ -93,7 +94,7 @@ def format_list_tasks_result(raw: str) -> str:
             lines.append(f"• {title} — {due}")
         return "\n".join(lines)
 
-    return f"Resposta do Google Tasks: {raw[:400]}"
+    return "Resposta inesperada do Google Tasks; nada a listar."
 
 
 def _wrap_mail_line(subject: str, sender: str) -> str:
@@ -103,11 +104,13 @@ def _wrap_mail_line(subject: str, sender: str) -> str:
 
 
 def format_inbox_result(raw: str) -> str:
-    if "failed" in raw.lower():
-        hint = format_windmill_oauth_error(raw, "acessar o Gmail", "WINDMILL_GMAIL_RESOURCE")
-        return hint or f"Não foi possível acessar o Gmail. {raw[:350]}"
-
     blob = _parse_json_blob(raw)
+    if blob is None and '"summary"' not in raw:
+        # Not JSON: a transport/Windmill error. Never echo the raw text unwrapped
+        # (it may carry attacker-controlled mail content).
+        hint = format_windmill_oauth_error(raw, "acessar o Gmail", "WINDMILL_GMAIL_RESOURCE")
+        return hint or "Não foi possível acessar o Gmail (resposta inesperada)."
+
     if blob and blob.get("status") == "error":
         detail = str(blob.get("detail", ""))[:500]
         http = blob.get("http_status")
@@ -128,7 +131,6 @@ def format_inbox_result(raw: str) -> str:
                 sender = msg.get("from", "")
                 tag = f"[{mid}] " if mid else ""
                 lines.append(f"• {tag}{_wrap_mail_line(subj, sender)}")
-            lines.append("Para apagar: «apagar email <id>» ou use delete_emails.")
             return "\n".join(lines)
         summary = str(blob.get("summary") or "").strip()
         if summary:
@@ -148,11 +150,8 @@ def format_inbox_result(raw: str) -> str:
                     parsed_lines.append(f"• {wrap_external(line[2:], 'email')}")
             if parsed_lines:
                 lines = [f"Caixa de entrada ({count} recentes):"] + parsed_lines
-                lines.append(
-                    "Para apagar: «apagar email <id>», delete_emails_by_query, ou peça ao assistente."
-                )
                 return "\n".join(lines)
-            return summary
+            return wrap_external(summary, "email")
         return "Caixa de entrada vazia (nenhuma mensagem recente)."
 
     if '"summary"' in raw:
@@ -160,7 +159,7 @@ def format_inbox_result(raw: str) -> str:
         if blob:
             return format_inbox_result(json.dumps(blob))
 
-    return f"Resposta do Gmail: {raw[:400]}"
+    return "Resposta inesperada do Gmail; não consegui interpretar a caixa de entrada."
 
 
 def format_delete_emails_result(raw: str, *, count: int | None = None) -> str:

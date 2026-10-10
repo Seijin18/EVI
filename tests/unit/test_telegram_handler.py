@@ -332,3 +332,36 @@ def test_disallowed_log_has_chat_id_not_text(monkeypatch, caplog):
         _run_guard(_text(666, "segredo-xyz"), {"TELEGRAM_CHAT_ID": "111"}, monkeypatch)
     joined = " ".join(r.getMessage() for r in caplog.records)
     assert "666" in joined and "segredo-xyz" not in joined
+
+
+def test_chat_none_does_not_crash():
+    with _DIRECT_OFF:
+        with (
+            patch("services.telegram_handler.send_telegram_message", return_value=True),
+            patch("services.telegram_handler._persist_turn"),
+            patch("services.telegram_handler.log_telegram_turn"),
+        ):
+            process_telegram_update(
+                {"message": {"text": "oi", "chat": None}},
+                lambda m, s: {"response": "ok", "tools": []},
+            )
+
+
+def test_forwarded_message_is_flagged_to_invoke_chat():
+    seen = {}
+
+    def fake_chat(msg, session_id, forwarded=False):
+        seen["forwarded"] = forwarded
+        return {"response": "ok", "tools": []}
+
+    update = {
+        "message": {"text": "sim", "chat": {"id": 1}, "forward_origin": {"type": "user"}}
+    }
+    with _DIRECT_OFF:
+        with (
+            patch("services.telegram_handler.send_telegram_message", return_value=True),
+            patch("services.telegram_handler._persist_turn"),
+            patch("services.telegram_handler.log_telegram_turn"),
+        ):
+            process_telegram_update(update, fake_chat)
+    assert seen["forwarded"] is True

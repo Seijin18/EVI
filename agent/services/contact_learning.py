@@ -14,6 +14,7 @@ from services.contact_filesystem import (
     read_timeline_since,
     resolve_contact_for_query,
 )
+from services.untrusted import wrap_external
 from services.whatsapp_backfill import backfill_contact_full
 
 
@@ -136,7 +137,8 @@ def learn_contact(
     append_profile_section(jid, heading=heading, body=synthesis, label=label)
 
     body = (
-        f"Aprendizado sobre **{label}** (últimos {days} dias):\n\n{synthesis}\n\n"
+        f"Aprendizado sobre **{wrap_external(label, 'perfil_contato', 120)}** "
+        f"(últimos {days} dias):\n\n{wrap_external(synthesis, 'perfil_contato', 4000)}\n\n"
         f"Perfil atualizado em `{heading}`."
     )
     if backfill_note:
