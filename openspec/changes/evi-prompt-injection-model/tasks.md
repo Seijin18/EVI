@@ -16,7 +16,7 @@
   - Files: `agent/services/write_guard.py`, `agent/tools/registry.py`, `tests/unit/test_write_guard.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_write_guard.py -q` — todas as tools de escrita registradas chamam a guarda
 
-- [ ] 1.3 Saídas de `summarize_inbox` e `list_calendar_events` delimitadas + `AGENTS.md`
+- [x] 1.3 Saídas de `summarize_inbox` e `list_calendar_events` delimitadas + `AGENTS.md`
   - SCN-INJ-04
   - Files: `agent/services/response_format.py`, `agent/tools/calendar_tool.py`, `EVI_WORKSPACE/AGENTS.md`, `tests/unit/test_response_format.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_response_format.py -q` e `./scripts/evi-test inbox-ux`

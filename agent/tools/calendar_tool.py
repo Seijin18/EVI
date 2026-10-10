@@ -4,6 +4,7 @@ import re
 from langchain_core.tools import tool
 
 from integrations.factory import get_integration
+from services.untrusted import wrap_external
 from services.tool_result import ToolResult, parse_windmill_result
 from tools.calendar_time import evi_timezone, normalize_wall_clock
 
@@ -141,7 +142,7 @@ def list_calendar_events(
 
     lines = [f"Próximos eventos ({blob.get('count', len(events))}):"]
     for ev in events:
-        title = ev.get("summary") or "(sem título)"
+        title = wrap_external(ev.get("summary") or "(sem título)", "agenda", max_chars=200)
         when = ev.get("start") or "?"
         link = ev.get("html_link") or ""
         line = f"• {when} — {title}"

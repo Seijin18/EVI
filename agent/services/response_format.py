@@ -7,6 +7,8 @@ import os
 import re
 from typing import Any
 
+from services.untrusted import wrap_external
+
 
 def format_windmill_oauth_error(raw: str, action: str, resource_env: str) -> str | None:
     lower = raw.lower()
@@ -86,12 +88,18 @@ def format_list_tasks_result(raw: str) -> str:
             return "Nenhuma tarefa aberta no Google Tasks."
         lines = [f"Tarefas abertas ({blob.get('count', len(tasks))}):"]
         for t in tasks:
-            title = t.get("title") or "(sem título)"
+            title = wrap_external(t.get("title") or "(sem título)", "tarefa", max_chars=200)
             due = t.get("due") or "sem prazo"
             lines.append(f"• {title} — {due}")
         return "\n".join(lines)
 
     return f"Resposta do Google Tasks: {raw[:400]}"
+
+
+def _wrap_mail_line(subject: str, sender: str) -> str:
+    """Um único bloco externo por mensagem: remetente e assunto são de terceiros."""
+    text = f"De: {sender} — Assunto: {subject}" if sender else f"Assunto: {subject}"
+    return wrap_external(text, "email")
 
 
 def format_inbox_result(raw: str) -> str:
@@ -119,9 +127,7 @@ def format_inbox_result(raw: str) -> str:
                 subj = msg.get("subject", "(sem assunto)")
                 sender = msg.get("from", "")
                 tag = f"[{mid}] " if mid else ""
-                lines.append(f"• {tag}{subj}")
-                if sender:
-                    lines.append(f"  De: {sender}")
+                lines.append(f"• {tag}{_wrap_mail_line(subj, sender)}")
             lines.append("Para apagar: «apagar email <id>» ou use delete_emails.")
             return "\n".join(lines)
         summary = str(blob.get("summary") or "").strip()
@@ -134,13 +140,12 @@ def format_inbox_result(raw: str) -> str:
                     m = re.match(r"^- \[([^\]]+)\]\s*(.+?)(?:\s+—\s+(.+))?$", line)
                     if m:
                         parsed_lines.append(
-                            f"• [{m.group(1)}] {m.group(2)}"
-                            + (f"\n  De: {m.group(3)}" if m.group(3) else "")
+                            f"• [{m.group(1)}] {_wrap_mail_line(m.group(2), m.group(3) or '')}"
                         )
                     else:
-                        parsed_lines.append(f"• {line.lstrip('- ')}")
+                        parsed_lines.append(f"• {wrap_external(line.lstrip('- '), 'email')}")
                 elif line.startswith("- "):
-                    parsed_lines.append(f"• {line[2:]}")
+                    parsed_lines.append(f"• {wrap_external(line[2:], 'email')}")
             if parsed_lines:
                 lines = [f"Caixa de entrada ({count} recentes):"] + parsed_lines
                 lines.append(
