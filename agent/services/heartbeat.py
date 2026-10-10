@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from typing import Any
 
 from services.daily_summary import heartbeat_enabled, run_heartbeat_dry
 from services.whatsapp_control import parse_control_jids
+
+logger = logging.getLogger(__name__)
+
+
+def _briefing_enabled() -> bool:
+    # Read at call time so tests/ops can flip the flag without a restart.
+    return os.getenv("EVI_BRIEFING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def run_heartbeat(*, dry: bool = False) -> dict[str, Any]:
@@ -15,6 +24,18 @@ def run_heartbeat(*, dry: bool = False) -> dict[str, Any]:
 
     out = run_heartbeat_dry()
     messages: list[str] = []
+
+    if _briefing_enabled():
+        # The morning briefing surfaces pending commitments; maintenance
+        # findings (contacts without synthesis) are logged, never sent.
+        stale = _contacts_needing_synthesis()
+        for name in stale:
+            logger.info("heartbeat: contact needs synthesis (silenced by briefing): %s", name)
+        out["messages"] = []
+        out["notified_jids"] = 0
+        out["silenced"] = len(stale)
+        out["ran"] = True
+        return out
 
     pending = int(out.get("pending_unnotified") or 0)
     if pending > 0:

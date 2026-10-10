@@ -47,7 +47,7 @@
   - Files: `windmill/f/integrations/briefing.py`, `windmill/f/integrations/briefing.script.yaml`, `windmill/README.md`
   - Verify: `python3 -c "import ast;ast.parse(open('windmill/f/integrations/briefing.py').read())"` e teste unitário do script contra um servidor fake; a execução real no Windmill (conta real) fica como pendência do usuário — a entrega ponta a ponta é verificada na simulação (3.1)
 
-- [ ] 2.8 Heartbeat silencia manutenção quando o briefing está ligado
+- [x] 2.8 Heartbeat silencia manutenção quando o briefing está ligado
   - SCN-BRIEF-07
   - Files: `agent/services/heartbeat.py`, `tests/unit/test_heartbeat.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_heartbeat.py -q`

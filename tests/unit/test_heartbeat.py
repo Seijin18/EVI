@@ -109,3 +109,44 @@ def test_contact_without_synthesis_is_flagged(tmp_path, monkeypatch):
     )
     monkeypatch.setattr("services.contact_filesystem.last_synthesis_date", lambda _jid: "")
     assert hb._contacts_needing_synthesis() == ["Sem sintese"]
+
+
+def _run_enabled_heartbeat(monkeypatch, briefing: str):
+    from services import heartbeat as hb
+
+    monkeypatch.setenv("EVI_BRIEFING_ENABLED", briefing)
+    monkeypatch.setattr(hb, "heartbeat_enabled", lambda: True)
+    monkeypatch.setattr(
+        hb,
+        "run_heartbeat_dry",
+        lambda: {"ok": True, "checklist": "x", "pending_unnotified": 2},
+    )
+    monkeypatch.setattr(hb, "_contacts_needing_synthesis", lambda **kw: ["Ana", "Beto"])
+    monkeypatch.setattr(hb, "parse_control_jids", lambda: ["ctl@s.whatsapp.net"])
+    sent: list = []
+    monkeypatch.setattr(
+        "services.evolution_client.send_whatsapp_text",
+        lambda jid, body, **kw: sent.append((jid, body)) or True,
+    )
+    return hb.run_heartbeat(), sent
+
+
+def test_heartbeat_silenced_when_briefing_enabled(monkeypatch, caplog):
+    """SCN-BRIEF-07 — no message is sent; findings go to the log."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="services.heartbeat"):
+        out, sent = _run_enabled_heartbeat(monkeypatch, "true")
+    assert sent == []
+    assert out["messages"] == []
+    assert out["notified_jids"] == 0
+    assert out["silenced"] == 2
+    assert "Ana" in caplog.text and "Beto" in caplog.text
+
+
+def test_heartbeat_unchanged_when_briefing_disabled(monkeypatch):
+    out, sent = _run_enabled_heartbeat(monkeypatch, "false")
+    assert len(sent) == 1
+    assert "pendente" in sent[0][1] and "Ana" in sent[0][1]
+    assert out["notified_jids"] == 1
+    assert "silenced" not in out
