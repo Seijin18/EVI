@@ -99,16 +99,25 @@ def _compact_session(session_id: str) -> None:
 
 
 def _telegram_invoke_chat(
-    message: str, session_id: str, is_test: bool = False
+    message: str, session_id: str, is_test: bool = False, input_kind: str = "text"
 ) -> Dict[str, Any]:
     return _run_chat(
-        ChatRequest(message=message, session_id=session_id), session_id, "telegram", is_test
+        ChatRequest(message=message, session_id=session_id),
+        session_id,
+        "telegram",
+        is_test,
+        input_kind,
     )
 
 
-def _whatsapp_control_invoke_chat(message: str, session_id: str) -> Dict[str, Any]:
+def _whatsapp_control_invoke_chat(
+    message: str, session_id: str, input_kind: str = "text"
+) -> Dict[str, Any]:
     return _run_chat(
-        ChatRequest(message=message, session_id=session_id), session_id, "whatsapp_control"
+        ChatRequest(message=message, session_id=session_id),
+        session_id,
+        "whatsapp_control",
+        input_kind=input_kind,
     )
 
 
@@ -250,7 +259,11 @@ def _header_is_test(value: Optional[str]) -> bool:
 
 
 def _run_chat(
-    request: ChatRequest, session_id: str, channel: str, is_test: bool = False
+    request: ChatRequest,
+    session_id: str,
+    channel: str,
+    is_test: bool = False,
+    input_kind: str = "text",
 ) -> Dict[str, Any]:
     """Single entry for every turn (HTTP, Telegram, WhatsApp control); `channel`
     is only used to label the turn_log row."""
@@ -260,15 +273,19 @@ def _run_chat(
     from services.session_lane import session_lane
 
     with session_lane(session_id):
-        return _chat_impl(request, session_id, channel, is_test)
+        return _chat_impl(request, session_id, channel, is_test, input_kind)
 
 
 def _chat_impl(
-    request: ChatRequest, session_id: str, channel: str = "api", is_test: bool = False
+    request: ChatRequest,
+    session_id: str,
+    channel: str = "api",
+    is_test: bool = False,
+    input_kind: str = "text",
 ) -> Dict[str, Any]:
     from services.turn_log import end_turn, record_turn, start_turn
 
-    collector, token = start_turn(channel, session_id, is_test)
+    collector, token = start_turn(channel, session_id, is_test, input_kind)
     started = time.monotonic()
     reply: Optional[str] = None
     error: Optional[str] = None

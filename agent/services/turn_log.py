@@ -36,9 +36,14 @@ class TurnCollector(BaseCallbackHandler):
     """Collects tool outcomes, tool timings and LLM call count for one turn."""
 
     def __init__(
-        self, channel: str | None = None, is_test: bool = False, session_id: str | None = None
+        self,
+        channel: str | None = None,
+        is_test: bool = False,
+        session_id: str | None = None,
+        input_kind: str = "text",
     ) -> None:
         self.channel = channel
+        self.input_kind = input_kind or "text"
         self.session_id = session_id
         self.is_test = bool(is_test)
         self._lock = threading.Lock()
@@ -119,9 +124,14 @@ _current: ContextVar[TurnCollector | None] = ContextVar("evi_turn_collector", de
 
 
 def start_turn(
-    channel: str | None = None, session_id: str | None = None, is_test: bool = False
+    channel: str | None = None,
+    session_id: str | None = None,
+    is_test: bool = False,
+    input_kind: str = "text",
 ) -> tuple[TurnCollector, Any]:
-    collector = TurnCollector(channel, bool(is_test) or is_test_session(session_id), session_id)
+    collector = TurnCollector(
+        channel, bool(is_test) or is_test_session(session_id), session_id, input_kind
+    )
     return collector, _current.set(collector)
 
 
@@ -224,6 +234,7 @@ def record_turn(
             tokens_out=(collector.tokens_out or None) if collector else None,
             error=error,
             is_test=test,
+            input_kind=(collector.input_kind if collector else "text"),
         )
     except Exception as exc:
         soft_fail("turn_log.record_turn", exc)

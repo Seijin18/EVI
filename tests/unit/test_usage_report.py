@@ -379,3 +379,33 @@ def test_scn_debt_08_action_rate_for_reply_debts(tmp_path, monkeypatch):
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM wa_conversation_state WHERE jid = ANY(%s)", (jids,))
             conn.commit()
+
+
+def test_scn_voice_06_voice_turns_kpi_and_telegram_line():
+    turns = [mk(i, day=i % 3) for i in range(6)]
+    for t in turns[:4]:
+        t["input_kind"] = "voice"
+    turns[1]["signals"] = {"correction": True}
+    k = ur.compute_kpis(turns)
+    assert k["voice_turns"] == 4 and k["voice_success_rate"] == 0.75
+    r = {
+        "label": "2026-W40", "start": MON, "end": MON + timedelta(days=7),
+        "kpis": k, "prev_kpis": None, "base_kpis": None, "baseline_range": None,
+        "commitments": {"confirmed": 1, "dismissed": 2, "pending": 3},
+        "probes": {"gmail": 2}, "review": ur.review_candidates(turns),
+    }
+    md = ur.render_markdown(r)
+    assert "| Turnos por voz | 4 |" in md and "| Sucesso dos turnos por voz | 75% |" in md
+    tg = ur.render_telegram(r)
+    assert "Voz: 4 turnos · sucesso 75%" in tg and len(tg.splitlines()) <= 10
+
+
+def test_no_voice_turns_no_telegram_line():
+    k = ur.compute_kpis([mk(1), mk(2)])
+    assert k["voice_turns"] == 0 and k["voice_success_rate"] is None
+    r = {
+        "label": "2026-W40", "start": MON, "end": MON + timedelta(days=7),
+        "kpis": k, "prev_kpis": None, "base_kpis": None, "baseline_range": None,
+        "commitments": None, "probes": None, "review": [],
+    }
+    assert "Voz:" not in ur.render_telegram(r)

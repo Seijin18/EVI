@@ -17,7 +17,7 @@
   - Files: `agent/services/evolution_parser.py`, `agent/services/whatsapp_control.py`, `agent/messaging/evolution.py`, `tests/unit/test_whatsapp_control.py`, `tests/unit/test_evolution_parser.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_whatsapp_control.py tests/unit/test_evolution_parser.py -q` e `./scripts/evi-test whatsapp`
 
-- [ ] 2.3 `turn_log.input_kind` (`text`/`voice`) + linha no relatório semanal
+- [x] 2.3 `turn_log.input_kind` (`text`/`voice`) + linha no relatório semanal
   - SCN-VOICE-06
   - Files: `agent/db.py`, `agent/services/turn_log.py`, `agent/services/usage_report.py`, `tests/unit/test_usage_report.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_usage_report.py tests/unit/test_turn_log.py -q`

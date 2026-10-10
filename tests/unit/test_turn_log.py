@@ -212,3 +212,27 @@ def test_turn_row_really_lands_in_postgres(windmill_oauth_error):
     assert channel == "telegram" and reply == "Pronto." and llm_calls == 2 and is_test is True
     assert tools[0]["name"] == "schedule_event" and tools[0]["ok"] is False
     assert tools[0]["reason"] == "oauth"
+
+
+def test_input_kind_defaults_to_text_and_is_threaded_to_insert(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
+    with patch("db.insert_turn") as insert:
+        app_state.graph = _graph([])
+        main._telegram_invoke_chat("oi", "s-tg")
+        app_state.graph = _graph([])
+        main._telegram_invoke_chat("oi", "s-tg", input_kind="voice")
+        app_state.graph = _graph([])
+        main._whatsapp_control_invoke_chat("oi", "s-wa", input_kind="voice")
+    assert [c.kwargs["input_kind"] for c in insert.call_args_list] == ["text", "voice", "voice"]
+
+
+@needs_db
+def test_input_kind_column_persists_in_postgres():
+    db.reset_db_init_for_tests()
+    db.init_db()
+    sid = f"evi-test-{uuid.uuid4().hex[:8]}"
+    db.insert_turn(session_id=sid, channel="telegram", user_text="a", input_kind="voice")
+    db.insert_turn(session_id=sid, channel="telegram", user_text="b")
+    with db._conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT user_text, input_kind FROM turn_log WHERE session_id=%s ORDER BY id", (sid,))
+        assert cur.fetchall() == [("a", "voice"), ("b", "text")]

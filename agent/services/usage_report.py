@@ -126,6 +126,7 @@ def compute_kpis(turns: List[Dict[str, Any]], weeks: float = 1.0) -> Dict[str, A
     days = set()
     failures: Dict[str, int] = {}
     ok_n = corr_n = 0
+    voice_n = voice_ok = 0
     lat: List[float] = []
     llm: List[float] = []
     tok_in = tok_out = 0
@@ -137,6 +138,9 @@ def compute_kpis(turns: List[Dict[str, Any]], weeks: float = 1.0) -> Dict[str, A
         by_channel[ch] = by_channel.get(ch, 0) + 1
         if turn_succeeded(t):
             ok_n += 1
+        if t.get("input_kind") == "voice":
+            voice_n += 1
+            voice_ok += 1 if turn_succeeded(t) else 0
         sig = t.get("signals") or {}
         if sig.get("correction") or sig.get("rephrase"):
             corr_n += 1
@@ -160,6 +164,8 @@ def compute_kpis(turns: List[Dict[str, Any]], weeks: float = 1.0) -> Dict[str, A
         "by_channel": {k: v / weeks for k, v in by_channel.items()},
         "success_rate": (ok_n / n) if n else None,
         "correction_rate": (corr_n / n) if n else None,
+        "voice_turns": voice_n / weeks,
+        "voice_success_rate": (voice_ok / voice_n) if voice_n else None,
         "latency_p50": percentile(lat, 50),
         "latency_p95": percentile(lat, 95),
         "llm_calls_per_turn": (sum(llm) / len(llm)) if llm else None,
@@ -224,6 +230,8 @@ def _kpi_rows(cur: Dict, prev: Dict | None, base: Dict | None) -> List[Tuple[str
         ("Turnos", "turns", "num"),
         ("Taxa de sucesso", "success_rate", "pct"),
         ("Correção/reformulação", "correction_rate", "pct"),
+        ("Turnos por voz", "voice_turns", "num"),
+        ("Sucesso dos turnos por voz", "voice_success_rate", "pct"),
         ("Latência p50", "latency_p50", "ms"),
         ("Latência p95", "latency_p95", "ms"),
         ("Chamadas LLM/turno", "llm_calls_per_turn", "num"),
@@ -361,6 +369,10 @@ def render_telegram(r: Dict[str, Any]) -> str:
             f"(Δ sem. {_delta(k['success_rate'], prev.get('success_rate') if prev else None, 'pct')})"
         )
         L.append(f"Correção/reformulação {_fmt(k['correction_rate'], 'pct')}")
+        if k.get("voice_turns"):
+            L.append(
+                f"Voz: {_fmt(k['voice_turns'])} turnos · sucesso {_fmt(k['voice_success_rate'], 'pct')}"
+            )
         L.append(f"Latência p50/p95 {_fmt(k['latency_p50'], 'ms')} / {_fmt(k['latency_p95'], 'ms')}")
         L.append(f"Falhas de tool {_fmt(k['failure_total'])}")
     c = r["commitments"]

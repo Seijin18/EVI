@@ -108,6 +108,7 @@ def _run_migrations() -> None:
                 );
                 ALTER TABLE turn_log ADD COLUMN IF NOT EXISTS tokens_in INTEGER;
                 ALTER TABLE turn_log ADD COLUMN IF NOT EXISTS tokens_out INTEGER;
+                ALTER TABLE turn_log ADD COLUMN IF NOT EXISTS input_kind VARCHAR(8) NOT NULL DEFAULT 'text';
                 CREATE INDEX IF NOT EXISTS turn_log_ts ON turn_log (ts);
                 CREATE INDEX IF NOT EXISTS turn_log_session
                     ON turn_log (session_id, ts);
@@ -623,6 +624,7 @@ def insert_turn(
     is_test: bool = False,
     tokens_in: int | None = None,
     tokens_out: int | None = None,
+    input_kind: str = "text",
 ) -> int:
     """Record one agent turn. `tools` is [{name, ok, reason, ms}]. Returns the id."""
     import json
@@ -635,8 +637,9 @@ def insert_turn(
                 """
                 INSERT INTO turn_log
                     (session_id, channel, user_text, reply_text, tools,
-                     latency_ms, llm_calls, error, is_test, tokens_in, tokens_out)
-                VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s)
+                     latency_ms, llm_calls, error, is_test, tokens_in, tokens_out,
+                     input_kind)
+                VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
@@ -651,6 +654,7 @@ def insert_turn(
                     is_test,
                     tokens_in,
                     tokens_out,
+                    input_kind or "text",
                 ),
             )
             turn_id = int(cur.fetchone()[0])
