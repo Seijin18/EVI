@@ -173,6 +173,9 @@ def main(
             "summary": i.get("summary") or "(sem título)",
             "start": _event_start_label(i, tz_name),
             "html_link": i.get("htmlLink") or "",
+            "id": i.get("id") or "",
+            "start_iso": (i.get("start") or {}).get("dateTime") or (i.get("start") or {}).get("date") or "",
+            "end_iso": (i.get("end") or {}).get("dateTime") or (i.get("end") or {}).get("date") or "",
         }
         for i in items
     ]

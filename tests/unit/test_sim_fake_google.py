@@ -156,7 +156,9 @@ def test_summarize_inbox_and_delete_scripts():
     with mock.patch.object(urllib.request, "urlopen", _urlopen_for(g)):
         inbox = _script("summarize_inbox").main(gmail={"token": "tok"})
         assert inbox["count"] == 3
-        assert {"id": "m2", "subject": "Reunião", "from": "Ana <ana@x.com>"} in inbox["messages"]
+        m2 = next(m for m in inbox["messages"] if m["id"] == "m2")
+        assert (m2["subject"], m2["from"]) == ("Reunião", "Ana <ana@x.com>")
+        assert m2["labelIds"] == ["INBOX"]
         out = _script("delete_emails_by_query").main(q="category:promotions", gmail={"token": "tok"})
         assert sorted(out["deleted_ids"]) == ["m1", "m3"]
         out2 = _script("delete_emails").main(message_ids=["m2", "nope"], gmail={"token": "tok"})

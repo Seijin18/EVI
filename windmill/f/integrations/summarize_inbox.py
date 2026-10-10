@@ -83,24 +83,32 @@ def main(max_messages: int = 10, gmail: str = "gmail"):
 
     ids = [m["id"] for m in listing.get("messages", []) if m.get("id")]
     lines: List[str] = []
-    messages: List[Dict[str, str]] = []
+    messages: List[Dict[str, Any]] = []
     for mid in ids:
         try:
             msg = _gmail_get(
                 token,
-                f"/messages/{mid}?format=metadata&metadataHeaders=Subject&metadataHeaders=From",
+                f"/messages/{mid}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date",
             )
         except urllib.error.HTTPError:
             continue
         headers = {
             h["name"]: h["value"]
             for h in msg.get("payload", {}).get("headers", [])
-            if h.get("name") in ("Subject", "From")
+            if h.get("name") in ("Subject", "From", "Date")
         }
         subj = headers.get("Subject", "(no subject)")
         sender = headers.get("From", "")
         lines.append(f"- [{mid}] {subj} — {sender}")
-        messages.append({"id": mid, "subject": subj, "from": sender})
+        messages.append(
+            {
+                "id": mid,
+                "subject": subj,
+                "from": sender,
+                "labelIds": list(msg.get("labelIds") or []),
+                "date": headers.get("Date", ""),
+            }
+        )
 
     summary = (
         "No recent INBOX messages."

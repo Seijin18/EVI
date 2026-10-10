@@ -17,17 +17,17 @@
   - Files: `agent/db.py`, `tests/unit/test_db.py`
   - Verify: `DATABASE_URL=<PG efêmero> EVI_TEST_EPHEMERAL_DB=1 PYTHONPATH=agent python3 -m pytest tests/unit/test_db.py -q` (marcador `ephemeral_db`; segunda migração idempotente; `UNIQUE(day, kind)`)
 
-- [ ] 2.2 Coleta isolada das 4 fontes (`Section`/`BriefItem`) com erro por seção
+- [x] 2.2 Coleta isolada das 4 fontes (`Section`/`BriefItem`) com erro por seção
   - SCN-BRIEF-02
   - Files: `agent/services/briefing.py`, `tests/unit/test_briefing.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py -q` — Gmail com OAuth expirado gera seção com `error` e as outras 3 seções intactas
 
-- [ ] 2.3 Heurística de e-mail; `labelIds` no retorno do `summarize_inbox` se ausente
+- [x] 2.3 Heurística de e-mail; `labelIds` no retorno do `summarize_inbox` se ausente
   - SCN-BRIEF-03
   - Files: `agent/services/briefing.py`, `windmill/f/integrations/summarize_inbox.py`, `tests/unit/test_briefing.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py -q -k email` — promoção e `noreply` descartados; sem `labelIds`, só o filtro de remetente
 
-- [ ] 2.4 Formatação: numeração contínua, limites por seção, "+N", dia livre, campos de terceiros via `wrap_external`
+- [x] 2.4 Formatação: numeração contínua, limites por seção, "+N", dia livre, campos de terceiros via `wrap_external`
   - SCN-BRIEF-01, SCN-SEC-01
   - Files: `agent/services/briefing.py`, `tests/unit/test_briefing.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py -q -k format`

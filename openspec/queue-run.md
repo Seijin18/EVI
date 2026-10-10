@@ -15,6 +15,7 @@
 - 2026-10-10 evi-usage-validation (sync): nome e telefone reais em SCN-USE-04/07 trocados por fictícios; Verify de 1.1 com PG efêmero em container descartável (`evi-unit-pg`); cenários SIM-USE-01/02 adicionados às tasks 1.2 e 2.1.
 - 2026-10-10 evi-usage-validation 1.1: `log_retention` só trata arquivos; a retenção de 180 dias do `turn_log` vai para o job noturno da 2.2 (DELETE por `ts`).
 - 2026-10-10 evi-morning-briefing (sync): Verify da 2.7 não roda o script no Windmill real (conta real) — vira pendência; DB tests com `EVI_TEST_EPHEMERAL_DB`; 1.2 regrava cassettes e roda adversariais live.
+- 2026-10-10 evi-morning-briefing 2.2–2.4: um commit só (mesmo módulo `briefing.py`); `list_events.py` ganhou `id/start_iso/end_iso` (aditivo) para conflitos e refs de evento.
 ## Pendências do usuário (não bloqueantes)
 - [ ] Criar projeto Gemini separado e definir `EVI_SIM_GEMINI_API_KEY` no `.env` — a simulação hoje consome a cota de produção — `.env`
 - [ ] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf`
@@ -22,5 +23,6 @@
 - [ ] Criar schedules no Windmill: `f/integrations/usage_signals` diário (ex. 03:00), `f/integrations/usage_report` segunda 00:30, `f/integrations/probe` diário 06:30 — Windmill UI → Schedules
 - [ ] Recriar o `agent-api` para ativar V1/V2 em produção (novas tabelas, endpoints, mount `./data/payload_shapes`) — `docker compose up -d --build agent-api`
 - [ ] Avaliar em 2026-10-24 a "Validação em uso real" do evi-usage-validation: relatório entregue em 2 semanas seguidas; sonda detecta falha induzida em ≤ 24 h; ≥ 1 cenário promovido para `tests/sim/scenarios/from-usage/` — `EVI_WORKSPACE/reports/`
+- [ ] Publicar no Windmill os scripts alterados/novos (`summarize_inbox`, `list_events` ganharam campos aditivos; `usage_report`, `usage_signals`, `probe`, `briefing` novos) — `wmill sync push` na pasta `windmill/`
 ## Bloqueios
 - —

@@ -1,0 +1,326 @@
+"""Briefing diário determinístico (sem LLM): agenda, tarefas, e-mail e WhatsApp.
+
+Cada fonte é coletada de forma isolada (``ThreadPoolExecutor(4)``); a falha de
+uma vira ``Section(error=...)`` e as demais seguem. Os itens são numerados de
+forma contínua (1..N) entre seções, para que "confirma 4" possa ser resolvido
+pelo snapshot ``morning_briefing`` (entrega/snapshot ficam em outra task).
+
+Conteúdo de terceiros (assunto/remetente, texto de compromisso, nome de evento)
+passa por ``wrap_external`` — nenhum LLM é construído aqui.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, timedelta
+from email.utils import parsedate_to_datetime
+from typing import Any, Callable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+import db
+from integrations.factory import get_integration
+from services.probe import _resource
+from services.soft_fail import soft_fail
+from services.tool_result import OAUTH, ToolResult, parse_windmill_result
+from services.untrusted import wrap_external
+from tools.calendar_time import evi_timezone, now_local
+
+MAX_CHARS = 4000
+LIMITS = {"calendar": 8, "tasks": 5, "email": 3, "whatsapp": 5}
+_EMAIL_FETCH = 15
+_EMAIL_DROP_LABELS = frozenset({"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES"})
+_NOREPLY_RE = re.compile(r"no-?reply", re.IGNORECASE)
+_FREE_DAY = "Dia livre: sem eventos, tarefas ou pendências"
+_TRUNC = "…[truncado]"
+_WEEKDAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+_FIELD_MAX = 120
+
+
+@dataclass(frozen=True)
+class BriefItem:
+    n: int  # número global exibido (1..N, contínuo entre seções)
+    text: str  # linha já formatada; campos de terceiros já delimitados
+    ref: dict  # {"kind": "commitment", "id": 12} | {"kind": "email", "id": "18f…"} | …
+
+
+@dataclass(frozen=True)
+class Section:
+    key: str  # "calendar" | "tasks" | "email" | "whatsapp"
+    title: str
+    items: list[BriefItem] = field(default_factory=list)
+    error: str = ""  # motivo legível quando a fonte falhou
+    more: int = 0  # itens omitidos pelo limite da seção ("+N")
+
+
+@dataclass(frozen=True)
+class Briefing:
+    text: str
+    sections: list[Section]
+    items: list[BriefItem]
+
+
+_TITLES = {"calendar": "Agenda", "tasks": "Tarefas", "email": "E-mail", "whatsapp": "WhatsApp"}
+
+
+def _tz() -> ZoneInfo:
+    try:
+        return ZoneInfo(evi_timezone())
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo("America/Sao_Paulo")
+
+
+def _email_max() -> int:
+    try:
+        return max(1, int(os.getenv("EVI_BRIEFING_EMAIL_MAX", "3")))
+    except ValueError:
+        return 3
+
+
+# ---------------------------------------------------------------- errors
+
+
+def _reason_text(out: ToolResult) -> str:
+    if out.reason == OAUTH:
+        return "credencial expirada — reconecte no Windmill"
+    detail = " ".join((out.detail or "").split())[:100]
+    labels = {
+        "not_configured": "integração não configurada",
+        "http_error": "erro de comunicação com o Windmill",
+        "unparseable": "resposta ilegível do Windmill",
+    }
+    base = labels.get(out.reason, "falha na fonte")
+    return f"{base} ({detail})" if detail else base
+
+
+class _SourceError(Exception):
+    pass
+
+
+def _call(op: str, payload: dict[str, Any], *, action: str, env: str, timeout: int) -> dict:
+    raw = get_integration().post(op, payload, timeout=timeout, wait_result=True)
+    out = parse_windmill_result(raw, action=action, resource_env=env)
+    if not out.ok:
+        raise _SourceError(_reason_text(out))
+    return out.data or {}
+
+
+# ---------------------------------------------------------------- sources
+
+
+def _parse_iso(value: str, tz: ZoneInfo) -> datetime | None:
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+    return dt.astimezone(tz) if dt.tzinfo else dt.replace(tzinfo=tz)
+
+
+def _collect_calendar(day: date) -> list[tuple[str, dict]]:
+    payload = {
+        "gcal": _resource("calendar"),
+        "calendar_id": os.getenv("WINDMILL_CALENDAR_ID", "primary").strip() or "primary",
+        "timezone": evi_timezone(),
+        "days_ahead": 1,
+        "max_results": 50,
+        "on_date": day.isoformat(),
+    }
+    blob = _call(
+        "list_events", payload, action="listar eventos",
+        env="WINDMILL_GCAL_RESOURCE", timeout=120,
+    )
+    tz = _tz()
+    events = []
+    for ev in blob.get("events") or []:
+        start_s, end_s = str(ev.get("start_iso") or ""), str(ev.get("end_iso") or "")
+        timed = "T" in start_s
+        start = _parse_iso(start_s, tz) if timed else None
+        end = _parse_iso(end_s, tz) if timed and "T" in end_s else None
+        events.append({"ev": ev, "start": start, "end": end})
+    events.sort(key=lambda e: (e["start"] is None, e["start"] or datetime.max.replace(tzinfo=tz)))
+    conflicts: set[int] = set()
+    timed_evs = [(i, e) for i, e in enumerate(events) if e["start"] and e["end"]]
+    for a in range(len(timed_evs)):
+        for b in range(a + 1, len(timed_evs)):
+            (i, ea), (j, eb) = timed_evs[a], timed_evs[b]
+            if ea["start"] < eb["end"] and eb["start"] < ea["end"]:
+                conflicts.update((i, j))
+    rows = []
+    for i, e in enumerate(events):
+        ev = e["ev"]
+        if e["start"]:
+            when = e["start"].strftime("%H:%M")
+            if e["end"]:
+                when += "–" + e["end"].strftime("%H:%M")
+        else:
+            when = "dia todo"
+        name = wrap_external(ev.get("summary") or "(sem título)", "agenda", _FIELD_MAX)
+        line = f"{when} {name}" + (" ⚠ conflito de horário" if i in conflicts else "")
+        rows.append((line, {"kind": "event", "id": ev.get("id") or ""}))
+    return rows
+
+
+def _collect_tasks(day: date, overdue: bool) -> list[tuple[str, dict]]:
+    payload = {"gtasks": _resource("tasks"), "max_results": 100, "show_completed": False}
+    blob = _call(
+        "list_tasks", payload, action="listar tarefas",
+        env="WINDMILL_GTASKS_RESOURCE", timeout=120,
+    )
+    rows = []
+    for t in blob.get("tasks") or []:
+        if t.get("status") == "completed":
+            continue
+        due = str(t.get("due") or "")[:10]
+        try:
+            due_d = date.fromisoformat(due)
+        except ValueError:
+            continue  # sem prazo
+        if due_d != day and not (overdue and due_d < day):
+            continue
+        title = " ".join(str(t.get("title") or "(sem título)").split())[:_FIELD_MAX]
+        tag = f" (venceu {due_d.strftime('%d/%m')})" if due_d < day else ""
+        rows.append((f"{title}{tag}", {"kind": "task", "id": t.get("id") or ""}, due_d))
+    rows.sort(key=lambda r: r[2])
+    return [(text, ref) for text, ref, _ in rows]
+
+
+def _msg_time(msg: dict) -> datetime | None:
+    raw = str(msg.get("date") or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    return dt
+
+
+def select_emails(messages: list[dict]) -> list[dict]:
+    """Heurística v1: sem promoções/social/updates e sem no-reply; mais recentes primeiro.
+
+    Sem ``labelIds`` na mensagem, vale só o filtro de remetente.
+    """
+    kept = []
+    for m in messages:
+        labels = set(m.get("labelIds") or [])
+        if labels & _EMAIL_DROP_LABELS:
+            continue
+        if _NOREPLY_RE.search(str(m.get("from") or "")):
+            continue
+        kept.append(m)
+    times = [_msg_time(m) for m in kept]
+    if kept and all(times):
+        kept = [m for _, m in sorted(zip(times, kept), key=lambda p: p[0], reverse=True)]
+    return kept  # sem datas: ordem da API (Gmail lista do mais recente ao mais antigo)
+
+
+def _collect_email() -> list[tuple[str, dict]]:
+    payload = {"max_messages": _EMAIL_FETCH, "gmail": _resource("gmail")}
+    blob = _call(
+        "summarize_inbox", payload, action="acessar o Gmail",
+        env="WINDMILL_GMAIL_RESOURCE", timeout=180,
+    )
+    rows = []
+    for m in select_emails(list(blob.get("messages") or [])):
+        subj = wrap_external(m.get("subject") or "(sem assunto)", "email", _FIELD_MAX)
+        sender = wrap_external(m.get("from") or "", "email", _FIELD_MAX)
+        rows.append((f"{subj} — {sender}", {"kind": "email", "id": m.get("id") or ""}))
+    return rows
+
+
+def _collect_whatsapp() -> list[tuple[str, dict]]:
+    rows = []
+    for c in db.list_pending_commitments(limit=50):
+        text = wrap_external(c.get("title") or c.get("raw_text") or "", "whatsapp", _FIELD_MAX)
+        who = c.get("source_label") or c.get("source_chat") or ""
+        when = c.get("event_date") or c.get("due_date") or ""
+        if when:
+            try:
+                when = date.fromisoformat(str(when)[:10]).strftime("%d/%m")
+            except ValueError:
+                when = ""
+        line = text
+        if who:
+            line += f" — {wrap_external(who, 'whatsapp', 60)}"
+        if when:
+            line += f" ({when})"
+        rows.append((line, {"kind": "commitment", "id": c.get("id")}))
+    return rows
+
+
+# ---------------------------------------------------------------- assembly
+
+
+def _run_source(key: str, fn: Callable[[], list[tuple[str, dict]]]) -> Section:
+    title = _TITLES[key]
+    try:
+        rows = fn()
+    except _SourceError as exc:
+        return Section(key, title, error=str(exc))
+    except Exception as exc:  # isolada: nunca derruba as outras fontes
+        soft_fail(f"briefing.{key}", exc)
+        return Section(key, title, error=f"falha inesperada ({str(exc)[:100]})")
+    limit = _email_max() if key == "email" else LIMITS[key]
+    items = [BriefItem(0, text, ref) for text, ref in rows[:limit]]
+    return Section(key, title, items=items, more=max(0, len(rows) - limit))
+
+
+def _header(now: datetime, day: date, kind: str) -> str:
+    stamp = f"{_WEEKDAYS[day.weekday()]}, {day.strftime('%d/%m')}"
+    if kind == "evening":
+        return f"Boa noite! Amanhã: {stamp}"
+    return f"Bom dia! {stamp}"
+
+
+def _truncate(text: str) -> str:
+    if len(text) <= MAX_CHARS:
+        return text
+    cut = text[: MAX_CHARS - len(_TRUNC)]
+    cut = cut[: cut.rfind("\n")] if "\n" in cut else cut
+    return cut.rstrip() + "\n" + _TRUNC
+
+
+def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Briefing:
+    """Monta o briefing sem LLM. ``kind="evening"`` é a prévia de amanhã."""
+    now = now or now_local()
+    evening = kind == "evening"
+    day = now.date() + timedelta(days=1) if evening else now.date()
+    sources: list[tuple[str, Callable[[], list[tuple[str, dict]]]]] = [
+        ("calendar", lambda: _collect_calendar(day)),
+        ("tasks", lambda: _collect_tasks(day, overdue=not evening)),
+        ("email", _collect_email),
+        ("whatsapp", _collect_whatsapp),
+    ]
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(_run_source, key, fn) for key, fn in sources]
+        raw_sections = [f.result() for f in futures]
+
+    n = 0
+    sections: list[Section] = []
+    for sec in raw_sections:
+        numbered = []
+        for it in sec.items:
+            n += 1
+            numbered.append(replace(it, n=n))
+        sections.append(replace(sec, items=numbered))
+    items = [it for sec in sections for it in sec.items]
+
+    lines = [_header(now, day, kind)]
+    if not items and not any(s.error for s in sections):
+        lines.append(_FREE_DAY)
+    for sec in sections:
+        if sec.error:
+            lines.append(f"⚠ {sec.title} indisponível — {sec.error}")
+        elif sec.items:
+            lines.append(f"\n{sec.title}")
+            lines.extend(f"{it.n}. {it.text}" for it in sec.items)
+            if sec.more:
+                lines.append(f"+{sec.more}")
+    return Briefing(_truncate("\n".join(lines)), sections, items)
