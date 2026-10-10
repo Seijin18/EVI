@@ -54,6 +54,10 @@ Google, Telegram API e Evolution API, e conduz cenários YAML contra ela.
 `run` já faz `guard` + `up`. Gate de change:
 `./scripts/evi-sim run --tag critical --repeat 3 --llm live`. Offline (igual ao CI):
 `./scripts/evi-sim run --tag critical --llm replay`.
+Briefing: `./scripts/evi-sim run --tag briefing --repeat 3 --llm live` (passo `job: briefing`;
+`reply_matches` do passo avalia o texto enviado ao Telegram).
+O workspace do sim é semeado a cada reset com os arquivos versionados de `EVI_WORKSPACE/`
+(AGENTS/TOOLS/HEARTBEAT/skills) + o `USER.md` fictício de `tests/sim/workspace/`.
 
 ### Formato do cenário
 
@@ -167,6 +171,7 @@ Tiers legados (ainda válidos):
 | Feature | Command | SCN |
 |---------|---------|-----|
 | Runtime v3 offline | `./scripts/evi-test runtime-v3` | SCN-UX-RUNTIME |
+| Briefing offline (sem LLM) | `./scripts/evi-test briefing` | SCN-BRIEF-01/01b/02 |
 | Inbox UX mock | `./scripts/evi-test inbox-ux` | SCN-UX-INBOX-01/02/04 |
 | Inbox UX live harness | `./scripts/evi-inbox-ux-verify.sh` | SCN-UX-INBOX live |
 | Chat invoke (unit) | `tests/unit/test_chat_invoke.py` | SCN-UX-CHAT |

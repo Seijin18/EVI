@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 DEFAULT_TZ = "America/Sao_Paulo"
 SOURCES = ("real-usage", "failure", "adversarial", "synthetic")
 STEP_TYPES = ("telegram", "whatsapp_control", "whatsapp_contact", "clock", "job", "fault")
-JOBS = ("heartbeat", "daily-summary")
+JOBS = ("heartbeat", "daily-summary", "briefing")
 # agent tables a scenario may inspect via expect.postgres (never free-form SQL)
 PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log")
 

@@ -982,6 +982,73 @@ def run_inbox_ux() -> bool:
     return _result("inbox-ux", ok, "SCN-UX-INBOX-01/02/04")
 
 
+def run_briefing() -> bool:
+    """SCN-BRIEF-01/02/03: briefing assembled offline from fixture envelopes, no LLM."""
+    from datetime import datetime
+    from unittest.mock import patch
+    from zoneinfo import ZoneInfo
+
+    import db
+    import llm
+    from services import briefing
+
+    now = datetime(2026, 10, 10, 7, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))
+    base = json.loads((FIXTURES / "windmill" / "email_summary_messages.json").read_text())
+    msgs = [
+        {**base["messages"][0], "labelIds": ["INBOX", "CATEGORY_PROMOTIONS"], "date": "2026-10-10T06:00:00Z"},
+        {**base["messages"][1], "labelIds": ["INBOX", "CATEGORY_UPDATES"], "date": "2026-10-10T05:00:00Z"},
+        {"id": "p1", "from": "Ana <ana@x.com>", "subject": "Almoço?", "labelIds": ["INBOX"], "date": "2026-10-09T10:00:00Z"},
+        {"id": "p2", "from": "boss@company.com", "subject": "Prazo sexta", "labelIds": ["INBOX"], "date": "2026-10-10T08:00:00Z"},
+    ]
+
+    def env(**blob):
+        return json.dumps({"status": "ok", **blob})
+
+    responses = {
+        "list_events": env(events=[
+            {"summary": "Standup", "id": "ev1", "start_iso": "2026-10-10T09:00:00-03:00", "end_iso": "2026-10-10T09:30:00-03:00"},
+            {"summary": "Dentista", "id": "ev2", "start_iso": "2026-10-10T15:00:00-03:00", "end_iso": "2026-10-10T16:00:00-03:00"},
+        ]),
+        "list_tasks": env(tasks=[{"id": "t1", "title": "Pagar boleto", "due": "2026-10-08", "status": "needsAction"}]),
+        "summarize_inbox": json.dumps({**base, "messages": msgs, "count": 4}),
+    }
+    commitment = {"id": 12, "title": "Enviar relatório", "source_label": "Carlos", "event_date": "2026-10-12", "raw_text": "x"}
+
+    class FakeIntegration:
+        def __init__(self, resp):
+            self.resp = resp
+
+        def post(self, op, payload, timeout=None, wait_result=False):
+            return self.resp[op]
+
+    def boom(*_a, **_k):
+        raise AssertionError("LLM must not be constructed")
+
+    def assemble(resp, commitments):
+        with (
+            patch.object(briefing, "get_integration", lambda: FakeIntegration(resp)),
+            patch.object(db, "list_pending_commitments", lambda limit=50, **kw: commitments),
+            patch.object(llm, "build_llm", boom),
+        ):
+            return briefing.assemble_briefing(now=now)
+
+    try:
+        b = assemble(responses, [commitment])
+        ok = [len(s.items) for s in b.sections] == [2, 1, 2, 1]
+        ok = ok and [i.n for i in b.items] == [1, 2, 3, 4, 5, 6]
+        ok = ok and all(f"\n{n}. " in b.text for n in range(1, 7)) and "\n7. " not in b.text
+        ok = ok and "aliexpress" not in b.text.lower() and b.items[5].ref == {"kind": "commitment", "id": 12}
+        degraded = assemble({**responses, "summarize_inbox": "Error refreshing token for Resource u/evi/gmail: invalid_grant"}, [commitment])
+        email = next(s for s in degraded.sections if s.key == "email")
+        ok = ok and bool(email.error) and "E-mail indisponível" in degraded.text
+        ok = ok and [len(s.items) for s in degraded.sections if s.key != "email"] == [2, 1, 1]
+        free = assemble({"list_events": env(events=[]), "list_tasks": env(tasks=[]), "summarize_inbox": env(messages=[])}, [])
+        ok = ok and "Dia livre" in free.text
+    except Exception as e:
+        return _result("briefing", False, str(e))
+    return _result("briefing", ok, "SCN-BRIEF-01/01b/02")
+
+
 def run_chat(*, strict: bool = False) -> bool:
     base = os.getenv("EVI_API_URL", "http://localhost:8002")
     session_id = "evi-test-chat-harness"
@@ -1045,6 +1112,7 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
         run_runtime_v3,
         run_watcher,
         lambda: run_rag(False),
+        run_briefing,
     ]
     if full:
         tests.append(run_chat)
@@ -1107,6 +1175,7 @@ def main() -> int:
         "memory-live": run_memory_live,
         "runtime-v3": run_runtime_v3,
         "inbox-ux": run_inbox_ux,
+        "briefing": run_briefing,
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
 

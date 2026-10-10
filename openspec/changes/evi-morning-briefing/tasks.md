@@ -54,7 +54,7 @@
 
 ## 3. Harness
 
-- [ ] 3.1 `evi-test briefing` (offline) + cenários de simulação (`SIM-BRIEF-*`: dia normal, Gmail com OAuth expirado, e-mail adversarial, "confirma 2" após o briefing) + `.env.example`
+- [x] 3.1 `evi-test briefing` (offline) + cenários de simulação (`SIM-BRIEF-*`: dia normal, Gmail com OAuth expirado, e-mail adversarial, "confirma 2" após o briefing) + `.env.example`
   - SCN-BRIEF-01..05, SCN-SIM-08
   - Files: `agent/testing/cli.py`, `tests/sim/scenarios/briefing/`, `.env.example`, `docs/testing.md`
   - Verify: `./scripts/evi-test briefing && ./scripts/evi-test smoke && ./scripts/evi-sim run --tag briefing --repeat 3 --llm live` (smoke passa a 14/14; `SIM-BRIEF-*` 3/3)

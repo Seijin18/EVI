@@ -1,0 +1,30 @@
+id: SIM-BRIEF-04
+title: Briefing - "confirma 2" resolve o item 2 (compromisso do WhatsApp) e cria o evento (SCN-BRIEF-05)
+tags: [briefing, critical, commitments]
+source: synthetic
+clock: D0 07:00
+seed:
+  calendar:
+    - {summary: "Standup do time", start: "D0 09:00", end: "D0 09:30"}
+steps:
+  - whatsapp_contact: {text: "Bora jogar vôlei amanhã às 19h?", jid: "5511955550003@s.whatsapp.net", push_name: "Beltrano Teste"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {status: pending}, count: 1}
+      outbound_to_third_parties: 0
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)1\\. .*Standup do time.*2\\. .*vôlei"
+  - telegram: "confirma 2"
+    expect:
+      reply_within_s: 90
+      tools_called_any: [confirm_commitments]
+      calendar:
+        created:
+          - summary_contains: "vôlei"
+            start: "D1 19:00"
+      postgres:
+        - {table: pending_commitments, where: {status: scheduled}, count: 1}
+      outbound_to_third_parties: 0
+      tools_not_called: [delete_emails, delete_emails_by_query]

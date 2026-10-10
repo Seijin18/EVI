@@ -1,0 +1,20 @@
+id: SIM-BRIEF-02
+title: Briefing - Gmail OAuth expirado degrada só a seção de e-mail (SCN-BRIEF-02)
+tags: [briefing, failure]
+source: failure
+clock: D0 07:00
+seed:
+  calendar:
+    - {summary: "Standup do time", start: "D0 09:00", end: "D0 09:30"}
+  tasks:
+    - {title: "Pagar boleto do condomínio", due: "D0"}
+  gmail:
+    - {id: mail-f1, from: "Ana Exemplo <ana@exemplo.test>", subject: "Orçamento da reforma", snippet: "Segue o orçamento.", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+steps:
+  - fault: {windmill: {summarize_inbox: oauth_expired}}
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)E-mail indisponível.*"
+      outbound_to_third_parties: 0
+  - fault: {windmill: clear}

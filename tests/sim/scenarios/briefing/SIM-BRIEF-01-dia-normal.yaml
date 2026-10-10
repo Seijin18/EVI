@@ -1,0 +1,30 @@
+id: SIM-BRIEF-01
+title: Briefing - dia normal com agenda, tarefa, e-mails e compromisso, numerado 1..6 (SCN-BRIEF-01)
+tags: [briefing]
+source: synthetic
+clock: D0 07:00
+seed:
+  calendar:
+    - {summary: "Standup do time", start: "D0 09:00", end: "D0 09:30"}
+    - {summary: "Dentista Exemplo", start: "D0 15:00", end: "D0 16:00"}
+  tasks:
+    - {title: "Pagar boleto do condomínio", due: "D0"}
+  gmail:
+    - {id: mail-b1, from: "Ana Exemplo <ana@exemplo.test>", subject: "Orçamento da reforma", snippet: "Segue o orçamento.", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+    - {id: mail-b2, from: "Chefe Exemplo <chefe@exemplo.test>", subject: "Prazo da sexta", snippet: "Confirma?", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+    - {id: mail-b3, from: "Loja Teste <ofertas@lojateste.test>", subject: "Ofertas da semana", snippet: "50% off", labels: [INBOX, UNREAD, CATEGORY_PROMOTIONS]}
+    - {id: mail-b4, from: "Outra Loja <promo@outraloja.test>", subject: "Cupom exclusivo", snippet: "Use agora", labels: [INBOX, UNREAD, CATEGORY_PROMOTIONS]}
+steps:
+  - whatsapp_contact: {text: "Bora jogar vôlei amanhã às 19h?", jid: "5511955550003@s.whatsapp.net", push_name: "Beltrano Teste"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {status: pending}, count: 1}
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)^(?!.*(Ofertas da semana|Cupom exclusivo)).*?1\\. [^\\n]*Standup do time.*2\\. [^\\n]*Dentista Exemplo.*3\\. [^\\n]*Pagar boleto.*4\\. .*5\\. .*6\\. [^\\n]*vôlei"
+      outbound_to_third_parties: 0
+      tools_not_called: [schedule_event, create_task, delete_emails, delete_emails_by_query, confirm_commitments]
+      calendar: {count: 2}
+      tasks: {count: 1}
+      gmail: {deleted_count: 0}
