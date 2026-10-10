@@ -1,6 +1,7 @@
 # Execução da fila — iniciada 2026-10-10
 ## Estado
-- Change atual: evi-reminders (fase: implementar) — task 3.1 (revisão Opus do núcleo em curso)
+- Change atual: evi-reminders (fase: implementar) — task 3.1 parcial (cenários e harness commitados em 7b2bcb0; falta verificação live), depois 3.2
+- Próximo: evi-reply-debts — proposta escrita em `openspec/queued/evi-reply-debts/` (ainda não validada com `openspec validate --strict`; validar ao ativar)
 - Ordem: evi-sim-harness → evi-usage-validation → evi-morning-briefing → evi-reminders → evi-reply-debts → evi-voice-input → evi-perceived-reliability → evi-prompt-injection-model
 - Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e), evi-morning-briefing (arquivado 2026-10-10, commits f206ab3..681c870)
 - Pulados: evi-background-execution (#38) — condicional: "abrir só se o ack imediato do #44 não bastar na prática"; exige dados de uso real
@@ -30,5 +31,6 @@
 - [ ] Publicar no Windmill os scripts alterados/novos (`summarize_inbox`, `list_events` ganharam campos aditivos; `usage_report`, `usage_signals`, `probe`, `briefing` novos) — `wmill sync push` na pasta `windmill/`
 - [ ] Ligar o briefing: `EVI_BRIEFING_ENABLED=true` no `.env`, recriar `agent-api`, schedule `f/integrations/briefing` `0 7 * * *` (opcional `0 21 * * *` com `kind=evening`) — ver `windmill/README.md`
 - [ ] Avaliar em 2026-10-24 a validação do briefing (entregue ≥ 13/14 dias, resposta ≥ 50% dos dias, sucesso por turno sem queda) — relatório semanal
+- [ ] Teste instável observado (ordem): `tests/unit/test_payload_shapes.py::test_scn_use_08_written_file_has_no_original_values[find_messages.json]` falhou uma vez na suíte completa e passa isolado — investigar
 ## Bloqueios
-- —
+- 2026-10-10 evi-reminders 3.1: cota diária do Gemini esgotada (429 RESOURCE_EXHAUSTED) com a chave de produção compartilhada. SIM-REM-01..04 passaram 3/3; SIM-REM-05 falhou só por 429. Faltam, quando a cota voltar: `./scripts/evi-sim up` → `./scripts/evi-sim run --id SIM-REM-05 --repeat 3 --llm live` → `--tag critical --llm record` (cassettes estão defasados pelas tools novas; o job `sim-replay` da CI fica vermelho até regravar) → `--tag critical --llm replay` → `--tag critical,adversarial,briefing --repeat 3 --llm live` → task 3.2 (arquivar). Tentado: esperar e repetir SIM-REM-05 uma vez (0/3, 429).
