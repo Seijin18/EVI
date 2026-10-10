@@ -89,6 +89,37 @@ def _run_migrations() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_whatsapp_contacts_display
                     ON whatsapp_contacts(display_name);
+                CREATE TABLE IF NOT EXISTS turn_log (
+                    id BIGSERIAL PRIMARY KEY,
+                    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    session_id VARCHAR(128) NOT NULL,
+                    channel VARCHAR(16) NOT NULL,
+                    user_text TEXT NOT NULL,
+                    reply_text TEXT,
+                    tools JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    latency_ms INTEGER,
+                    llm_calls INTEGER,
+                    error TEXT,
+                    is_test BOOLEAN NOT NULL DEFAULT false,
+                    feedback VARCHAR(8),
+                    feedback_note TEXT,
+                    signals JSONB NOT NULL DEFAULT '{}'::jsonb
+                );
+                CREATE INDEX IF NOT EXISTS turn_log_ts ON turn_log (ts);
+                CREATE INDEX IF NOT EXISTS turn_log_session
+                    ON turn_log (session_id, ts);
+                CREATE TABLE IF NOT EXISTS probe_log (
+                    id BIGSERIAL PRIMARY KEY,
+                    day DATE NOT NULL,
+                    check_name VARCHAR(64) NOT NULL,
+                    ok BOOLEAN NOT NULL,
+                    reason VARCHAR(256),
+                    ms INTEGER,
+                    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    notified BOOLEAN NOT NULL DEFAULT false
+                );
+                CREATE INDEX IF NOT EXISTS probe_log_day_check
+                    ON probe_log (day, check_name);
                 """
             )
         conn.commit()
@@ -515,6 +546,205 @@ def mark_pending_notified(ids: List[int]) -> None:
                 (ids,),
             )
         conn.commit()
+
+
+# --- turn_log / probe_log (evi-usage-validation) ------------------------------
+# Retention: services/log_retention.py only prunes files (jsonl), it is not
+# table-driven. turn_log (180 days) pruning must be added by a later task.
+
+TURN_REPLY_MAX_CHARS = 2000
+
+
+def insert_turn(
+    *,
+    session_id: str,
+    channel: str,
+    user_text: str,
+    reply_text: str | None = None,
+    tools: List[Dict[str, Any]] | None = None,
+    latency_ms: int | None = None,
+    llm_calls: int | None = None,
+    error: str | None = None,
+    is_test: bool = False,
+) -> int:
+    """Record one agent turn. `tools` is [{name, ok, reason, ms}]. Returns the id."""
+    import json
+
+    if reply_text is not None:
+        reply_text = reply_text[:TURN_REPLY_MAX_CHARS]
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO turn_log
+                    (session_id, channel, user_text, reply_text, tools,
+                     latency_ms, llm_calls, error, is_test)
+                VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    session_id,
+                    channel,
+                    user_text,
+                    reply_text,
+                    json.dumps(tools or []),
+                    latency_ms,
+                    llm_calls,
+                    error,
+                    is_test,
+                ),
+            )
+            turn_id = int(cur.fetchone()[0])
+        conn.commit()
+    return turn_id
+
+
+def set_turn_feedback(session_id: str, feedback: str, note: str | None = None) -> int | None:
+    """Attach feedback ('bom'|'ruim') to the latest non-command turn of the session.
+
+    Returns the turn id, or None when the session has no such turn.
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE turn_log
+                SET feedback = %s, feedback_note = %s
+                WHERE id = (
+                    SELECT id FROM turn_log
+                    WHERE session_id = %s AND user_text NOT LIKE '/%%'
+                    ORDER BY ts DESC, id DESC
+                    LIMIT 1
+                )
+                RETURNING id
+                """,
+                (feedback, note, session_id),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return int(row[0]) if row else None
+
+
+def list_turns(since, until, include_test: bool = False) -> List[Dict[str, Any]]:
+    """Turns with since <= ts < until, oldest first. Test turns excluded by default."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT * FROM turn_log
+                WHERE ts >= %s AND ts < %s
+                  AND (%s OR NOT is_test)
+                ORDER BY ts ASC, id ASC
+                """,
+                (since, until, include_test),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_turn(turn_id: int) -> Dict[str, Any] | None:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM turn_log WHERE id = %s", (turn_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def get_session_turns_around(turn_id: int) -> Dict[str, Dict[str, Any] | None]:
+    """Previous and next turn of the same session: {"prev": row|None, "next": row|None}."""
+    turn = get_turn(turn_id)
+    out: Dict[str, Dict[str, Any] | None] = {"prev": None, "next": None}
+    if not turn:
+        return out
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT * FROM turn_log
+                WHERE session_id = %s AND (ts, id) < (%s, %s)
+                ORDER BY ts DESC, id DESC LIMIT 1
+                """,
+                (turn["session_id"], turn["ts"], turn["id"]),
+            )
+            row = cur.fetchone()
+            out["prev"] = dict(row) if row else None
+            cur.execute(
+                """
+                SELECT * FROM turn_log
+                WHERE session_id = %s AND (ts, id) > (%s, %s)
+                ORDER BY ts ASC, id ASC LIMIT 1
+                """,
+                (turn["session_id"], turn["ts"], turn["id"]),
+            )
+            row = cur.fetchone()
+            out["next"] = dict(row) if row else None
+    return out
+
+
+def update_turn_signals(turn_id: int, signals: Dict[str, Any]) -> None:
+    import json
+
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE turn_log SET signals = %s::jsonb WHERE id = %s",
+                (json.dumps(signals), turn_id),
+            )
+        conn.commit()
+
+
+def insert_probe(day, check_name: str, ok: bool, reason: str | None = None, ms: int | None = None) -> int:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO probe_log (day, check_name, ok, reason, ms)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (day, check_name, ok, reason, ms),
+            )
+            probe_id = int(cur.fetchone()[0])
+        conn.commit()
+    return probe_id
+
+
+def probe_already_notified(day, check_name: str) -> bool:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT EXISTS (SELECT 1 FROM probe_log "
+                "WHERE day = %s AND check_name = %s AND notified)",
+                (day, check_name),
+            )
+            return bool(cur.fetchone()[0])
+
+
+def mark_probe_notified(day, check_name: str) -> None:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE probe_log SET notified = true WHERE day = %s AND check_name = %s",
+                (day, check_name),
+            )
+        conn.commit()
+
+
+def list_probes(since, until) -> List[Dict[str, Any]]:
+    """Probe rows with since <= day <= until, oldest first."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT * FROM probe_log
+                WHERE day >= %s AND day <= %s
+                ORDER BY ts ASC, id ASC
+                """,
+                (since, until),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
 
 # Removed with the dev bridge (2026-08-12): create_dev_job, get_dev_job,
 # update_dev_job, list_dev_jobs, get_dev_bridge_setting, set_dev_bridge_setting.

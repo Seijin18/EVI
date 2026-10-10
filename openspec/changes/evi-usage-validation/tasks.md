@@ -1,6 +1,6 @@
 ## 1. Registro
 
-- [ ] 1.1 Tabela `turn_log` + `probe_log` + funções de gravação/consulta
+- [x] 1.1 Tabela `turn_log` + `probe_log` + funções de gravação/consulta
   - SCN-USE-01
   - Files: `agent/db.py`, `tests/unit/test_db.py`
   - Verify: `DATABASE_URL=postgresql://postgres:t@127.0.0.1:55432/postgres PYTHONPATH=agent python3 -m pytest tests/unit/test_db.py -q` com PG efêmero (`docker run --rm -d --name evi-unit-pg -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=t postgres:15-alpine`; sem `DATABASE_URL` o teste é pulado); migração idempotente

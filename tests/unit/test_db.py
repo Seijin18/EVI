@@ -221,3 +221,90 @@ def test_tool_snapshots_round_trip_newest_first():
     rows = db.load_tool_snapshots(sid, limit=5)
     assert rows[0]["payload"]["n"] == 2
     assert isinstance(rows[0]["created_at"], str), "must be JSON-serialisable"
+
+
+# --- turn_log / probe_log (SCN-USE-01) ---------------------------------------
+
+
+def _window():
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    return now - timedelta(minutes=5), now + timedelta(minutes=5)
+
+
+def test_turn_log_migration_idempotent_and_insert_list():
+    import db
+
+    db.reset_db_init_for_tests()
+    db.init_db()
+    db.reset_db_init_for_tests()
+    db.init_db()
+    sid = f"test-{_uid()}"
+    tools = [{"name": "calendar", "ok": True, "reason": None, "ms": 12}]
+    tid = db.insert_turn(
+        session_id=sid, channel="api", user_text="oi", reply_text="x" * 3000,
+        tools=tools, latency_ms=5, llm_calls=2,
+    )
+    since, until = _window()
+    rows = [r for r in db.list_turns(since, until) if r["session_id"] == sid]
+    assert [r["id"] for r in rows] == [tid]
+    assert rows[0]["tools"] == tools
+    assert len(rows[0]["reply_text"]) == 2000
+    assert rows[0]["signals"] == {}
+
+
+def test_turn_log_excludes_test_by_default():
+    import db
+
+    sid = f"test-{_uid()}"
+    db.insert_turn(session_id=sid, channel="api", user_text="t", is_test=True)
+    since, until = _window()
+    assert not [r for r in db.list_turns(since, until) if r["session_id"] == sid]
+    assert [r for r in db.list_turns(since, until, include_test=True) if r["session_id"] == sid]
+
+
+def test_feedback_targets_latest_non_command_turn():
+    import db
+
+    sid = f"test-{_uid()}"
+    first = db.insert_turn(session_id=sid, channel="telegram", user_text="agenda?")
+    second = db.insert_turn(session_id=sid, channel="telegram", user_text="e amanhã?")
+    db.insert_turn(session_id=sid, channel="telegram", user_text="/ruim")
+    assert db.set_turn_feedback(sid, "ruim", "errou") == second
+    assert db.get_turn(second)["feedback"] == "ruim"
+    assert db.get_turn(second)["feedback_note"] == "errou"
+    assert db.get_turn(first)["feedback"] is None
+    assert db.set_turn_feedback(f"none-{_uid()}", "bom") is None
+
+
+def test_session_turns_around_and_signals():
+    import db
+
+    sid = f"test-{_uid()}"
+    a = db.insert_turn(session_id=sid, channel="api", user_text="a")
+    b = db.insert_turn(session_id=sid, channel="api", user_text="b")
+    c = db.insert_turn(session_id=sid, channel="api", user_text="c")
+    around = db.get_session_turns_around(b)
+    assert around["prev"]["id"] == a and around["next"]["id"] == c
+    assert db.get_session_turns_around(a)["prev"] is None
+    assert db.get_session_turns_around(c)["next"] is None
+    db.update_turn_signals(b, {"repeat": True})
+    assert db.get_turn(b)["signals"] == {"repeat": True}
+    assert db.get_turn(-1) is None
+
+
+def test_probe_log_notified_flag():
+    import datetime as dt
+
+    import db
+
+    day = dt.date(2099, 1, 1)
+    chk = f"chk-{_uid()}"
+    db.insert_probe(day, chk, False, "timeout", 900)
+    assert not db.probe_already_notified(day, chk)
+    db.mark_probe_notified(day, chk)
+    assert db.probe_already_notified(day, chk)
+    assert not db.probe_already_notified(dt.date(2099, 1, 2), chk)
+    rows = [r for r in db.list_probes(day, day) if r["check_name"] == chk]
+    assert rows and rows[0]["ok"] is False and rows[0]["reason"] == "timeout"
