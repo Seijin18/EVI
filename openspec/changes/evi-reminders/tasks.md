@@ -29,7 +29,7 @@
 
 ## 3. Simulação e fechamento
 
-- [ ] 3.1 Cenários `SIM-REM-*` (criar e disparar no horário, "adia 1h", diário, atrasado após salto de relógio, "feito") + `sim.env` + `.env.example` + `docs/testing.md`; regravar cassettes se o prompt mudou
+- [x] 3.1 Cenários `SIM-REM-*` (criar e disparar no horário, "adia 1h", diário, atrasado após salto de relógio, "feito") + `sim.env` + `.env.example` + `docs/testing.md`; regravar cassettes se o prompt mudou
   - SCN-REM-01..05
   - Files: `tests/sim/scenarios/reminders/`, `tests/sim/sim.env`, `.env.example`, `docs/testing.md`, `tests/sim/cassettes/`
   - Verify: `./scripts/evi-sim run --tag reminders --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --llm replay`
