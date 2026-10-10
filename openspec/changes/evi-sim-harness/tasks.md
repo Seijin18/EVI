@@ -22,7 +22,7 @@
   - Files: `agent/testing/sim/fake_windmill.py`, `tests/unit/test_sim_fake_windmill.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_fake_windmill.py -q` — os 8 scripts rodam contra o fake Google; `oauth_expired` produz o mesmo envelope que `parse_windmill_result` classifica como `reason=oauth`
 
-- [ ] 2.3 Fake Telegram (`getMe`, `deleteWebhook`, `getUpdates` long-poll, `sendMessage` com falha transitória) + fake Evolution (`sendText` capturado, contatos do seed) + app dos fakes
+- [x] 2.3 Fake Telegram (`getMe`, `deleteWebhook`, `getUpdates` long-poll, `sendMessage` com falha transitória) + fake Evolution (`sendText` capturado, contatos do seed) + app dos fakes
   - SCN-SIM-02, SCN-SIM-05
   - Files: `agent/testing/sim/fake_telegram.py`, `agent/testing/sim/fake_evolution.py`, `agent/testing/sim/fakes.py`, `tests/unit/test_sim_fake_messaging.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_fake_messaging.py -q`
