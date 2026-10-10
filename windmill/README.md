@@ -237,6 +237,23 @@ Verificação local (sem webhook público):
 ./scripts/evi-telegram-verify.sh
 ```
 
+## Schedules
+
+Os schedules vivem no Windmill (não no repo). Valores recomendados (hora local):
+
+| Script | Cron | Notas |
+|--------|------|-------|
+| `f/integrations/briefing` | `0 7 * * *` | `kind=morning` |
+| `f/integrations/briefing` (opcional) | `0 21 * * *` | `kind=evening` |
+| `f/integrations/probe` | `30 6 * * *` | probe diário |
+| `f/integrations/usage_signals` | `0 3 * * *` | sinais de uso diários |
+| `f/integrations/usage_report` | `30 0 * * 1` | segunda 00:30; reporta a semana ISO que acabou de fechar |
+| `f/integrations/heartbeat` | conforme configurado no Windmill | POST `/jobs/heartbeat`; com o briefing ligado, apenas registra achados em log em vez de notificar |
+
+- `briefing` aceita `kind` (`morning`|`evening`) e `force` (reenvia mesmo já enviado no dia).
+- O job só envia se `EVI_BRIEFING_ENABLED=true` estiver no `.env` do agent-api.
+- Depois de alterar scripts, rode `wmill sync push`.
+
 ## RAM note
 
 Server + one worker ~512MB each; disable extra workers on 16GB hosts.

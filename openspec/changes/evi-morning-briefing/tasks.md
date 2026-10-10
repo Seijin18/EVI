@@ -42,7 +42,7 @@
   - Files: `agent/main.py`, `tests/unit/test_main_endpoints.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_main_endpoints.py -q` — sem API key → 401; segundo POST no mesmo dia → `already_sent`
 
-- [ ] 2.7 Script Windmill `briefing` + doc do schedule
+- [x] 2.7 Script Windmill `briefing` + doc do schedule
   - SCN-BRIEF-06
   - Files: `windmill/f/integrations/briefing.py`, `windmill/f/integrations/briefing.script.yaml`, `windmill/README.md`
   - Verify: `python3 -c "import ast;ast.parse(open('windmill/f/integrations/briefing.py').read())"` e teste unitário do script contra um servidor fake; a execução real no Windmill (conta real) fica como pendência do usuário — a entrega ponta a ponta é verificada na simulação (3.1)
