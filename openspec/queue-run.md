@@ -1,8 +1,8 @@
 # Execução da fila — iniciada 2026-10-10
 ## Estado
-- Change atual: evi-morning-briefing (fase: implementar) — tasks 1.1 + 2.1
+- Change atual: evi-reminders (fase: implementar) — task 1.1
 - Ordem: evi-sim-harness → evi-usage-validation → evi-morning-briefing → evi-reminders → evi-reply-debts → evi-voice-input → evi-perceived-reliability → evi-prompt-injection-model
-- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e)
+- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e), evi-morning-briefing (arquivado 2026-10-10, commits f206ab3..archive)
 - Pulados: evi-background-execution (#38) — condicional: "abrir só se o ack imediato do #44 não bastar na prática"; exige dados de uso real
 ## Decisões tomadas sem o usuário
 - 2026-10-10 fila: agentes de projeto (`.claude/agents/`) não estão registrados nesta sessão; usados via `general-purpose` com `model` equivalente (haiku/sonnet/opus) e instrução de seguir o arquivo do agente.
@@ -18,6 +18,7 @@
 - 2026-10-10 evi-morning-briefing 2.2–2.4: um commit só (mesmo módulo `briefing.py`); `list_events.py` ganhou `id/start_iso/end_iso` (aditivo) para conflitos e refs de evento.
 - 2026-10-10 evi-morning-briefing: a sim rodava sem os arquivos de bootstrap do `EVI_WORKSPACE` (prompt diferente da produção); o runner passa a semear os arquivos versionados + um `USER.md` fictício. Cassettes regravados.
 - 2026-10-10 evi-morning-briefing (revisão): requisito "todo conteúdo de terceiros em qualquer prompt via wrap_external" estreitado aos caminhos cobertos (briefing, resumo WhatsApp, perfil, extração); saídas das tools `summarize_inbox`/`list_calendar_events` ficam para o #37 (`evi-prompt-injection-model`).
+- 2026-10-10 evi-reminders (proposta escrita pela fila): presets de recorrência (sem RRULE livre); flag `EVI_REMINDERS_ENABLED` default `false`; tools `snooze`/`complete` além das 3 do roadmap (necessárias para "adia/feito"); limiar "atrasado" = 5 min; `python-dateutil` como dependência nova pinada.
 ## Pendências do usuário (não bloqueantes)
 - [ ] Criar projeto Gemini separado e definir `EVI_SIM_GEMINI_API_KEY` no `.env` — a simulação hoje consome a cota de produção — `.env`
 - [ ] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf`
@@ -26,5 +27,7 @@
 - [ ] Recriar o `agent-api` para ativar V1/V2 em produção (novas tabelas, endpoints, mount `./data/payload_shapes`) — `docker compose up -d --build agent-api`
 - [ ] Avaliar em 2026-10-24 a "Validação em uso real" do evi-usage-validation: relatório entregue em 2 semanas seguidas; sonda detecta falha induzida em ≤ 24 h; ≥ 1 cenário promovido para `tests/sim/scenarios/from-usage/` — `EVI_WORKSPACE/reports/`
 - [ ] Publicar no Windmill os scripts alterados/novos (`summarize_inbox`, `list_events` ganharam campos aditivos; `usage_report`, `usage_signals`, `probe`, `briefing` novos) — `wmill sync push` na pasta `windmill/`
+- [ ] Ligar o briefing: `EVI_BRIEFING_ENABLED=true` no `.env`, recriar `agent-api`, schedule `f/integrations/briefing` `0 7 * * *` (opcional `0 21 * * *` com `kind=evening`) — ver `windmill/README.md`
+- [ ] Avaliar em 2026-10-24 a validação do briefing (entregue ≥ 13/14 dias, resposta ≥ 50% dos dias, sucesso por turno sem queda) — relatório semanal
 ## Bloqueios
 - —

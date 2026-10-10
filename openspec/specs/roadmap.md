@@ -84,9 +84,10 @@ real" (KPI, limiar, janela).
 **Dependência.** V1 (o `promote` escreve cenários do simulador).
 **Pronto quando:** 2 relatórios semanais seguidos entregues; 1 falha real promovida.
 
-### Etapa 18 — Briefing matinal + guarda de injeção mínima — **ativo**
+### Etapa 18 — Briefing matinal + guarda de injeção mínima — **Done** (2026-10-10)
 
-Change: [`evi-morning-briefing`](../changes/evi-morning-briefing/proposal.md).
+Change: [`evi-morning-briefing`](../changes/archive/2026-10-10-evi-morning-briefing/proposal.md).
+As-built: briefing determinístico com claim atômico por dia, histórico persistido, snapshot fixado; `wrap_external` em briefing, perfis, resumo e extração WhatsApp. Ligar com `EVI_BRIEFING_ENABLED=true` + schedule no Windmill.
 Recuado para depois de V1/V2: nasce com cenários de simulação (`SIM-BRIEF-*`) e
 com linha de base de uso para medir o efeito.
 Briefing determinístico no Telegram (agenda, tarefas, e-mails que pedem ação,
@@ -97,7 +98,9 @@ age sobre os itens. Inclui a parte mínima do #37: conteúdo de terceiros delimi
 **Pronto quando:** briefing chega todo dia por 2 semanas; `evi_briefing_replied_total`
 > 0 em pelo menos metade dos dias.
 
-### Etapa 19 — Lembretes que disparam — `evi-reminders`
+### Etapa 19 — Lembretes que disparam — `evi-reminders` — **ativo**
+
+Change: [`evi-reminders`](../changes/evi-reminders/proposal.md).
 
 **Por quê.** "Me lembra às 18h de pagar o boleto" é o recurso mais básico de
 qualquer assistente por mensagem (Zapia, Perplexity, Poke) e hoje é impossível: o

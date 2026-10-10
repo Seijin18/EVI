@@ -24,7 +24,7 @@ Este projeto usa OpenSpec (`openspec/`). CLI instalado: `openspec`.
   `Verify:` (comando `./scripts/evi-test <feature>`).
 - Ao arquivar, atualizar [`openspec/BACKLOG.md`](openspec/BACKLOG.md) e
   [`Progress.md`](Progress.md) (etapa + matriz de features).
-- `openspec validate --specs` deve passar (9 specs) antes de fechar um change.
+- `openspec validate --specs` deve passar (10 specs) antes de fechar um change.
 
 Fonte de verdade é `openspec/specs/`, **não** `Progress.md` nem `README.md` —
 esses são resumo/overview e podem estar defasados.
