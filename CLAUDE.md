@@ -32,8 +32,12 @@ esses são resumo/overview e podem estar defasados.
 ## Implementação de changes e uso de modelos
 
 `/implement-change [slug]` ([`.claude/commands/implement-change.md`](.claude/commands/implement-change.md))
-roda todas as tasks do change ativo até o archive. A sessão (Opus) orquestra e
-delega para agentes de projeto em [`.claude/agents/`](.claude/agents/):
+roda todas as tasks do change ativo até o archive.
+`/run-queue` ([`.claude/commands/run-queue.md`](.claude/commands/run-queue.md))
+executa a fila inteira do BACKLOG (propõe o que só está no roadmap, implementa,
+arquiva, ativa o próximo), com estado em `openspec/queue-run.md` para retomar.
+Nos dois, a sessão (Opus) orquestra e delega para agentes de projeto em
+[`.claude/agents/`](.claude/agents/):
 
 | Agente | Modelo | Papel |
 |---|---|---|
