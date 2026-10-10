@@ -1,6 +1,7 @@
 import os
 
 from langchain_core.tools import tool
+from services.write_guard import guarded_write
 
 from integrations.factory import get_integration
 from services.response_format import format_list_tasks_result, format_task_result
@@ -41,6 +42,7 @@ def create_task_result(
 
 
 @tool
+@guarded_write
 def create_task(title: str, due_date: str = "", notes: str = "") -> str:
     """
     Create a Google Task via the configured orchestration backend.

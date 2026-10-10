@@ -4,6 +4,7 @@ import re
 from typing import List
 
 from langchain_core.tools import tool
+from services.write_guard import guarded_write
 
 from integrations.factory import get_integration
 from services import write_guard
@@ -136,6 +137,7 @@ def _confirm_and_delete(confirm_token: str) -> str:
 
 
 @tool
+@guarded_write
 def delete_emails(message_ids: List[str], confirm_token: str = "") -> str:
     """
     Move Gmail messages to trash by message id (from summarize_inbox). TWO STEPS:
@@ -159,6 +161,7 @@ def delete_emails(message_ids: List[str], confirm_token: str = "") -> str:
 
 
 @tool
+@guarded_write
 def delete_emails_by_query(
     q: str, max_messages: int = 25, confirm_token: str = ""
 ) -> str:

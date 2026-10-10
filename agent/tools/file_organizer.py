@@ -1,5 +1,6 @@
 # /home/marshibs/Projects/EVI/agent/tools/file_organizer.py
 from langchain_core.tools import tool
+from services.write_guard import guarded_write
 from pathlib import Path
 import shutil
 import hashlib
@@ -8,6 +9,7 @@ from tools.file_rules import classify_file as _classify_file
 
 
 @tool
+@guarded_write
 def organize_inbox(confirm: bool = False) -> str:
     """
     Scans /watched_folders/inbox and sorts files into categorized folders.

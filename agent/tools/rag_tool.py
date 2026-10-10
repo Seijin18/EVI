@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any
 from langchain_core.tools import tool
+from services.write_guard import guarded_write
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_qdrant import QdrantVectorStore
@@ -57,6 +58,7 @@ def extract_and_chunk_pdf(file_path: str) -> List[Dict[str, Any]]:
 
 
 @tool
+@guarded_write
 def ingest_university_pdf(file_path: str) -> str:
     """
     Ingest a single PDF file into the university notes knowledge base.
@@ -79,6 +81,7 @@ def ingest_university_pdf(file_path: str) -> str:
 
 
 @tool
+@guarded_write
 def ingest_university_folder(
     folder_path: str = "/watched_folders/university",
 ) -> str:

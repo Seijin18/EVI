@@ -7,6 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from langchain_core.tools import tool
+from services.write_guard import guarded_write
 
 from tools.calendar_time import evi_timezone, now_local
 
@@ -45,6 +46,7 @@ def _validate(text: str, due_at: str, repeat: str | None):
 
 
 @tool
+@guarded_write
 def create_reminder(text: str, due_at: str, repeat: str = "") -> str:
     """Create a reminder that EVI sends on Telegram at the given time.
 
@@ -105,6 +107,7 @@ def list_reminders() -> str:
 
 
 @tool
+@guarded_write
 def cancel_reminder(reminder_id: int) -> str:
     """Cancel a pending reminder by id (see list_reminders). For a recurring
     reminder this stops the whole series: use it only when the user explicitly
@@ -120,6 +123,7 @@ def cancel_reminder(reminder_id: int) -> str:
 
 
 @tool
+@guarded_write
 def complete_reminder(reminder_id: int) -> str:
     """Mark a reminder as done. Use when the user answers "feito"/"ok" after a
     delivered reminder; its id is in the `last_reminder` snapshot. For a recurring
@@ -141,6 +145,7 @@ def complete_reminder(reminder_id: int) -> str:
 
 
 @tool
+@guarded_write
 def snooze_reminder(reminder_id: int, until: str) -> str:
     """Postpone a reminder to a new time (only that occurrence; a recurring
     series keeps its schedule). Use for "adia 1h"/"adia para amanhã"

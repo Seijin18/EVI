@@ -2,6 +2,7 @@ import os
 import re
 
 from langchain_core.tools import tool
+from services.write_guard import guarded_write
 
 from integrations.factory import get_integration
 from services.untrusted import wrap_external
@@ -71,6 +72,7 @@ def schedule_event_result(
 
 
 @tool
+@guarded_write
 def schedule_event(
     title: str, start_time: str, end_time: str = "", description: str = ""
 ) -> str:

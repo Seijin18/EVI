@@ -7,6 +7,7 @@ dismissing only writes an acknowledgement, so neither is gated by the flag.
 from __future__ import annotations
 
 from langchain_core.tools import tool
+from services.write_guard import guarded_write
 
 
 def _fmt_age(hours: float) -> str:
@@ -34,6 +35,7 @@ def list_reply_debts() -> str:
 
 
 @tool
+@guarded_write
 def dismiss_reply_debt(jid_or_name: str = "", briefing_items: list[int] | None = None) -> str:
     """Mark a conversation as answered/ignored so it stops appearing as a reply debt
     (until a new inbound message arrives). Use for «respondido», «ignora <contato>».

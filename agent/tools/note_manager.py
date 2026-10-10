@@ -1,11 +1,13 @@
 from typing import List, Optional
 
 from langchain_core.tools import tool
+from services.write_guard import guarded_write
 
 from tools.note_core import write_auto_insight, write_manual_note
 
 
 @tool
+@guarded_write
 def save_note_manual(
     title: str, content: str, tags: Optional[List[str]] = None, category: str = "general"
 ) -> str:

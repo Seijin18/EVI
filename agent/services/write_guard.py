@@ -12,6 +12,7 @@ message.
 
 from __future__ import annotations
 
+import functools
 import re
 import secrets
 import time
@@ -19,6 +20,32 @@ import unicodedata
 from dataclasses import dataclass, field
 
 from services.soft_fail import soft_fail
+
+# Write tools by turn origin (design §2): the allowlist is checked in code, not in
+# the prompt. A tool called from a turn whose channel is not user-initiated is blocked.
+WRITE_TOOLS = frozenset(
+    {
+        "schedule_event",
+        "create_task",
+        "delete_emails",
+        "delete_emails_by_query",
+        "confirm_commitments",
+        "dismiss_commitments",
+        "set_whatsapp_contact_name",
+        "learn_whatsapp_contact",
+        "create_reminder",
+        "cancel_reminder",
+        "snooze_reminder",
+        "complete_reminder",
+        "dismiss_reply_debt",
+        "organize_inbox",
+        "save_note_manual",
+        "ingest_university_pdf",
+        "ingest_university_folder",
+    }
+)
+USER_CHANNELS = frozenset({"telegram", "whatsapp_control", "api"})
+BLOCKED_MESSAGE = "ação bloqueada: turno não iniciado pelo usuário"
 
 PENDING_TOOL = "pending_delete"
 TTL_SEC = 600
@@ -133,3 +160,34 @@ def check_confirmation(
     if not ids:
         return Check(False, "exclusão pendente sem e-mails")
     return Check(True, ids=ids)
+
+
+def check_write(tool_name: str) -> str | None:
+    """Blocked message when a write tool runs in a turn the user did not start.
+
+    Channel ``None`` means no turn is in progress (unit tests, internal callers such
+    as confirm_commitments -> schedule_event_result): it is NOT an LLM turn, so it is
+    allowed. Any known channel outside USER_CHANNELS (``job`` or other) is blocked.
+    """
+    from services.turn_log import current_channel
+
+    channel = current_channel()
+    if channel is None or channel in USER_CHANNELS:
+        return None
+    return f"{BLOCKED_MESSAGE} (canal: {channel}; ferramenta: {tool_name})"
+
+
+def guarded_write(fn):
+    """Decorator for write tools (apply under ``@tool``): runs check_write first.
+
+    functools.wraps keeps name, docstring and signature, so LangChain's schema is
+    unchanged."""
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        blocked = check_write(fn.__name__)
+        if blocked:
+            return blocked
+        return fn(*args, **kwargs)
+
+    return wrapper

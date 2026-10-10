@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from langchain_core.tools import tool
+from services.write_guard import guarded_write
 
 from services.commitment_review.digest import format_pending_digest
 from services.response_format import format_confirm_results
@@ -70,6 +71,7 @@ def _merge_briefing_ids(
 
 
 @tool
+@guarded_write
 def confirm_commitments(
     commitment_ids: Optional[List[int]] = None,
     confirmed_via: str = "chat",
@@ -130,6 +132,7 @@ def confirm_commitments(
 
 
 @tool
+@guarded_write
 def dismiss_commitments(
     commitment_ids: Optional[List[int]] = None,
     briefing_items: Optional[List[int]] = None,

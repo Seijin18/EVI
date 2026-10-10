@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from langchain_core.tools import tool
+from services.write_guard import guarded_write
 
 from services.contact_filesystem import (
     collect_known_contacts,
@@ -167,6 +168,7 @@ def get_whatsapp_contact_info(name_or_phone: str) -> str:
 
 
 @tool
+@guarded_write
 def learn_whatsapp_contact(
     name_or_phone: str,
     days: int = 30,
@@ -199,6 +201,7 @@ def summarize_whatsapp_messages(days: int = 1) -> str:
 
 
 @tool
+@guarded_write
 def set_whatsapp_contact_name(
     name_or_phone: str,
     display_name: str,

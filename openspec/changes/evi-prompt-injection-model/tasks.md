@@ -11,7 +11,7 @@
   - Files: `agent/tools/email_tool.py`, `agent/services/write_guard.py`, `agent/services/turn_log.py`, `tests/unit/test_email_delete_confirm.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_email_delete_confirm.py -q`
 
-- [ ] 1.2 Allowlist de tools de escrita por origem do turno
+- [x] 1.2 Allowlist de tools de escrita por origem do turno
   - SCN-INJ-03
   - Files: `agent/services/write_guard.py`, `agent/tools/registry.py`, `tests/unit/test_write_guard.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_write_guard.py -q` — todas as tools de escrita registradas chamam a guarda
