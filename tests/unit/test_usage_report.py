@@ -267,3 +267,58 @@ def test_report_lists_new_payload_shapes_without_values():
     md = ur.render_markdown({**base, "shapes": [{"file": "abc123.json", "event": "messages.upsert"}]})
     assert "## Formatos novos do Evolution" in md and "abc123.json" in md
     assert ur.UNAVAILABLE in ur.render_markdown({**base, "shapes": None}).split("Formatos novos")[1]
+
+
+def test_reminders_section_renders_counts_only_and_telegram_cap():
+    turns = seeded_week()
+    r = {
+        "label": "2026-W40", "start": MON, "end": MON + timedelta(days=7),
+        "kpis": ur.compute_kpis(turns), "prev_kpis": None, "base_kpis": None,
+        "baseline_range": None, "commitments": {"confirmed": 1, "dismissed": 2, "pending": 3},
+        "probes": {"gmail": 2}, "review": ur.review_candidates(turns),
+        "reminders": {"created": 12, "fired": 10, "late": 0, "p95_drift_s": 240},
+    }
+    md = ur.render_markdown(r)
+    assert "## Lembretes" in md and "disparados: 10" in md and "atrasados (>5 min): 0" in md and "240 s" in md
+    tg = ur.render_telegram(r)
+    assert "Lembretes: 12 criados / 10 disp. / 0 atras." in tg and len(tg.splitlines()) <= 10
+    r["reminders"] = {"created": 0, "fired": 0, "late": 0, "p95_drift_s": None}
+    assert "Lembretes" not in ur.render_telegram(r)
+    r["reminders"] = None
+    assert ur.UNAVAILABLE in ur.render_markdown(r).split("## Lembretes")[1].split("##")[0]
+    assert "Lembretes" not in ur.render_telegram(r)
+
+
+@needs_db
+def test_scn_rem_06_weekly_report_reminders(tmp_path, monkeypatch):
+    import db
+
+    db.reset_db_init_for_tests()
+    db.init_db()
+    monkeypatch.setenv("EVI_WORKSPACE", str(tmp_path))
+    monkeypatch.setattr(ur, "prune_turn_log", lambda days=180: 0)
+    start = ur.parse_week("2020-W20")
+    end = start + timedelta(days=7)
+    ids = []
+    try:
+        for i in range(10):
+            due = start + timedelta(days=1, hours=i)
+            rid = db.create_reminder(f"segredo {i}", due, None, "chat-rem06", "test")
+            ids.append(rid)
+            drift = 240 if i == 4 else 2 + i
+            db.finish_fired(rid, due + timedelta(seconds=drift), drift)
+        with db._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE reminders SET created_at = %s WHERE id = ANY(%s)", (start + timedelta(hours=1), ids))
+            conn.commit()
+        rep = ur.build_report(start, start + timedelta(days=8))
+        assert rep["reminders"] == {"created": 10, "fired": 10, "late": 0, "p95_drift_s": 240}
+        md = ur.render_markdown(rep)
+        assert "disparados: 10" in md and "atrasados (>5 min): 0" in md and "240 s" in md
+        assert "segredo" not in md and "segredo" not in ur.render_telegram(rep)
+    finally:
+        with db._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM reminder_fires WHERE reminder_id = ANY(%s)", (ids,))
+                cur.execute("DELETE FROM reminders WHERE id = ANY(%s)", (ids,))
+            conn.commit()

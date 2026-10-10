@@ -22,7 +22,7 @@
   - Files: `agent/tools/reminder_tools.py`, `agent/tools/registry.py`, `EVI_WORKSPACE/AGENTS.md`, `tests/unit/test_reminder_tools.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reminder_tools.py -q` (inclui teste de que `get_all_tools()` expõe as 5 tools) — data no passado e `repeat` inválido recusados com mensagem clara; flag desligada não grava
 
-- [ ] 2.2 Métricas (`evi_reminders_fired_total{late}`, `evi_reminder_drift_seconds`) + seção "Lembretes" no relatório semanal
+- [x] 2.2 Métricas (`evi_reminders_fired_total{late}`, `evi_reminder_drift_seconds`) + seção "Lembretes" no relatório semanal
   - SCN-REM-06
   - Files: `agent/services/metrics.py`, `agent/services/usage_report.py`, `tests/unit/test_metrics.py`, `tests/unit/test_usage_report.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_metrics.py tests/unit/test_usage_report.py -q`

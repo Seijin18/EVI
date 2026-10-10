@@ -78,6 +78,34 @@ def test_briefing_counters_bounded_and_gated(monkeypatch):
     assert metrics.BRIEFING_REPLIED_TOTAL.labels(kind="other")._value.get() == other + 1
 
 
+def test_reminder_metrics_increment_bounded_and_gated(monkeypatch):
+    from services import metrics
+
+    monkeypatch.setenv("EVI_METRICS_ENABLED", "true")
+    on_time = metrics.REMINDERS_FIRED_TOTAL.labels(late="false")._value.get()
+    late = metrics.REMINDERS_FIRED_TOTAL.labels(late="true")._value.get()
+    count = metrics.REMINDER_DRIFT_SECONDS.collect()[0].samples
+    n0 = next(x.value for x in count if x.name.endswith("_count"))
+    metrics.record_reminder_fired(False, 2.0)
+    metrics.record_reminder_fired(True, 400.0)
+    metrics.record_reminder_fired(False, -3.0)  # clock skew clamps to 0
+    assert metrics.REMINDERS_FIRED_TOTAL.labels(late="false")._value.get() == on_time + 2
+    assert metrics.REMINDERS_FIRED_TOTAL.labels(late="true")._value.get() == late + 1
+    samples = metrics.REMINDER_DRIFT_SECONDS.collect()[0].samples
+    assert next(x.value for x in samples if x.name.endswith("_count")) == n0 + 3
+    # only the two bounded label values ever exist
+    labels = {s.labels.get("late") for s in metrics.REMINDERS_FIRED_TOTAL.collect()[0].samples}
+    assert labels <= {"true", "false", None}
+    # buckets resolve 0-3600 s: 5 min and 1 h are bucket edges
+    les = {float(s.labels["le"]) for s in samples if s.name.endswith("_bucket")}
+    assert {1.0, 60.0, 300.0, 3600.0} <= les
+    body = metrics.metrics_response().body.decode()
+    assert "evi_reminders_fired_total" in body and "evi_reminder_drift_seconds" in body
+    monkeypatch.setenv("EVI_METRICS_ENABLED", "false")
+    metrics.record_reminder_fired(True, 10.0)
+    assert metrics.REMINDERS_FIRED_TOTAL.labels(late="true")._value.get() == late + 1
+
+
 if __name__ == "__main__":
     test_metrics_route_in_main_scn_ops_03()
     test_metrics_module_wiring()

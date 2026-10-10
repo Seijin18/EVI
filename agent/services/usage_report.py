@@ -190,6 +190,10 @@ def _fmt(v: Any, kind: str = "num") -> str:
     return f"{v:.1f}".rstrip("0").rstrip(".") if isinstance(v, float) else str(v)
 
 
+def _fmt_drift(v: Any) -> str:
+    return "—" if v is None else f"{v:.0f} s"
+
+
 def _delta(cur: Any, ref: Any, kind: str = "num") -> str:
     if cur is None or ref is None:
         return "—"
@@ -274,6 +278,16 @@ def render_markdown(r: Dict[str, Any]) -> str:
         for k, v in p.items():
             L.append(f"- {k}: {v} dia(s)")
     L.append("")
+    L.append("## Lembretes")
+    rm = r.get("reminders")
+    if rm is None:
+        L.append(UNAVAILABLE)
+    else:
+        L.append(
+            f"criados: {rm['created']} · disparados: {rm['fired']} · atrasados (>5 min): {rm['late']} · "
+            f"p95 do desvio: {_fmt_drift(rm['p95_drift_s'])}"
+        )
+    L.append("")
     L.append("## Formatos novos do Evolution")
     sh = r.get("shapes")
     if sh is None:
@@ -332,6 +346,12 @@ def render_telegram(r: Dict[str, Any]) -> str:
         L.append(f"Sonda {UNAVAILABLE}")
     else:
         L.append("Sonda: " + (", ".join(f"{n} {d}d" for n, d in p.items()) if p else "sem falhas"))
+    rm = r.get("reminders")
+    if rm and (rm["created"] or rm["fired"]):
+        L.append(
+            f"Lembretes: {rm['created']} criados / {rm['fired']} disp. / {rm['late']} atras. "
+            f"(p95 {_fmt_drift(rm['p95_drift_s'])})"
+        )
     rev = r["review"]
     if rev:
         L.append("Revisar ids: " + ", ".join(str(i["turn"]["id"]) for i in rev))
@@ -470,6 +490,12 @@ def build_report(week_start: datetime, now: datetime | None = None) -> Dict[str,
             db.list_probes(week_start.date(), (end - timedelta(days=1)).date())
         ),
     )
+
+    def _reminders():
+        st = db.reminder_stats(week_start, end)
+        return {k: st[k] for k in ("created", "fired", "late", "p95_drift_s")}  # counts only, no text
+
+    r["reminders"] = _section("reminders", _reminders)
 
     def _shapes():
         from services.payload_shapes import list_new_shapes
