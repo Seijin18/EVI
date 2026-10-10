@@ -5,7 +5,7 @@
   - Files: `agent/services/untrusted.py`, `tests/unit/test_untrusted.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_untrusted.py -q`
 
-- [ ] 1.2 Aplicar nos três caminhos existentes + instrução defensiva no bootstrap
+- [x] 1.2 Aplicar nos três caminhos existentes + instrução defensiva no bootstrap
   - SCN-SEC-02
   - Files: `agent/services/context_assembly.py`, `agent/services/whatsapp_activity.py`, `agent/services/whatsapp_llm_extract.py`, `EVI_WORKSPACE/AGENTS.md`, `tests/unit/test_whatsapp_activity.py` (novo)
   - Verify: `PYTHONPATH=agent python3 -m pytest -q tests/unit/test_context_assembly.py tests/unit/test_whatsapp_llm_extract.py tests/unit/test_llm_extract.py tests/unit/test_whatsapp_activity.py` e `./scripts/evi-test runtime-v3`; o bootstrap mudou → regravar cassettes (`./scripts/evi-sim run --tag critical --llm record`) e `./scripts/evi-sim run --tag adversarial --repeat 3 --llm live` 3/3

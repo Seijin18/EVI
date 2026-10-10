@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from services.session_context import extract_jid_from_session, format_tool_snapshots
 from services.skill_loader import build_skills_block
+from services.untrusted import wrap_external
 from services.workspace import bootstrap_names, read_bootstrap_file, read_daily_memory
 
 
@@ -21,7 +22,7 @@ def _contact_profile_block(jid: str | None) -> str:
         text = profile.read_text(encoding="utf-8").strip()
         if not text:
             return ""
-        return f"CONTACT PROFILE ({jid}):\n{text[:2000]}"
+        return f"CONTACT PROFILE ({jid}):\n{wrap_external(text, 'perfil_contato', max_chars=2000)}"
     except Exception:
         return ""
 
