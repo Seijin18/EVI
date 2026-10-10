@@ -1,6 +1,25 @@
 # EVI testing guide
 
-Three tiers:
+## Níveis de verificação
+
+| Nível | O que roda de verdade | O que é falso | Comando | Estado |
+|---|---|---|---|---|
+| L0 unit | funções | tudo em volta | `pytest tests/unit -q` | ativo |
+| L1 integração CLI | módulos + fixtures | LLM, Windmill, rede | `./scripts/evi-test <feature>` | ativo |
+| L1c container smoke | imagem montada | dados | `./scripts/evi-test container` | ativo |
+| **L2 simulação** | imagem de produção, poller Telegram, webhook Evolution, LangGraph, LLM real, scripts Windmill, Postgres | Google, Telegram API, Evolution API, relógio | `./scripts/evi-sim run` | **em implementação** — `openspec/changes/evi-sim-harness/` |
+| L3 staging | + Windmill server e schedules | Google | — | futuro |
+| **L4 uso real** | tudo | nada | relatório semanal, sonda diária, `/bom` `/ruim` | **proposto** — `openspec/queued/evi-usage-validation/` |
+
+Ciclo pretendido: L2 aprova antes de integrar → L4 mede depois → falha real vira
+cenário L2 (`evi-sim promote`).
+
+> **Atenção:** `scripts/evi-telegram-verify.sh`, `scripts/evi-inbox-ux-verify.sh` e
+> as flags `--live-*` rodam contra as contas reais (Telegram, Gmail, Calendar) e
+> gravam no Postgres de produção. Use só para diagnóstico pontual, não para validar
+> change.
+
+Tiers legados (ainda válidos):
 
 1. **Unit** — `pytest tests/unit -q` (no Docker/Ollama)
 2. **Integration CLI** — `./scripts/evi-test <feature> [--verbose]`

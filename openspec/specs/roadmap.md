@@ -47,9 +47,46 @@ mensagens a terceiros por conta própria.
 Um change ativo por vez. Cada item abaixo vira `openspec/changes/<slug>/` quando
 o anterior for arquivado.
 
-### Etapa 18 — Briefing matinal + guarda de injeção mínima — **ativo**
+### Etapa V1 — Simulação do sistema montado — **ativo**
 
-Change: [`evi-morning-briefing`](../changes/evi-morning-briefing/proposal.md).
+Change: [`evi-sim-harness`](../changes/evi-sim-harness/proposal.md).
+
+**Por quê.** Os testes atuais mockam o LLM e as integrações; os problemas que
+chegaram ao uso real estavam no sistema montado (tool errada, data relativa
+errada, envelope do Windmill, path no container). E os harnesses "live" rodam
+contra as contas reais e poluem a produção (3 compromissos "Teste digest Telegram").
+
+**Escopo.** Projeto compose `evi-sim` isolado, com a imagem de produção, o poller
+real do Telegram, o webhook real do Evolution, LLM real e os scripts Windmill reais;
+falsos só nas bordas (Google, Telegram API, Evolution API) e no relógio
+(libfaketime). Cenários YAML com expectativas sobre estado e efeitos; corpus inicial
+derivado do uso real, de falhas e de injeção; taxa de aprovação com repetição;
+record/replay do LLM para a CI.
+
+**Pronto quando:** cenários `critical` 3/3 com LLM real e verdes em replay na CI.
+
+### Etapa V2 — Validação com base no uso real — `evi-usage-validation` (proposto)
+
+Change completo em [`openspec/queued/evi-usage-validation/`](../queued/evi-usage-validation/proposal.md).
+
+**Por quê.** Nada mede se o EVI funciona para o usuário depois de integrado; os
+sinais da revisão de 2026-10-10 só apareceram por consulta manual ao Postgres.
+
+**Escopo.** `turn_log` com resultado estruturado das tools; sinais explícitos
+(`/bom`, `/ruim`) e implícitos (correção, reformulação, falha); relatório semanal
+com KPIs contra linha de base; sonda diária somente-leitura em produção; dados de
+teste fora dos KPIs; `evi-sim promote` transforma falha real em cenário
+anonimizado. Regra nova: todo change de comportamento declara "Validação em uso
+real" (KPI, limiar, janela).
+
+**Dependência.** V1 (o `promote` escreve cenários do simulador).
+**Pronto quando:** 2 relatórios semanais seguidos entregues; 1 falha real promovida.
+
+### Etapa 18 — Briefing matinal + guarda de injeção mínima — proposto
+
+Change completo em [`openspec/queued/evi-morning-briefing/`](../queued/evi-morning-briefing/proposal.md).
+Recuado para depois de V1/V2: nasce com cenários de simulação (`SIM-BRIEF-*`) e
+com linha de base de uso para medir o efeito.
 Briefing determinístico no Telegram (agenda, tarefas, e-mails que pedem ação,
 pendências WhatsApp), numerado, com falha parcial visível; responder ao briefing
 age sobre os itens. Inclui a parte mínima do #37: conteúdo de terceiros delimitado

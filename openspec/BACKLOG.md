@@ -9,12 +9,16 @@
 
 A base está fechada (Etapas 12–14, 17). A fila agora prioriza o que o usuário
 percebe: o EVI passar a chegar até a pessoa em vez de esperar ser perguntado.
-Em ordem — um por vez.
+Antes, dois changes de verificação (V1, V2) para que tudo o que vem depois seja
+validado em simulação fiel e medido no uso real. Em ordem — um por vez.
+Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 
 | # | Change | Etapa | Status | Resumo |
 |---|--------|-------|--------|--------|
-| 40 | `evi-morning-briefing` | 18 | **Ativo** | Briefing matinal determinístico no Telegram; responder age sobre os itens; falha parcial visível. Inclui delimitação de conteúdo externo (parte mínima do #37) |
-| 41 | `evi-reminders` | 19 | Próximo | Lembretes com horário e recorrência disparados pelo próprio EVI (loop in-process); adiar/feito por resposta |
+| 45 | `evi-sim-harness` | V1 | **Ativo** | Simulação do sistema montado: imagem de produção, poller/webhook reais, LLM real, scripts Windmill reais; falsos só nas bordas e no relógio. Cenários de uso real, falha e injeção; record/replay na CI |
+| 46 | `evi-usage-validation` | V2 | Proposto (`openspec/queued/`) | Validação com base no uso real: `turn_log`, sinais de resultado, relatório semanal com linha de base, sonda somente-leitura, falha real → cenário de simulação |
+| 40 | `evi-morning-briefing` | 18 | Proposto (`openspec/queued/`) | Briefing matinal determinístico no Telegram; responder age sobre os itens; falha parcial visível. Inclui delimitação de conteúdo externo (parte mínima do #37) |
+| 41 | `evi-reminders` | 19 | Fila | Lembretes com horário e recorrência disparados pelo próprio EVI (loop in-process); adiar/feito por resposta |
 | 42 | `evi-reply-debts` | 20 | Fila | Troca "compromissos" (0/37 confirmados) por: esperando sua resposta (determinístico), promessas suas, combinados com data |
 | 43 | `evi-voice-input` | 21 | Fila | Áudio do usuário no Telegram/controle WhatsApp → transcrição via Gemini |
 | 44 | `evi-perceived-reliability` | 22 | Fila | Watchdog externo, `/ajuda`, ack imediato em tool lenta, aviso de OAuth expirado |

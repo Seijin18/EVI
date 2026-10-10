@@ -14,7 +14,9 @@ Este projeto usa OpenSpec (`openspec/`). CLI instalado: `openspec`.
 - **Antes de qualquer mudança não-trivial:** ler [`openspec/AGENTS.md`](openspec/AGENTS.md)
   e [`openspec/config.yaml`](openspec/config.yaml) (contexto, regras de proposal/tasks/design).
 - **Um change ativo por vez.** `openspec list` deve estar vazio antes de
-  `openspec new change <slug-kebab>`.
+  `openspec new change <slug-kebab>`. Changes já propostos por completo que
+  aguardam a vez ficam em [`openspec/queued/`](openspec/queued/README.md) — ativar
+  com `git mv` para `openspec/changes/` depois de arquivar o atual.
 - Fluxo: propor (`proposal.md` + `tasks.md` + specs delta) → implementar marcando
   tasks `[x]` conforme o Verify passa → sincronizar specs com o as-built →
   `openspec archive` para `openspec/changes/archive/YYYY-MM-DD-<slug>/`.
@@ -87,6 +89,12 @@ PYTHONPATH=agent python3 -m pytest tests/unit -q   # Tier 1 (~280 testes)
 openspec validate --specs
 ruff check agent/ --select E,W,F --ignore E501      # mesmo gate do CI
 ```
+
+Níveis L0–L4 em [`docs/testing.md`](docs/testing.md). Quando o `evi-sim-harness`
+estiver implementado, mudança de comportamento só fecha com
+`./scripts/evi-sim run --tag critical --repeat 3 --llm live` verde. **Não** usar os
+scripts `*-verify.sh` nem `--live-*` para validar change: eles tocam contas e dados
+reais.
 
 CI (`.github/workflows/ci.yml`) roda ruff + unit + smoke + tier-2 offline, e um
 job `container` separado com `./scripts/evi-container-smoke.sh`.

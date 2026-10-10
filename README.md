@@ -180,7 +180,9 @@ a pessoa com o que exige ação, em vez de esperar ser perguntado.
 
 | Etapa | Item | Notas |
 |-------|------|-------|
-| 18 | Briefing matinal no Telegram | **Ativo** — `evi-morning-briefing`; inclui delimitação de conteúdo externo |
+| V1 | Simulação do sistema montado | **Ativo** — `evi-sim-harness`; teste fiel ao uso real sem tocar em conta real |
+| V2 | Validação com base no uso real | Relatório semanal, sinais de resultado, sonda diária |
+| 18 | Briefing matinal no Telegram | Proposto; inclui delimitação de conteúdo externo |
 | 19 | Lembretes com horário | "me lembra às 18h…", recorrência, adiar/feito |
 | 20 | Pendências de resposta | Substitui a extração de compromissos (0/37 confirmados) |
 | 21 | Mensagens de voz | Transcrição via Gemini, só áudio do usuário |

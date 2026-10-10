@@ -21,10 +21,12 @@
 | Dev bridge multi-CLI | **Removido** (12 Ago 2026) — nunca rodou no container |
 | Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Done** (12 Ago 2026) |
 | Contrato de tools + cobertura do caminho crítico + import vCard | **Done** (12 Ago 2026) |
-| Assistente proativo (briefing, lembretes, voz) | **Em andamento** — Etapa 18 ativa |
+| Verificação realista (simulação + validação em uso real) | **Em andamento** — V1 ativa |
+| Assistente proativo (briefing, lembretes, voz) | **Proposto** — Etapa 18 em `openspec/queued/` |
 
-**Foco atual:** #40 `evi-morning-briefing` (Etapa 18) — briefing matinal no Telegram
-com guarda mínima de injeção. Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
+**Foco atual:** #45 `evi-sim-harness` (V1) — simulação do sistema montado, fiel ao uso
+real, sem tocar em conta real. Depois #46 `evi-usage-validation` (V2) e #40
+`evi-morning-briefing` (Etapa 18), ambos já propostos em `openspec/queued/`. Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
 porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de produto de 2026-10-10** ([`docs/ux-review-2026-10.md`](docs/ux-review-2026-10.md)).
@@ -32,7 +34,8 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 > mensagens (jun) para 0 (set/out); 0 de 37 compromissos extraídos do WhatsApp foram
 > confirmados; a stack ficou ~6 semanas parada sem ninguém notar. O EVI só age
 > quando chamado. A fila foi reordenada para proatividade: briefing (18), lembretes
-> (19), pendências de resposta (20), voz (21), confiabilidade percebida (22).
+> (19), pendências de resposta (20), voz (21), confiabilidade percebida (22) — precedidos
+> por simulação fiel (V1) e validação em uso real (V2).
 
 > **Revisão de 2026-08-12.** Uma revisão geral do sistema encontrou três itens antes
 > marcados Done que não funcionavam como descrito. Dois foram corrigidos na Etapa 12:
@@ -97,7 +100,9 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 | Feature | Etapa | Referência |
 |---------|-------|------------|
-| Briefing matinal no Telegram + delimitação de conteúdo externo | 18 · **ativo** | BACKLOG #40 · `openspec/changes/evi-morning-briefing/` |
+| Simulação do sistema montado (`evi-sim`) | V1 · **ativo** | BACKLOG #45 · `openspec/changes/evi-sim-harness/` |
+| Validação com base no uso real | V2 | BACKLOG #46 · `openspec/queued/evi-usage-validation/` |
+| Briefing matinal no Telegram + delimitação de conteúdo externo | 18 | BACKLOG #40 · `openspec/queued/evi-morning-briefing/` |
 | Lembretes com horário e recorrência | 19 | BACKLOG #41 |
 | Pendências de resposta e promessas (substitui extração de compromissos) | 20 | BACKLOG #42 |
 | Mensagens de voz via Gemini | 21 | BACKLOG #43 |
@@ -135,7 +140,9 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **14.1** | **Container smoke no CI** | **Done** | Job `container`, `evi-test container`, guarda de isolamento de volumes |
 | **14.2** | **Cobertura do caminho crítico** | **Done** | poller, evolution_client, db (PG real), webhook Evolution — +62 testes |
 | **17** | **Import de agenda (vCard)** | **Done** | Nomes da agenda por `.vcf`; casamento tolerante ao nono dígito |
-| **18** | **Briefing matinal** | **Ativo** | `evi-morning-briefing` — briefing no Telegram, resposta age sobre itens, `wrap_external` |
+| **V1** | **Simulação do sistema montado** | **Ativo** | `evi-sim-harness` — fakes nas bordas, código real no meio, LLM real, cenários de uso real |
+| V2 | Validação em uso real | **—** | `evi-usage-validation` (queued) |
+| 18 | Briefing matinal | **—** | `evi-morning-briefing` (queued) |
 | 19 | Lembretes | **—** | `evi-reminders` |
 | 20 | Pendências de resposta | **—** | `evi-reply-debts` |
 | 21 | Voz | **—** | `evi-voice-input` |

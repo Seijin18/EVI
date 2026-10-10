@@ -12,7 +12,7 @@ tratam a **resposta ao briefing** como interface. Análise completa:
 
 O briefing coloca conteúdo de terceiros (assunto de e-mail, texto de WhatsApp)
 na sessão do grafo principal, que tem `delete_emails_by_query` e `schedule_event`
-ligados. Por isso a guarda mínima de injeção de prompt (roadmap Etapa 15, #37)
+ligados. Por isso a guarda mínima de injeção de prompt (#37)
 entra **neste** change, antes de o briefing ir para produção.
 
 Prioridade de produto: produtividade proativa > canal remoto (Telegram).
@@ -55,6 +55,14 @@ Código: `agent/services/briefing.py` (novo), `agent/services/untrusted.py` (nov
 Specs: nova capability `proactive`; deltas em `agent-api` e `data-long-memory`.
 Sem container novo, sem dependência nova.
 
+## Validação em uso real
+
+Janela de 14 dias após ligar `EVI_BRIEFING_ENABLED`, medida pelo relatório de
+`evi-usage-validation`:
+- briefing entregue em ≥ 13 de 14 dias (sonda + `briefing_log`);
+- resposta ao briefing em ≥ 50% dos dias (`evi_briefing_replied_total`);
+- taxa de sucesso por turno não cai em relação à linha de base.
+
 ## Out of scope
 
 - Lembretes com horário disparados pelo EVI (P2, `evi-reminders` — próximo change;
@@ -65,7 +73,7 @@ Sem container novo, sem dependência nova.
   engajamento usa resposta textual.
 - Seleção de e-mails por LLM. V1 usa heurística (categoria/remetente).
 - Threat model completo do #37 (envio a terceiros, tools destrutivas com
-  confirmação). Fica no roadmap Etapa 15 como `evi-prompt-injection-model`, reduzido
+  confirmação). Fica no roadmap Etapa 23 como `evi-prompt-injection-model`, reduzido
   ao que este change não cobre.
 - Entrega por WhatsApp (canal de saída proativa é o Telegram — ver risco de
   plataforma em `docs/ux-review-2026-10.md`).

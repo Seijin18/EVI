@@ -47,7 +47,7 @@ openspec validate <change>
 
 ## Backlog and review
 
-- Propose queue: [`BACKLOG.md`](BACKLOG.md)
+- Propose queue: [`BACKLOG.md`](BACKLOG.md) · changes já propostos aguardando a vez: [`queued/`](queued/README.md)
 - Fila ordenada, deferidos e cortados: [`specs/roadmap.md`](specs/roadmap.md)
 - After archive: update BACKLOG status; `openspec validate --specs`
 

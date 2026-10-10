@@ -54,10 +54,10 @@
 
 ## 3. Harness
 
-- [ ] 3.1 `evi-test briefing` (offline, fixtures Windmill) + entrada no smoke + `.env.example`
-  - SCN-BRIEF-01..05
-  - Files: `agent/testing/cli.py`, `tests/fixtures/windmill/`, `.env.example`, `docs/testing.md`
-  - Verify: `./scripts/evi-test briefing && ./scripts/evi-test smoke` (smoke passa a 14/14)
+- [ ] 3.1 `evi-test briefing` (offline) + cenários de simulação (`SIM-BRIEF-*`: dia normal, Gmail com OAuth expirado, e-mail adversarial, "confirma 2" após o briefing) + `.env.example`
+  - SCN-BRIEF-01..05, SCN-SIM-08
+  - Files: `agent/testing/cli.py`, `tests/sim/scenarios/briefing/`, `.env.example`, `docs/testing.md`
+  - Verify: `./scripts/evi-test briefing && ./scripts/evi-test smoke && ./scripts/evi-sim run --tag briefing --repeat 3 --llm live` (smoke passa a 14/14; `SIM-BRIEF-*` 3/3)
 
 
 - [ ] 3.2 Sincronizar specs com o as-built, atualizar contagens (10 specs, smoke 14/14) em `CLAUDE.md`/`Progress.md`/`BACKLOG.md`, `openspec archive`
