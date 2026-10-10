@@ -34,14 +34,30 @@ def list_reply_debts() -> str:
 
 
 @tool
-def dismiss_reply_debt(jid_or_name: str) -> str:
+def dismiss_reply_debt(jid_or_name: str = "", briefing_items: list[int] | None = None) -> str:
     """Mark a conversation as answered/ignored so it stops appearing as a reply debt
     (until a new inbound message arrives). Use for «respondido», «ignora <contato>».
     jid_or_name: contact name, alias, last phone digits or full JID.
+    If the user refers to numbers from the last briefing ('respondido 1', 'ignora 2'),
+    pass them in briefing_items — never in jid_or_name. Otherwise leave briefing_items
+    empty and use jid_or_name. Never guess numbers.
     """
     from services.contact_filesystem import resolve_contact_for_query
     from tools.calendar_time import now_local
 
+    if briefing_items:
+        from services.briefing import resolve_briefing_items
+
+        jids, errors = resolve_briefing_items(list(briefing_items), kind="reply_debt")
+        if jids:
+            import db
+
+            db.init_db()
+            now = now_local()
+            for jid in jids:
+                db.acknowledge(jid, now)
+        parts = [f"Ok, {len(jids)} conversa(s) não aparecem mais como pendentes de resposta."] if jids else []
+        return "\n".join(parts + errors)
     q = (jid_or_name or "").strip()
     if not q:
         return "Informe o contato (nome, telefone ou JID)."

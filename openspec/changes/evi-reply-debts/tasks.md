@@ -22,7 +22,7 @@
   - Files: `agent/services/whatsapp_processor.py`, `agent/db.py`, `tests/unit/test_whatsapp_processor.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_whatsapp_processor.py -q` e `./scripts/evi-test whatsapp`
 
-- [ ] 2.3 Briefing com três subseções + fim da notificação avulsa com a flag
+- [x] 2.3 Briefing com três subseções + fim da notificação avulsa com a flag
   - SCN-DEBT-06, SCN-DEBT-07
   - Files: `agent/services/briefing.py`, `agent/services/commitment_capture_notify.py`, `agent/services/commitment_review/deliver.py`, `tests/unit/test_briefing.py`, `tests/unit/test_commitment_capture_notify.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_commitment_capture_notify.py tests/unit/test_commitment_review_digest.py -q` e `./scripts/evi-test briefing`

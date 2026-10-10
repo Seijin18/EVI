@@ -44,6 +44,7 @@ class BriefItem:
     n: int  # número global exibido (1..N, contínuo entre seções)
     text: str  # linha já formatada; campos de terceiros já delimitados
     ref: dict  # {"kind": "commitment", "id": 12} | {"kind": "email", "id": "18f…"} | …
+    group: str = ""  # sub-rótulo dentro da seção (WhatsApp com reply-debts); "" = sem grupo
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ class Section:
     items: list[BriefItem] = field(default_factory=list)
     error: str = ""  # motivo legível quando a fonte falhou
     more: int = 0  # itens omitidos pelo limite da seção ("+N")
+    group_more: dict = field(default_factory=dict)  # grupo -> omitidos ("+N" por grupo)
 
 
 @dataclass(frozen=True)
@@ -235,30 +237,68 @@ def _collect_email() -> list[tuple[str, dict]]:
     return rows
 
 
-def _collect_whatsapp() -> list[tuple[str, dict]]:
-    rows = []
+GROUP_DEBTS = "Esperando sua resposta"
+GROUP_PROMISES = "Suas promessas"
+GROUP_COMMITMENTS = "Combinados"
+GROUP_LIMIT = 3
+
+
+def _commitment_when(c: dict) -> str:
+    when = c.get("event_date") or c.get("due_date") or ""
+    if when:
+        try:
+            return date.fromisoformat(str(when)[:10]).strftime("%d/%m")
+        except ValueError:
+            return ""
+    return ""
+
+
+def _debt_age(hours: float) -> str:
+    if hours < 48:
+        return f"há {max(1, int(hours))} h"
+    return f"há {int(hours // 24)} d"
+
+
+def _collect_whatsapp() -> list[tuple]:
+    from services.whatsapp_processor import reply_debts_enabled
+
+    grouped = reply_debts_enabled()
+    rows: list[tuple] = []
+    debts: list[tuple] = []
+    promises: list[tuple] = []
     for c in db.list_pending_commitments(limit=50):
         text = wrap_external(c.get("title") or c.get("raw_text") or "", "whatsapp", _FIELD_MAX)
         who = c.get("source_label") or c.get("source_chat") or ""
-        when = c.get("event_date") or c.get("due_date") or ""
-        if when:
-            try:
-                when = date.fromisoformat(str(when)[:10]).strftime("%d/%m")
-            except ValueError:
-                when = ""
+        when = _commitment_when(c)
         line = text
         if who:
             line += f" — {wrap_external(who, 'whatsapp', 60)}"
         if when:
             line += f" ({when})"
-        rows.append((line, {"kind": "commitment", "id": c.get("id")}))
-    return rows
+        ref = {"kind": "commitment", "id": c.get("id")}
+        if not grouped:
+            rows.append((line, ref))
+        elif c.get("type") == "promise":
+            promises.append((line, ref, GROUP_PROMISES))
+        else:
+            rows.append((line, ref, GROUP_COMMITMENTS))
+    if not grouped:
+        return rows
+    from services.reply_debts import list_debts
+
+    for d in list_debts():
+        line = (
+            f"{wrap_external(d.get('name') or d['jid'], 'whatsapp', 60)} — "
+            f"{_debt_age(d['age_h'])}: {wrap_external(d.get('preview') or '', 'whatsapp', _FIELD_MAX)}"
+        )
+        debts.append((line, {"kind": "reply_debt", "id": d["jid"]}, GROUP_DEBTS))
+    return debts + promises + rows
 
 
 # ---------------------------------------------------------------- assembly
 
 
-def _run_source(key: str, fn: Callable[[], list[tuple[str, dict]]]) -> Section:
+def _run_source(key: str, fn: Callable[[], list[tuple]]) -> Section:
     title = _TITLES[key]
     try:
         rows = fn()
@@ -267,6 +307,18 @@ def _run_source(key: str, fn: Callable[[], list[tuple[str, dict]]]) -> Section:
     except Exception as exc:  # isolada: nunca derruba as outras fontes
         soft_fail(f"briefing.{key}", exc)
         return Section(key, title, error=f"falha inesperada ({str(exc)[:100]})")
+    if rows and len(rows[0]) == 3:  # grupos rotulados: teto e "+N" por grupo
+        items: list[BriefItem] = []
+        group_more: dict = {}
+        counts: dict = {}
+        for text, ref, group in rows:
+            counts[group] = counts.get(group, 0) + 1
+            if counts[group] <= GROUP_LIMIT:
+                items.append(BriefItem(0, text, ref, group))
+        for group, total in counts.items():
+            if total > GROUP_LIMIT:
+                group_more[group] = total - GROUP_LIMIT
+        return Section(key, title, items=items, group_more=group_more)
     limit = _email_max() if key == "email" else LIMITS[key]
     items = [BriefItem(0, text, ref) for text, ref in rows[:limit]]
     return Section(key, title, items=items, more=max(0, len(rows) - limit))
@@ -292,7 +344,7 @@ def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Bri
     now = now or now_local()
     evening = kind == "evening"
     day = now.date() + timedelta(days=1) if evening else now.date()
-    sources: list[tuple[str, Callable[[], list[tuple[str, dict]]]]] = [
+    sources: list[tuple[str, Callable[[], list[tuple]]]] = [
         ("calendar", lambda: _collect_calendar(day)),
         ("tasks", lambda: _collect_tasks(day, overdue=not evening)),
         ("email", _collect_email),
@@ -320,7 +372,15 @@ def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Bri
             lines.append(f"⚠ {sec.title} indisponível — {sec.error}")
         elif sec.items:
             lines.append(f"\n{sec.title}")
-            lines.extend(f"{it.n}. {it.text}" for it in sec.items)
+            cur = None
+            for i, it in enumerate(sec.items):
+                if it.group and it.group != cur:
+                    cur = it.group
+                    lines.append(f"{cur}:")
+                lines.append(f"{it.n}. {it.text}")
+                nxt = sec.items[i + 1].group if i + 1 < len(sec.items) else None
+                if it.group and nxt != it.group and sec.group_more.get(it.group):
+                    lines.append(f"+{sec.group_more[it.group]}")
             if sec.more:
                 lines.append(f"+{sec.more}")
     return Briefing(_truncate("\n".join(lines)), sections, items)
@@ -340,7 +400,7 @@ NO_BRIEFING_TODAY = "não há briefing de hoje para resolver os números"
 
 def resolve_briefing_items(
     numbers: list[int], session_id: str | None = None, kind: str = "commitment"
-) -> tuple[list[int], list[str]]:
+) -> tuple[list, list[str]]:
     """Mapeia números do briefing de hoje ("confirma 2") para ids reais.
 
     Lê o último snapshot ``morning_briefing`` do dia local da sessão (padrão: a do
@@ -372,8 +432,8 @@ def resolve_briefing_items(
             soft_fail("briefing.resolve_items", exc)
     if refs is None:
         return [], [NO_BRIEFING_TODAY] if nums else []
-    label = {"commitment": "um compromisso"}.get(kind, f"do tipo {kind}")
-    ids: list[int] = []
+    label = {"commitment": "um compromisso", "reply_debt": "uma conversa esperando resposta"}.get(kind, f"do tipo {kind}")
+    ids: list = []
     errors: list[str] = []
     for n in nums:
         ref = refs.get(str(n))
@@ -381,6 +441,12 @@ def resolve_briefing_items(
             errors.append(f"item {n} não existe no briefing")
             continue
         ref_kind, _, ref_id = str(ref).partition(":")
+        if kind == "reply_debt":
+            if ref_kind != kind or not ref_id:
+                errors.append(f"item {n} do briefing não é {label}")
+            elif ref_id not in ids:
+                ids.append(ref_id)
+            continue
         if ref_kind != kind or not ref_id.lstrip("-").isdigit():
             errors.append(f"item {n} do briefing não é {label}")
             continue

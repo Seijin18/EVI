@@ -67,3 +67,14 @@ if __name__ == "__main__":
     test_format_scheduled_today_empty()
     test_telegram_notify_reexport()
     print("ok")
+
+
+def test_scn_debt_07_digest_notification_skipped_with_flag(monkeypatch):
+    from services.commitment_review import deliver
+
+    monkeypatch.setenv("EVI_REPLY_DEBTS_ENABLED", "true")
+    sent = []
+    monkeypatch.setattr(deliver, "send_telegram_message", lambda t: sent.append(t) or True)
+    monkeypatch.setattr(deliver, "count_unnotified_pending", lambda: 99)
+    assert deliver.maybe_notify_new_pending([1], ["urgent"]) is False
+    assert sent == []

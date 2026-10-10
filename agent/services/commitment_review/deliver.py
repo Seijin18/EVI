@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Iterable, List
 
@@ -9,6 +10,8 @@ from db import count_unnotified_pending, list_pending_commitments, mark_pending_
 from services.commitment_review.digest import format_pending_digest
 from services.commitment_review.channels.telegram import send_telegram_message
 from services.commitment_review.channels.whatsapp import send_whatsapp_text
+
+logger = logging.getLogger(__name__)
 
 _HIGH = frozenset({"urgent", "work", "university"})
 
@@ -36,6 +39,11 @@ def maybe_notify_new_pending(
     priorities: Iterable[str],
 ) -> bool:
     if not queued_ids:
+        return False
+    from services.whatsapp_processor import reply_debts_enabled
+
+    if reply_debts_enabled():
+        logger.info("pending-commitment digest skipped (reply debts on): %d queued", len(queued_ids))
         return False
     high = any(p in _HIGH for p in priorities)
     unnotified = count_unnotified_pending()

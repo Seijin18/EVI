@@ -245,3 +245,25 @@ def test_dismiss_tool_resolves_name_and_acknowledges(monkeypatch):
     assert reply_debt_tools.dismiss_reply_debt.invoke({"jid_or_name": "zzz"}) == "nada"
     reply_debt_tools.dismiss_reply_debt.invoke({"jid_or_name": "c@s.whatsapp.net"})
     assert acked[-1] == "c@s.whatsapp.net"
+
+
+def test_dismiss_tool_resolves_briefing_items(monkeypatch):
+    from tools import reply_debt_tools
+
+    acked = []
+
+    class Db:
+        def init_db(self):
+            pass
+
+        def acknowledge(self, jid, ts):
+            acked.append(jid)
+
+    monkeypatch.setitem(sys.modules, "db", Db())
+    monkeypatch.setattr(
+        "services.briefing.resolve_briefing_items",
+        lambda nums, session_id=None, kind="commitment": (["a@s.whatsapp.net"], ["item 9 não existe"])
+        if kind == "reply_debt" else ([], []),
+    )
+    out = reply_debt_tools.dismiss_reply_debt.invoke({"briefing_items": [1, 9]})
+    assert acked == ["a@s.whatsapp.net"] and "item 9" in out

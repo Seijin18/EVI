@@ -72,3 +72,11 @@ if __name__ == "__main__":
     test_send_failure_is_silent()
     test_title_truncated_at_80()
     print("ok")
+
+
+def test_scn_debt_07_no_notification_with_reply_debts_flag():
+    env = {"EVI_WHATSAPP_CONTROL_JIDS": "5511@c.us", "EVI_REPLY_DEBTS_ENABLED": "true"}
+    with patch.dict(os.environ, env):
+        with patch("services.commitment_capture_notify.send_whatsapp_text") as mock_send:
+            notify_commitment_captured(9, "Vôlei amanhã às 19h", "event")
+    mock_send.assert_not_called()

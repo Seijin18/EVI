@@ -510,3 +510,59 @@ def test_resolve_briefing_items_no_snapshot_today(monkeypatch):
     ids, errs = _resolve(monkeypatch, old, [1])
     assert ids == [] and errs
     assert _resolve(monkeypatch, [], [1])[1]
+
+
+# ---- reply-debts groups (SCN-DEBT-06) ---------------------------------------
+
+
+def _debts_on(monkeypatch, debts):
+    monkeypatch.setenv("EVI_REPLY_DEBTS_ENABLED", "true")
+    from services import reply_debts
+
+    monkeypatch.setattr(reply_debts, "list_debts", lambda *a, **k: debts)
+
+
+def test_scn_debt_06_three_labelled_groups(setup, monkeypatch):
+    promise = {**COMMITMENT, "id": 20, "type": "promise", "title": "Mandar o contrato",
+               "source_label": "Ana", "event_date": "2026-10-11"}
+    dated = {**COMMITMENT, "id": 21, "type": "event", "title": "Vôlei", "event_date": "2026-10-13"}
+    setup(commitments=[dated, promise])
+    _debts_on(monkeypatch, [{"jid": "55@s.whatsapp.net", "name": "Beto", "age_h": 5.0, "preview": "Topa?"}])
+    b = briefing.assemble_briefing(now=NOW)
+    wa = b.sections[3]
+    assert [i.group for i in wa.items] == [
+        "Esperando sua resposta", "Suas promessas", "Combinados"]
+    assert [i.ref for i in wa.items] == [
+        {"kind": "reply_debt", "id": "55@s.whatsapp.net"},
+        {"kind": "commitment", "id": 20},
+        {"kind": "commitment", "id": 21},
+    ]
+    assert [i.n for i in b.items] == list(range(1, 9))
+    assert "há 5 h" in wa.items[0].text and "Topa?" in wa.items[0].text
+    assert "Ana" in wa.items[1].text and "(11/10)" in wa.items[1].text
+    for label in ("Esperando sua resposta:", "Suas promessas:", "Combinados:"):
+        assert label in b.text
+    assert b.text.index("Esperando") < b.text.index("Suas promessas") < b.text.index("Combinados:")
+
+
+def test_groups_cap_three_with_plus_n_per_group(setup, monkeypatch):
+    setup(commitments=[{**COMMITMENT, "id": i, "type": "event"} for i in range(5)])
+    _debts_on(monkeypatch, [])
+    b = briefing.assemble_briefing(now=NOW)
+    wa = b.sections[3]
+    assert len(wa.items) == 3 and wa.group_more == {"Combinados": 2}
+    assert "+2" in b.text
+
+
+def test_flag_off_has_no_groups(setup):
+    setup(commitments=[{**COMMITMENT, "type": "promise"}])
+    b = briefing.assemble_briefing(now=NOW)
+    assert all(i.group == "" for i in b.items)
+    assert "Combinados:" not in b.text
+
+
+def test_resolve_reply_debt_kind(monkeypatch):
+    rows = _snap({"1": "reply_debt:55@s.whatsapp.net", "2": "commitment:3"})
+    assert _resolve(monkeypatch, rows, [1], kind="reply_debt") == (["55@s.whatsapp.net"], [])
+    ids, errs = _resolve(monkeypatch, rows, [2], kind="reply_debt")
+    assert ids == [] and "não é" in errs[0]

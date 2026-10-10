@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 from services.evolution_client import send_whatsapp_text
+
+logger = logging.getLogger(__name__)
 
 _CTYPE_LABEL = {"event": "evento", "task": "tarefa"}
 
@@ -25,6 +28,11 @@ def notify_commitment_captured(
 
     Silently no-ops when control JIDs are not configured or send fails.
     """
+    from services.whatsapp_processor import reply_debts_enabled
+
+    if reply_debts_enabled():
+        logger.info("capture notification skipped (reply debts on): #%s", commitment_id)
+        return
     jids = _control_jids()
     if not jids:
         return
