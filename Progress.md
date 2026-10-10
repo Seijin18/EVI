@@ -22,11 +22,11 @@
 | Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Done** (12 Ago 2026) |
 | Contrato de tools + cobertura do caminho crítico + import vCard | **Done** (12 Ago 2026) |
 | Verificação realista (simulação + validação em uso real) | **Done** (10 Out 2026) — V1 + V2 |
-| Assistente proativo (briefing, lembretes, voz) | **Em andamento** — Etapas 18–21 Done (10 Out 2026), 22 ativa |
+| Assistente proativo (briefing, lembretes, voz) | **Em andamento** — Etapas 18–22 Done (10 Out 2026), 23 ativa |
 
-**Foco atual:** #44 `evi-perceived-reliability` (Etapa 22). Arquivados em 2026-10-10: #45
+**Foco atual:** #37 `evi-prompt-injection-model` (Etapa 23). Arquivados em 2026-10-10: #45
 `evi-sim-harness` (V1), #46 `evi-usage-validation` (V2), #40 `evi-morning-briefing` (18),
-#41 `evi-reminders` (19), #42 `evi-reply-debts` (20), #43 `evi-voice-input` (21). Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
+#41 `evi-reminders` (19), #42 `evi-reply-debts` (20), #43 `evi-voice-input` (21), #44 `evi-perceived-reliability` (22). Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
 porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de produto de 2026-10-10** ([`docs/ux-review-2026-10.md`](docs/ux-review-2026-10.md)).
@@ -99,6 +99,7 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 | Lembretes que disparam (loop in-process) | `test_reminders.py`, `test_reminder_loop.py` · SIM-REM-01..05 · `proactive` |
 | Pendências de resposta, promessas e combinados com data | `test_reply_debts.py`, `test_promises.py` · SIM-DEBT-01..06 · `messaging-whatsapp` |
 | Mensagens de voz (Telegram + controle WhatsApp) | `test_transcribe.py` · SIM-VOICE-01..05 · `agent-api` |
+| Confiabilidade percebida (watchdog, `/ajuda`, ack, OAuth no turno) | `test_watchdog.py`, `test_slow_ack.py` · SIM-REL-02..04 · `agent-api` |
 | Contrato estruturado de tools (`ToolResult`) | `test_tool_result.py` · SCN-TOOL-01/02 |
 | Import de agenda vCard | `test_vcard_import.py` · `data-long-memory` |
 
@@ -140,14 +141,15 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **14.1** | **Container smoke no CI** | **Done** | Job `container`, `evi-test container`, guarda de isolamento de volumes |
 | **14.2** | **Cobertura do caminho crítico** | **Done** | poller, evolution_client, db (PG real), webhook Evolution — +62 testes |
 | **17** | **Import de agenda (vCard)** | **Done** | Nomes da agenda por `.vcf`; casamento tolerante ao nono dígito |
-| **V1** | **Simulação do sistema montado** | **Ativo** | `evi-sim-harness` — fakes nas bordas, código real no meio, LLM real, cenários de uso real |
-| V2 | Validação em uso real | **—** | `evi-usage-validation` (queued) |
-| 18 | Briefing matinal | **—** | `evi-morning-briefing` (queued) |
-| 19 | Lembretes | **—** | `evi-reminders` |
-| 20 | Pendências de resposta | **—** | `evi-reply-debts` |
-| 21 | Voz | **—** | `evi-voice-input` |
-| 22 | Confiabilidade percebida | **—** | `evi-perceived-reliability` |
-| 23–24 | Injeção (restante), background (restante) | **—** | Ver `openspec/specs/roadmap.md` |
+| **V1** | **Simulação do sistema montado** | **Done** | `evi-sim-harness` — fakes nas bordas, código real no meio, LLM real, record/replay na CI |
+| **V2** | **Validação em uso real** | **Done** | `evi-usage-validation` — `turn_log`, `/bom` `/ruim`, relatório semanal, sonda, `promote` |
+| **18** | **Briefing matinal** | **Done** | `evi-morning-briefing` — determinístico, claim diário, `wrap_external` |
+| **19** | **Lembretes** | **Done** | `evi-reminders` — loop in-process, recorrência, adiar/feito |
+| **20** | **Pendências de resposta** | **Done** | `evi-reply-debts` — esperando resposta, promessas, combinados com data |
+| **21** | **Voz** | **Done** | `evi-voice-input` — Telegram + controle WhatsApp via Gemini |
+| **22** | **Confiabilidade percebida** | **Done** | `evi-perceived-reliability` — watchdog, `/ajuda`, ack, OAuth no turno |
+| 23 | Injeção (restante) | **Ativo** | `evi-prompt-injection-model` — confirmação de exclusão, allowlist por origem, chat do Telegram restrito |
+| 24 | Background (restante) | **—** | Condicional: só se o ack do #44 não bastar |
 
 ### Série Runtime v3 (17 Jun 2026) — Done
 

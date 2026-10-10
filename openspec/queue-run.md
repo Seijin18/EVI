@@ -1,9 +1,8 @@
 # Execução da fila — iniciada 2026-10-10
 ## Estado
-- Change atual: evi-perceived-reliability (fase: implementar) — task 1.1
-- Proposta escrita pela fila em `openspec/queued/`: evi-prompt-injection-model (validar ao ativar)
+- Change atual: evi-prompt-injection-model (fase: implementar) — task 1.0
 - Ordem: evi-sim-harness → evi-usage-validation → evi-morning-briefing → evi-reminders → evi-reply-debts → evi-voice-input → evi-perceived-reliability → evi-prompt-injection-model
-- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e), evi-morning-briefing (arquivado 2026-10-10, commits f206ab3..681c870), evi-reminders (arquivado 2026-10-10, commits 23382d8..d788182), evi-reply-debts (arquivado 2026-10-10, commits 1030862..5468808), evi-voice-input (arquivado 2026-10-10, commits 410386c..6acd0c2)
+- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e), evi-morning-briefing (arquivado 2026-10-10, commits f206ab3..681c870), evi-reminders (arquivado 2026-10-10, commits 23382d8..d788182), evi-reply-debts (arquivado 2026-10-10, commits 1030862..5468808), evi-voice-input (arquivado 2026-10-10, commits 410386c..6acd0c2), evi-perceived-reliability (arquivado 2026-10-10, commits 86ef936..ARCH)
 - Pulados: evi-background-execution (#38) — condicional: "abrir só se o ack imediato do #44 não bastar na prática"; exige dados de uso real
 ## Decisões tomadas sem o usuário
 - 2026-10-10 fila: agentes de projeto (`.claude/agents/`) não estão registrados nesta sessão; usados via `general-purpose` com `model` equivalente (haiku/sonnet/opus) e instrução de seguir o arquivo do agente.
@@ -43,5 +42,7 @@
 - [ ] Flake da simulação: `getUpdates error: TimeoutError` no poller dentro do evi-sim (SIM-VOICE-03 1/3, VOICE-01 ~60 s). O fake usa relógio monotônico; investigar o servidor de fakes (threads) — `agent/testing/sim/fake_telegram.py`
 - [ ] Ligar voz: `EVI_VOICE_ENABLED=true` no `.env` e recriar `agent-api`
 - [ ] Avaliar em 2026-10-17 a validação da voz (≥ 3 turnos por voz; sucesso ≥ texto − 10 pontos; nenhuma voz sem resposta)
+- [ ] Instalar o watchdog (timer de usuário, sem sudo) — `docs/operations.md`
+- [ ] Ligar o ack de tool lenta: `EVI_SLOW_ACK_SEC=5` no `.env`
 ## Bloqueios
 - (resolvido 2026-10-10 — usuário ampliou o orçamento em R$ 10) evi-reminders 3.1: cota diária do Gemini esgotada (429 RESOURCE_EXHAUSTED) com a chave de produção compartilhada. SIM-REM-01..04 passaram 3/3; SIM-REM-05 falhou só por 429. Faltam, quando a cota voltar: `./scripts/evi-sim up` → `./scripts/evi-sim run --id SIM-REM-05 --repeat 3 --llm live` → `--tag critical --llm record` (cassettes estão defasados pelas tools novas; o job `sim-replay` da CI fica vermelho até regravar) → `--tag critical --llm replay` → `--tag critical,adversarial,briefing --repeat 3 --llm live` → task 3.2 (arquivar). Tentado: esperar e repetir SIM-REM-05 uma vez (0/3, 429).

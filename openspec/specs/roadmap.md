@@ -173,9 +173,10 @@ era rodar localmente na GTX 1060 3 GB. Via Gemini não usa GPU e cabe no free ti
 Ressalva: no free tier o Google pode usar o conteúdo para treino — aceitável para
 comandos ditados ao próprio assistente, por isso o limite a áudio do usuário.
 
-### Etapa 22 — Confiabilidade percebida — `evi-perceived-reliability` — **ativo**
+### Etapa 22 — Confiabilidade percebida — `evi-perceived-reliability` — **Done** (2026-10-10)
 
-Change: [`evi-perceived-reliability`](../changes/evi-perceived-reliability/proposal.md).
+Change: [`evi-perceived-reliability`](../changes/archive/2026-10-10-evi-perceived-reliability/proposal.md).
+As-built: watchdog externo (timer de usuário), `/ajuda` sem LLM, ack de tool lenta (`EVI_SLOW_ACK_SEC`), aviso de OAuth no turno com o controle diário da sonda.
 
 Itens pequenos, independentes, que mudam a confiança no dia a dia.
 
@@ -186,7 +187,9 @@ Itens pequenos, independentes, que mudam a confiança no dia a dia.
 | Ack imediato | Tool que passa de ~5 s manda "fazendo…" antes do resultado (núcleo do antigo #38) |
 | OAuth expirado | Detectar `reason=oauth` e avisar uma vez por dia com o link de reconexão do Windmill |
 
-### Etapa 23 — Modelo de ameaça de injeção (restante) — `evi-prompt-injection-model`
+### Etapa 23 — Modelo de ameaça de injeção (restante) — `evi-prompt-injection-model` — **ativo**
+
+Change: [`evi-prompt-injection-model`](../changes/evi-prompt-injection-model/proposal.md).
 
 A parte mínima (delimitação) entra na Etapa 18. Fica aqui:
 - Confirmação obrigatória antes de tool destrutiva (`delete_emails_by_query` com

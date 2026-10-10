@@ -21,8 +21,8 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 41 | `evi-reminders` | 19 | **Done** (2026-10-10) | Lembretes com horário e recorrência disparados pelo próprio EVI (loop in-process); adiar/feito por resposta |
 | 42 | `evi-reply-debts` | 20 | **Done** (2026-10-10) | Troca "compromissos" (0/37 confirmados) por: esperando sua resposta (determinístico), promessas suas, combinados com data |
 | 43 | `evi-voice-input` | 21 | **Done** (2026-10-10) | Áudio do usuário no Telegram/controle WhatsApp → transcrição via Gemini |
-| 44 | `evi-perceived-reliability` | 22 | **Ativo** | Watchdog externo, `/ajuda`, ack imediato em tool lenta, aviso de OAuth expirado |
-| 37 | `evi-prompt-injection-model` | 23 | Fila (reduzido) | Confirmação de tool destrutiva, allowlist por origem do turno, corpus adversarial |
+| 44 | `evi-perceived-reliability` | 22 | **Done** (2026-10-10) | Watchdog externo, `/ajuda`, ack imediato em tool lenta, aviso de OAuth expirado |
+| 37 | `evi-prompt-injection-model` | 23 | **Ativo** | Confirmação de tool destrutiva, allowlist por origem do turno, corpus adversarial |
 | 38 | `evi-background-execution` | 24 | Fila (reduzido) | Tarefas longas desacopladas; abrir só se o ack do #44 não bastar |
 
 **Deferido / cortado:** ver [`specs/roadmap.md`](specs/roadmap.md).
