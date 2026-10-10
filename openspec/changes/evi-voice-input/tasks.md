@@ -1,6 +1,6 @@
 ## 1. Transcrição
 
-- [ ] 1.1 `services/transcribe.py`: chamada Gemini com áudio (sem tools), limites, erros legíveis, provider `ollama` recusado, flag
+- [x] 1.1 `services/transcribe.py`: chamada Gemini com áudio (sem tools), limites, erros legíveis, provider `ollama` recusado, flag
   - SCN-VOICE-03, SCN-VOICE-04
   - Files: `agent/services/transcribe.py`, `tests/unit/test_transcribe.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_transcribe.py -q`
