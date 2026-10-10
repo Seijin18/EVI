@@ -1,5 +1,11 @@
 ## 1. Garantias no código
 
+- [ ] 1.0 Telegram só aceita o chat do usuário: mensagens de texto de qualquer chat diferente de `TELEGRAM_CHAT_ID` (ou da lista `TELEGRAM_ALLOWED_CHAT_IDS`) são ignoradas sem resposta e registradas em log (hoje só a voz verifica o chat)
+  - SCN-INJ-00
+  - Files: `agent/services/telegram_handler.py`, `tests/unit/test_telegram_handler.py`, `.env.example`
+  - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_handler.py -q` — chat desconhecido não chega ao grafo; sem `TELEGRAM_CHAT_ID` configurado, comportamento atual (aviso no log)
+
+
 - [ ] 1.1 Exclusão em dois passos com token em snapshot, turno posterior e confirmação do texto do usuário; `max_messages` ≤ 50
   - SCN-INJ-01, SCN-INJ-02
   - Files: `agent/tools/email_tool.py`, `agent/services/write_guard.py`, `agent/services/turn_log.py`, `tests/unit/test_email_delete_confirm.py`

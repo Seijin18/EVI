@@ -9,6 +9,9 @@ precisam estar no código. Roadmap: Etapa 23 (reduzido).
 
 ## What Changes
 
+- **Telegram restrito ao chat do usuário** (achado de 2026-10-10): hoje qualquer pessoa
+  que encontrar o bot conversa com o EVI, com acesso às tools de e-mail e agenda.
+
 - **Confirmação em dois passos para exclusão**: `delete_emails*` primeiro devolve uma
   prévia (quantos, assuntos delimitados) e um token; a exclusão só ocorre num turno
   **seguinte** do mesmo usuário com confirmação explícita ("sim", "confirma", "pode

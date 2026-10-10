@@ -23,6 +23,7 @@
 - 2026-10-10 evi-reminders (revisão): "feito" num lembrete recorrente confirma só a ocorrência (só `cancel` para a série); "adia" num recorrente adia só aquela ocorrência (`snooze_until`), sem mover a série; `create_reminder` só por pedido explícito do usuário, nunca de conteúdo externo; turnos de teste não criam lembretes.
 - 2026-10-10 custo (pedido do usuário): otimizações antes de retomar — `EVI_GEMINI_THINKING_BUDGET` (0 só na simulação; produção inalterada até validar), tokens/custo por chamada no relatório da sim e no `turn_log`, prompt com a parte estática primeiro (cache implícito do Gemini). Processo da fila: 3 repetições só em `critical`/`adversarial`, regressão com 1, cassettes gravados uma vez no fim de cada change, teto ~150 chamadas por change. Orçamento: +R$ 10.
 - 2026-10-10 evi-reply-debts: tools de pendência funcionam com a flag desligada (só leitura/reconhecimento); timeout do LLM 30 s × 2 tentativas (antes 60 s × até 6).
+- 2026-10-10 achado de segurança (evi-voice-input 2.1): mensagens de texto do Telegram de QUALQUER chat chegam ao agente (só a voz verifica `TELEGRAM_CHAT_ID`). Correção incluída como task 1.0 do `evi-prompt-injection-model`.
 ## Pendências do usuário (não bloqueantes)
 - [ ] Criar projeto Gemini separado e definir `EVI_SIM_GEMINI_API_KEY` no `.env` — a simulação hoje consome a cota de produção — `.env`
 - [ ] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf`
