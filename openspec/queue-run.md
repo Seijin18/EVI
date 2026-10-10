@@ -1,8 +1,9 @@
 # Execução da fila — iniciada 2026-10-10
 ## Estado
-- Change atual: evi-reply-debts (fase: implementar) — task 1.1
+- Change atual: evi-voice-input (fase: implementar) — task 1.1
+- Propostas escritas pela fila em `openspec/queued/`: evi-perceived-reliability, evi-prompt-injection-model (validar ao ativar)
 - Ordem: evi-sim-harness → evi-usage-validation → evi-morning-briefing → evi-reminders → evi-reply-debts → evi-voice-input → evi-perceived-reliability → evi-prompt-injection-model
-- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e), evi-morning-briefing (arquivado 2026-10-10, commits f206ab3..681c870), evi-reminders (arquivado 2026-10-10, commits 23382d8..d788182)
+- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e), evi-morning-briefing (arquivado 2026-10-10, commits f206ab3..681c870), evi-reminders (arquivado 2026-10-10, commits 23382d8..d788182), evi-reply-debts (arquivado 2026-10-10, commits 1030862..HEAD-archive)
 - Pulados: evi-background-execution (#38) — condicional: "abrir só se o ack imediato do #44 não bastar na prática"; exige dados de uso real
 ## Decisões tomadas sem o usuário
 - 2026-10-10 fila: agentes de projeto (`.claude/agents/`) não estão registrados nesta sessão; usados via `general-purpose` com `model` equivalente (haiku/sonnet/opus) e instrução de seguir o arquivo do agente.
@@ -21,6 +22,7 @@
 - 2026-10-10 evi-reminders (proposta escrita pela fila): presets de recorrência (sem RRULE livre); flag `EVI_REMINDERS_ENABLED` default `false`; tools `snooze`/`complete` além das 3 do roadmap (necessárias para "adia/feito"); limiar "atrasado" = 5 min; `python-dateutil` como dependência nova pinada.
 - 2026-10-10 evi-reminders (revisão): "feito" num lembrete recorrente confirma só a ocorrência (só `cancel` para a série); "adia" num recorrente adia só aquela ocorrência (`snooze_until`), sem mover a série; `create_reminder` só por pedido explícito do usuário, nunca de conteúdo externo; turnos de teste não criam lembretes.
 - 2026-10-10 custo (pedido do usuário): otimizações antes de retomar — `EVI_GEMINI_THINKING_BUDGET` (0 só na simulação; produção inalterada até validar), tokens/custo por chamada no relatório da sim e no `turn_log`, prompt com a parte estática primeiro (cache implícito do Gemini). Processo da fila: 3 repetições só em `critical`/`adversarial`, regressão com 1, cassettes gravados uma vez no fim de cada change, teto ~150 chamadas por change. Orçamento: +R$ 10.
+- 2026-10-10 evi-reply-debts: tools de pendência funcionam com a flag desligada (só leitura/reconhecimento); timeout do LLM 30 s × 2 tentativas (antes 60 s × até 6).
 ## Pendências do usuário (não bloqueantes)
 - [ ] Criar projeto Gemini separado e definir `EVI_SIM_GEMINI_API_KEY` no `.env` — a simulação hoje consome a cota de produção — `.env`
 - [ ] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf`
@@ -35,5 +37,7 @@
 - [ ] Ligar lembretes: `EVI_REMINDERS_ENABLED=true` no `.env` e recriar `agent-api`
 - [ ] Avaliar em 2026-10-17 a validação dos lembretes (desvio < 60 s em ≥ 95%, nenhum vencido sem envio, ≥ 3 lembretes criados) — relatório semanal
 - [ ] Decidir se a produção usa `EVI_GEMINI_THINKING_BUDGET=0` (a simulação inteira passou com 0; custo cai ~50%) — `.env`
+- [ ] Ligar pendências de resposta: `EVI_REPLY_DEBTS_ENABLED=true` (para de mandar notificação avulsa de compromisso; o briefing passa a ter 3 grupos)
+- [ ] Avaliar em 2026-10-24 a validação do evi-reply-debts (ação ≥ 30% em "esperando resposta"; se promessas+combinados < 30%, desligar `EVI_WHATSAPP_LLM_EXTRACT`) — relatório semanal
 ## Bloqueios
 - (resolvido 2026-10-10 — usuário ampliou o orçamento em R$ 10) evi-reminders 3.1: cota diária do Gemini esgotada (429 RESOURCE_EXHAUSTED) com a chave de produção compartilhada. SIM-REM-01..04 passaram 3/3; SIM-REM-05 falhou só por 429. Faltam, quando a cota voltar: `./scripts/evi-sim up` → `./scripts/evi-sim run --id SIM-REM-05 --repeat 3 --llm live` → `--tag critical --llm record` (cassettes estão defasados pelas tools novas; o job `sim-replay` da CI fica vermelho até regravar) → `--tag critical --llm replay` → `--tag critical,adversarial,briefing --repeat 3 --llm live` → task 3.2 (arquivar). Tentado: esperar e repetir SIM-REM-05 uma vez (0/3, 429).

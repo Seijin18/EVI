@@ -126,9 +126,10 @@ EVI só cria evento no Google Calendar e depende da notificação de outro app.
 **Dependência.** Etapa 18 (padrão de entrega + snapshot + `wrap_external`).
 **Pronto quando:** desvio de disparo < 60 s em 95% dos casos (medido no log).
 
-### Etapa 20 — Pendências de resposta e promessas — `evi-reply-debts` — **ativo**
+### Etapa 20 — Pendências de resposta e promessas — `evi-reply-debts` — **Done** (2026-10-10)
 
-Change: [`evi-reply-debts`](../changes/evi-reply-debts/proposal.md).
+Change: [`evi-reply-debts`](../changes/archive/2026-10-10-evi-reply-debts/proposal.md).
+As-built: estado por conversa direta, pendências determinísticas, promessas por padrão, combinados só com data, briefing em 3 grupos, fim da notificação avulsa. Ligar com `EVI_REPLY_DEBTS_ENABLED=true`.
 
 **Por quê.** A extração de "compromissos" teve 0 confirmações em 37 itens. Os
 itens chegam sem data ("Jantar"), sem sentido ("baixeii pra te mandar") ou sem
@@ -152,7 +153,9 @@ após duas semanas, desligar a extração por LLM e manter só (a).
 
 **Dependência.** Etapa 18.
 
-### Etapa 21 — Mensagens de voz — `evi-voice-input`
+### Etapa 21 — Mensagens de voz — `evi-voice-input` — **ativo**
+
+Change: [`evi-voice-input`](../changes/evi-voice-input/proposal.md).
 
 **Por quê.** No Brasil, áudio é o modo padrão no WhatsApp; Zapia e Luzia nasceram
 transcrevendo áudio. Hoje o EVI ignora `audioMessage`/voice.
