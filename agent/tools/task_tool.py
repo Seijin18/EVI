@@ -31,6 +31,7 @@ def create_task_result(
         raw,
         action=f"criar a tarefa «{title}»",
         resource_env="WINDMILL_GTASKS_RESOURCE",
+        tool="create_task",
     )
     if not out.ok:
         return out

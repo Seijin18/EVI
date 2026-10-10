@@ -5,7 +5,7 @@
   - Files: `agent/db.py`, `tests/unit/test_db.py`
   - Verify: `DATABASE_URL=postgresql://postgres:t@127.0.0.1:55432/postgres PYTHONPATH=agent python3 -m pytest tests/unit/test_db.py -q` com PG efêmero (`docker run --rm -d --name evi-unit-pg -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=t postgres:15-alpine`; sem `DATABASE_URL` o teste é pulado); migração idempotente
 
-- [ ] 1.2 Coletor por turno (`ContextVar`) alimentado por `parse_windmill_result` + gravação no handler de `/chat` em `soft_fail`
+- [x] 1.2 Coletor por turno (`ContextVar`) alimentado por `parse_windmill_result` + gravação no handler de `/chat` em `soft_fail`
   - SCN-USE-01
   - Files: `agent/services/turn_log.py`, `agent/services/tool_result.py`, `agent/main.py`, `tests/unit/test_turn_log.py`, `tests/sim/scenarios/usage/SIM-USE-01.yaml`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_turn_log.py tests/unit/test_tool_result.py tests/unit/test_main_endpoints.py -q` — tool Windmill que falha grava `ok=false, reason`; erro no log não derruba o turno; `./scripts/evi-sim run --id SIM-USE-01 --repeat 3 --llm live` (Telegram + controle WhatsApp gravam `turn_log`; OAuth expirado em `schedule_event` → `reason=oauth`; `turn_log` entra na allowlist de `postgres:` do schema)

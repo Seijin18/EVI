@@ -82,13 +82,36 @@ def parse_windmill_result(
     action: str,
     resource_env: str = "",
     fallback_message: str = "",
+    tool: str = "",
 ) -> ToolResult:
     """Classify a Windmill response into a structured outcome. Never raises.
 
     `action` is the pt-BR verb used in error prose ("agendar 'X'", "listar
     tarefas"). `resource_env` enables the OAuth hint when the failure looks like
-    an expired or missing Windmill resource.
+    an expired or missing Windmill resource. `tool` names the calling LangChain
+    tool so the outcome can be attributed in the per-turn log (turn_log).
     """
+    result = _classify_windmill_result(
+        raw, action=action, resource_env=resource_env, fallback_message=fallback_message
+    )
+    if tool:
+        try:
+            from services.turn_log import record_tool_outcome
+
+            record_tool_outcome(tool, result.ok, result.reason)
+        except Exception:  # observability must never change a tool outcome
+            pass
+    return result
+
+
+def _classify_windmill_result(
+    raw: str,
+    *,
+    action: str,
+    resource_env: str = "",
+    fallback_message: str = "",
+) -> ToolResult:
+    """The classification itself; see `parse_windmill_result`."""
     from services.response_format import _parse_json_blob, format_windmill_oauth_error
 
     text = (raw or "").strip()

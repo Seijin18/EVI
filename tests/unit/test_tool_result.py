@@ -173,3 +173,19 @@ def test_error_detail_mentioning_criada_is_still_a_failure():
     out = parse_windmill_result(raw, action="criar tarefa")
     assert out.ok is False, "an error whose detail says 'criada' must not read as success"
     assert "criad" in out.message.lower()  # the prose still contains the trap word
+
+
+def test_tool_name_reports_outcome_to_the_turn_collector():
+    from services import turn_log
+
+    collector, token = turn_log.start_turn()
+    try:
+        parse_windmill_result("Missing WINDMILL_WEBHOOK_CALENDAR", action="agendar", tool="schedule_event")
+        parse_windmill_result('{"status":"ok"}', action="listar", tool="list_calendars")
+        parse_windmill_result('{"status":"ok"}', action="sem nome")  # no tool: not recorded
+    finally:
+        turn_log.end_turn(token)
+    assert [(w["name"], w["ok"], w["reason"]) for w in collector._windmill] == [
+        ("schedule_event", False, "not_configured"),
+        ("list_calendars", True, None),
+    ]

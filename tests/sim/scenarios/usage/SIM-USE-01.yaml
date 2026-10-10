@@ -1,0 +1,22 @@
+id: SIM-USE-01
+title: Uso - cada turno é gravado em turn_log, por canal (SCN-USE-01)
+description: >
+  O agendamento falha com OAuth expirado; o turno ainda é gravado em turn_log
+  (canal telegram) e o turno do canal de controle do WhatsApp em outra linha.
+  O campo tools (reason=oauth) é verificado em tests/unit/test_turn_log.py -
+  `where` só compara colunas por igualdade, não operadores JSON.
+tags: [usage]
+source: synthetic
+clock: D0 09:00
+steps:
+  - fault: {windmill: {schedule_event: oauth_expired}}
+  - telegram: "Marque dentista amanhã às 15h"
+    expect:
+      reply_within_s: 90
+      postgres:
+        - {table: turn_log, where: {channel: telegram}, count: 1}
+  - whatsapp_control: "Oi"
+    expect:
+      reply_within_s: 90
+      postgres:
+        - {table: turn_log, where: {channel: whatsapp_control}, count: 1}

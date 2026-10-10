@@ -21,14 +21,16 @@ def _gmail_resource() -> str:
     return gmail
 
 
-def _windmill_tool_result(raw: str, action: str, prose: str) -> ToolResult:
+def _windmill_tool_result(
+    raw: str, action: str, prose: str, tool: str = ""
+) -> ToolResult:
     """Classify structurally, render with the existing formatter.
 
     The prose is deliberately unchanged — only the success/failure decision moves
     off substring inspection.
     """
     out = parse_windmill_result(
-        raw, action=action, resource_env="WINDMILL_GMAIL_RESOURCE"
+        raw, action=action, resource_env="WINDMILL_GMAIL_RESOURCE", tool=tool
     )
     if not out.ok:
         return out
@@ -46,7 +48,9 @@ def summarize_inbox(max_messages: int = 10) -> str:
         "gmail": _gmail_resource(),
     }
     raw = get_integration().post("summarize_inbox", payload, timeout=180, wait_result=True)
-    return str(_windmill_tool_result(raw, "acessar o Gmail", format_inbox_result(raw)))
+    return str(_windmill_tool_result(
+            raw, "acessar o Gmail", format_inbox_result(raw), "summarize_inbox"
+        ))
 
 
 @tool
@@ -67,7 +71,10 @@ def delete_emails(message_ids: List[str]) -> str:
     raw = get_integration().post("delete_emails", payload, timeout=120, wait_result=True)
     return str(
         _windmill_tool_result(
-            raw, "apagar os emails", format_delete_emails_result(raw, count=len(ids))
+            raw,
+            "apagar os emails",
+            format_delete_emails_result(raw, count=len(ids)),
+            "delete_emails",
         )
     )
 
@@ -94,6 +101,9 @@ def delete_emails_by_query(q: str, max_messages: int = 25) -> str:
     )
     return str(
         _windmill_tool_result(
-            raw, "apagar os emails", format_delete_emails_by_query_result(raw)
+            raw,
+            "apagar os emails",
+            format_delete_emails_by_query_result(raw),
+            "delete_emails_by_query",
         )
     )

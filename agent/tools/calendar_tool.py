@@ -52,6 +52,7 @@ def schedule_event_result(
         raw,
         action=f"agendar '{title}'",
         resource_env="WINDMILL_GCAL_RESOURCE",
+        tool="schedule_event",
     )
     if not out.ok:
         return out
@@ -107,7 +108,10 @@ def list_calendar_events(
     payload = _calendar_payload(extra)
     raw = get_integration().post("list_events", payload, timeout=120, wait_result=True)
     out = parse_windmill_result(
-        raw, action="listar eventos", resource_env="WINDMILL_GCAL_RESOURCE"
+        raw,
+        action="listar eventos",
+        resource_env="WINDMILL_GCAL_RESOURCE",
+        tool="list_calendar_events",
     )
     if not out.ok:
         return str(out)
@@ -142,7 +146,10 @@ def list_calendars() -> str:
         "list_calendars", {"gcal": _gcal_resource()}, timeout=60, wait_result=True
     )
     out = parse_windmill_result(
-        raw, action="listar calendários", resource_env="WINDMILL_GCAL_RESOURCE"
+        raw,
+        action="listar calendários",
+        resource_env="WINDMILL_GCAL_RESOURCE",
+        tool="list_calendars",
     )
     if not out.ok:
         return str(out)

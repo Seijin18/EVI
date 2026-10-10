@@ -120,7 +120,7 @@ def test_chat_keeps_sessions_isolated():
     from services.session_memory import get_session_memory
 
     mock_graph = MagicMock()
-    mock_graph.invoke.side_effect = lambda state: {
+    mock_graph.invoke.side_effect = lambda state, config=None: {
         "messages": [AIMessage(content="ok")],
         "final_answer": "ok",
     }

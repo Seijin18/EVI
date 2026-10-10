@@ -165,7 +165,7 @@ def run_sessions() -> bool:
 
         _reset()
 
-        def _fake_invoke(state):
+        def _fake_invoke(state, config=None):
             # AgentState accumulates messages via operator.add, so a real graph
             # returns the input messages plus its reply. Echo that shape —
             # returning only the reply would drop the turn under test.
@@ -180,8 +180,9 @@ def run_sessions() -> bool:
             "services.session_context.persist_tool_snapshots"
         ), patch.dict(os.environ, {"DATABASE_URL": ""}, clear=False):
             client = TestClient(main.app)
-            client.post("/chat", json={"message": "sou A", "session_id": "http-A"})
-            client.post("/chat", json={"message": "sou B", "session_id": "http-B"})
+            for msg, sid in (("sou A", "http-A"), ("sou B", "http-B")):
+                r = client.post("/chat", json={"message": msg, "session_id": sid})
+                assert r.status_code == 200, f"/chat {sid}: {r.status_code} {r.text[:200]}"
             a_http = [
                 str(getattr(m, "content", m))
                 for m in main.get_session_memory("http-A").get_messages()

@@ -1,5 +1,6 @@
 # /home/marshibs/Projects/EVI/agent/main.py
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
@@ -98,7 +99,13 @@ def _compact_session(session_id: str) -> None:
 
 
 def _telegram_invoke_chat(message: str, session_id: str) -> Dict[str, Any]:
-    return chat(ChatRequest(message=message, session_id=session_id))
+    return _run_chat(ChatRequest(message=message, session_id=session_id), session_id, "telegram")
+
+
+def _whatsapp_control_invoke_chat(message: str, session_id: str) -> Dict[str, Any]:
+    return _run_chat(
+        ChatRequest(message=message, session_id=session_id), session_id, "whatsapp_control"
+    )
 
 
 @asynccontextmanager
@@ -217,18 +224,50 @@ def chat(
     x_session_id: Optional[str] = Header(default=None),
     _: None = Depends(verify_api_key),
 ):
+    session_id = request.session_id or x_session_id or app_state.default_session
+    return _run_chat(request, session_id, "api")
+
+
+def _run_chat(request: ChatRequest, session_id: str, channel: str) -> Dict[str, Any]:
+    """Single entry for every turn (HTTP, Telegram, WhatsApp control); `channel`
+    is only used to label the turn_log row."""
     if not app_state.graph:
         raise HTTPException(status_code=500, detail="Agent graph not initialized")
-
-    session_id = request.session_id or x_session_id or app_state.default_session
 
     from services.session_lane import session_lane
 
     with session_lane(session_id):
-        return _chat_impl(request, session_id)
+        return _chat_impl(request, session_id, channel)
 
 
-def _chat_impl(request: ChatRequest, session_id: str) -> Dict[str, Any]:
+def _chat_impl(request: ChatRequest, session_id: str, channel: str = "api") -> Dict[str, Any]:
+    from services.turn_log import end_turn, record_turn, start_turn
+
+    collector, token = start_turn()
+    started = time.monotonic()
+    reply: Optional[str] = None
+    error: Optional[str] = None
+    try:
+        result = _chat_turn(request, session_id, collector)
+        reply = result.get("response")
+        return result
+    except Exception as exc:
+        error = str(getattr(exc, "detail", None) or exc or type(exc).__name__)[:500]
+        raise
+    finally:
+        end_turn(token)
+        record_turn(
+            collector,
+            session_id=session_id,
+            channel=channel,
+            user_text=request.message,
+            reply_text=reply,
+            latency_ms=int((time.monotonic() - started) * 1000),
+            error=error,
+        )
+
+
+def _chat_turn(request: ChatRequest, session_id: str, collector) -> Dict[str, Any]:
     _hydrate_memory(session_id)
 
     from services.context_assembly import build_context
@@ -254,7 +293,7 @@ def _chat_impl(request: ChatRequest, session_id: str) -> Dict[str, Any]:
     }
 
     try:
-        result = app_state.graph.invoke(initial_state)
+        result = app_state.graph.invoke(initial_state, config={"callbacks": [collector]})
         output_messages = result.get("messages", [])
         final_answer = result.get("final_answer", "")
 
@@ -421,7 +460,7 @@ def evolution_webhook(
             result = process_whatsapp_control_message(
                 jid=msg.sender,
                 text=msg.text,
-                invoke_chat=_telegram_invoke_chat,
+                invoke_chat=_whatsapp_control_invoke_chat,
                 reset_session=_reset_session,
                 compact_session=_compact_session,
             )
