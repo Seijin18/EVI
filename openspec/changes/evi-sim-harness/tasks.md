@@ -1,6 +1,6 @@
 ## 1. Costuras e isolamento
 
-- [ ] 1.1 `TELEGRAM_API_BASE` (default `https://api.telegram.org`) no envio e no poller
+- [x] 1.1 `TELEGRAM_API_BASE` (default `https://api.telegram.org`) no envio e no poller
   - SCN-SIM-02
   - Files: `agent/services/telegram_notify.py`, `agent/services/telegram_poller.py`, `tests/unit/test_telegram_poller.py`, `.env.example`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_poller.py tests/unit/test_send_result.py -q` — sem a env, URL idêntica à atual

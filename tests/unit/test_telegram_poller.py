@@ -207,3 +207,37 @@ def test_start_poller_spawns_a_daemon_thread(monkeypatch):
         tp.start_poller(MagicMock())
     thread.assert_called_once()
     assert thread.call_args.kwargs.get("daemon") is True
+
+
+# --- TELEGRAM_API_BASE (SCN-SIM-02) -----------------------------------------
+
+
+def test_api_base_default_url_is_unchanged(monkeypatch):
+    monkeypatch.delenv("TELEGRAM_API_BASE", raising=False)
+    calls = _urlopen(monkeypatch, [{"ok": True, "result": []}])
+    tp._api_get("TOK", "getUpdates", {"offset": 5})
+    assert calls["urls"][0] == "https://api.telegram.org/botTOK/getUpdates?offset=5"
+
+
+def test_api_base_override_used_by_getupdates_and_send(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_API_BASE", "http://fakes:18080/")
+    calls = _urlopen(monkeypatch, [{"ok": True, "result": []}])
+    tp._api_get("TOK", "getUpdates", {"offset": 5})
+    assert calls["urls"][0] == "http://fakes:18080/botTOK/getUpdates?offset=5"
+
+    from services import telegram_notify as tn
+
+    sent = {}
+
+    def fake_post(req, **kw):
+        sent["url"] = req.full_url
+        return "ok"
+
+    monkeypatch.setattr(tn, "post_with_retry", fake_post)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "TOK")
+    tn.send_telegram_message("hi", chat_id=1)
+    assert sent["url"] == "http://fakes:18080/botTOK/sendMessage"
+
+    monkeypatch.delenv("TELEGRAM_API_BASE")
+    tn.send_telegram_message("hi", chat_id=1)
+    assert sent["url"] == "https://api.telegram.org/botTOK/sendMessage"

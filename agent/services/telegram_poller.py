@@ -13,6 +13,7 @@ import urllib.request
 from typing import Any, Callable, Dict, List, Optional
 
 from services.telegram_handler import ChatInvoke, process_telegram_update
+from services.telegram_notify import telegram_api_base
 
 logger = logging.getLogger("evi.telegram_poller")
 
@@ -22,7 +23,7 @@ _thread: Optional[threading.Thread] = None
 
 def _api_get(token: str, method: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     qs = urllib.parse.urlencode({k: v for k, v in (params or {}).items() if v is not None})
-    url = f"https://api.telegram.org/bot{token}/{method}"
+    url = f"{telegram_api_base()}/bot{token}/{method}"
     if qs:
         url = f"{url}?{qs}"
     req = urllib.request.Request(url, method="GET")

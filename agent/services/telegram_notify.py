@@ -14,6 +14,11 @@ from services.send_result import (
 )
 
 
+def telegram_api_base() -> str:
+    """Bot API origin; read at call time. Override only for simulation."""
+    return (os.getenv("TELEGRAM_API_BASE", "").strip() or "https://api.telegram.org").rstrip("/")
+
+
 def send_telegram_message(text: str, chat_id: str | int | None = None) -> SendResult:
     """Deliver a Telegram reply. Truthy on success; never raises.
 
@@ -29,7 +34,7 @@ def send_telegram_message(text: str, chat_id: str | int | None = None) -> SendRe
     if not (text or "").strip():
         return SendResult.fail(EMPTY_TEXT)
 
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    url = f"{telegram_api_base()}/bot{token}/sendMessage"
     body = json.dumps(
         {"chat_id": str(target), "text": text[:4000], "disable_web_page_preview": True}
     ).encode("utf-8")
