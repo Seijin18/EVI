@@ -146,3 +146,22 @@ def test_build_llm_gemini_sets_request_timeout():
             with patch.dict(os.environ, {"EVI_LLM_TIMEOUT_SEC": "25"}):
                 llm_mod.build_llm()
             assert fake_module.ChatGoogleGenerativeAI.call_args.kwargs["timeout"] == 25.0
+
+
+def test_build_llm_gemini_thinking_budget_env():
+    """EVI_GEMINI_THINKING_BUDGET: unset -> not passed; int >= 0 -> passed; invalid -> ignored."""
+    fake_module = MagicMock()
+    with patch.dict("sys.modules", {"langchain_google_genai": fake_module}):
+        import llm as llm_mod
+        with patch.dict(os.environ, {"EVI_LLM_PROVIDER": "gemini"}):
+            os.environ.pop("EVI_GEMINI_THINKING_BUDGET", None)
+            llm_mod.build_llm()
+            assert "thinking_budget" not in fake_module.ChatGoogleGenerativeAI.call_args.kwargs
+            for raw, expected in (("0", 0), ("1024", 1024)):
+                with patch.dict(os.environ, {"EVI_GEMINI_THINKING_BUDGET": raw}):
+                    llm_mod.build_llm()
+                assert fake_module.ChatGoogleGenerativeAI.call_args.kwargs["thinking_budget"] == expected
+            for raw in ("", "  ", "abc", "-1", "1.5"):
+                with patch.dict(os.environ, {"EVI_GEMINI_THINKING_BUDGET": raw}):
+                    llm_mod.build_llm()
+                assert "thinking_budget" not in fake_module.ChatGoogleGenerativeAI.call_args.kwargs

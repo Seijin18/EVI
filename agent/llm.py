@@ -7,8 +7,11 @@ Select via environment variables:
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _llm_provider() -> str:
@@ -17,6 +20,25 @@ def _llm_provider() -> str:
 
 def _embed_provider() -> str:
     return os.getenv("EVI_EMBED_PROVIDER", "ollama").strip().lower()
+
+
+def _gemini_thinking_kwargs() -> dict[str, Any]:
+    """`thinking_budget` for Gemini 2.5 from EVI_GEMINI_THINKING_BUDGET (read at build time).
+
+    Unset/empty -> {} (provider default, today's behaviour). Integer >= 0 -> pass it
+    (0 disables thinking). Anything else is ignored with a warning.
+    """
+    raw = os.getenv("EVI_GEMINI_THINKING_BUDGET", "").strip()
+    if not raw:
+        return {}
+    try:
+        budget = int(raw)
+        if budget < 0:
+            raise ValueError(raw)
+    except ValueError:
+        logger.warning("EVI_GEMINI_THINKING_BUDGET=%r is not an integer >= 0; ignoring", raw)
+        return {}
+    return {"thinking_budget": budget}
 
 
 def build_ollama_llm(*, temperature: float | None = None, num_ctx: int | None = None):
@@ -84,6 +106,7 @@ def build_llm(
             # Without a timeout a hung request blocks the turn forever (seen in evi-sim);
             # on timeout the client retries.
             timeout=float(os.getenv("EVI_LLM_TIMEOUT_SEC", "60")),
+            **_gemini_thinking_kwargs(),
         )
 
     if provider == "openai":
