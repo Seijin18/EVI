@@ -1,0 +1,20 @@
+id: SIM-DEBT-05
+title: Reply debts - combinado sem data fica undated e sem notificação (SCN-DEBT-05, SCN-DEBT-07)
+tags: [reply-debts]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "Vamos jantar qualquer dia desses?", jid: "5511955550102@s.whatsapp.net", push_name: "Bruno Exemplo"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {status: pending}, count: 0}
+        - {table: pending_commitments, where: {status: undated}, count: 1}
+      outbound_to_third_parties: 0
+  - whatsapp_contact: {text: "Bora jogar vôlei amanhã às 19h?", jid: "5511955550103@s.whatsapp.net", push_name: "Carla Exemplo"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {status: pending}, count: 1}
+      outbound_to_third_parties: 0
+  - clock: D0 09:05
+    expect:
+      no_reply: true

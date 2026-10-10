@@ -1,0 +1,15 @@
+id: SIM-DEBT-01
+title: Reply debts - pedido sem resposta aparece em "Esperando sua resposta" (SCN-DEBT-01)
+tags: [reply-debts, critical, briefing]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "consegue me mandar o orçamento?", jid: "5511955550101@s.whatsapp.net", push_name: "Ana Exemplo"}
+    expect:
+      outbound_to_third_parties: 0
+  - clock: D0 16:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)esperando sua resposta.*Ana|Ana.*or[cç]amento"
+      outbound_to_third_parties: 0

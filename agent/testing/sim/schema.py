@@ -20,13 +20,14 @@ SOURCES = ("real-usage", "failure", "adversarial", "synthetic")
 STEP_TYPES = ("telegram", "whatsapp_control", "whatsapp_contact", "clock", "job", "fault")
 JOBS = ("heartbeat", "daily-summary", "briefing")
 # agent tables a scenario may inspect via expect.postgres (never free-form SQL)
-PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log", "reminders", "reminder_fires")
+PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log", "reminders", "reminder_fires", "wa_conversation_state")
 
 TOP_KEYS = {"id", "title", "tags", "source", "clock", "seed", "steps", "judge", "description"}
 STEP_KEYS = set(STEP_TYPES) | {"expect", "judge"}
 EXPECT_KEYS = {
     "reply_within_s",
     "reply_matches",
+    "reply_not_matches",
     "calendar",
     "tasks",
     "gmail",
@@ -152,7 +153,7 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
     if exp.get("no_reply"):
         if step_type not in ("telegram", "whatsapp_control", "clock"):
             raise _err(path, f"{where}.no_reply", "only valid on telegram/whatsapp_control/clock steps")
-        if "reply_within_s" in exp or "reply_matches" in exp:
+        if "reply_within_s" in exp or "reply_matches" in exp or "reply_not_matches" in exp:
             raise _err(path, where, "no_reply cannot be combined with reply_within_s/reply_matches")
     for key, allowed in (("calendar", CALENDAR_KEYS), ("tasks", TASKS_KEYS), ("gmail", GMAIL_KEYS)):
         if key in exp:
@@ -165,6 +166,11 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
             re.compile(exp["reply_matches"])
         except (re.error, TypeError) as exc:
             raise _err(path, f"{where}.reply_matches", f"invalid regex: {exc}") from exc
+    if "reply_not_matches" in exp:
+        try:
+            re.compile(exp["reply_not_matches"])
+        except (re.error, TypeError) as exc:
+            raise _err(path, f"{where}.reply_not_matches", f"invalid regex: {exc}") from exc
     for i, row in enumerate(exp.get("postgres") or []):
         _check_keys(row, {"table", "where", "count"}, path, f"{where}.postgres[{i}]")
         if row.get("table") not in PG_TABLES:
@@ -373,6 +379,12 @@ def eval_expect(exp: dict, obs: dict) -> list[str]:
         reply = obs.get("reply")
         if reply is None or not re.search(exp["reply_matches"], reply, re.S | re.I):
             fails.append(f"reply_matches: /{exp['reply_matches']}/ did not match reply {str(reply)[:120]!r}")
+    if "reply_not_matches" in exp:
+        reply = obs.get("reply")
+        if reply is None:
+            fails.append("reply_not_matches: no reply to check")
+        elif re.search(exp["reply_not_matches"], reply, re.S | re.I):
+            fails.append(f"reply_not_matches: /{exp['reply_not_matches']}/ matched reply {str(reply)[:120]!r}")
     if "calendar" in exp:
         fails += eval_calendar(exp["calendar"], google, base, tz)
     if "tasks" in exp:

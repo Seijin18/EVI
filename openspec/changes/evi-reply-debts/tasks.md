@@ -34,7 +34,7 @@
 
 ## 3. Simulação e fechamento
 
-- [ ] 3.1 Cenários `SIM-DEBT-*` (contato espera resposta → aparece no briefing; usuário responde pelo celular → some; "ok" não vira pendência; promessa "te mando amanhã" → item; combinado sem data não aparece; "respondido" pelo Telegram) + `sim.env` + `.env.example` + `docs/testing.md`; regravar cassettes
+- [x] 3.1 Cenários `SIM-DEBT-*` (contato espera resposta → aparece no briefing; usuário responde pelo celular → some; "ok" não vira pendência; promessa "te mando amanhã" → item; combinado sem data não aparece; "respondido" pelo Telegram) + `sim.env` + `.env.example` + `docs/testing.md`; regravar cassettes
   - SCN-DEBT-01..07
   - Files: `tests/sim/scenarios/reply-debts/`, `tests/sim/sim.env`, `.env.example`, `docs/testing.md`, `tests/sim/cassettes/`
   - Verify: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --llm replay`

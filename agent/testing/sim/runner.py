@@ -38,7 +38,7 @@ import urllib.error
 import urllib.request
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -130,6 +130,14 @@ class Ctx:
         aborts on an empty/missing file, so write to a temp file and mv."""
         stamp = dt.astimezone(ZoneInfo(self.tz)).strftime("@%Y-%m-%d %H:%M:%S")
         self.exec("fakes", "sh", "-c", f"printf '%s' '{stamp}' > /sim/clock.tmp && mv /sim/clock.tmp /sim/clock")
+        self._sim_clock = (dt, time.monotonic())
+
+    def sim_now(self) -> datetime:
+        """Current sim time (last set_clock + elapsed real time, as libfaketime ticks)."""
+        if getattr(self, "_sim_clock", None) is None:
+            return self.now()
+        dt, mono = self._sim_clock
+        return dt + timedelta(seconds=time.monotonic() - mono)
 
     def now(self) -> datetime:
         return datetime.now(ZoneInfo(self.tz))
@@ -267,13 +275,13 @@ def _control_replies(ctx: Ctx) -> list[str]:
     return [m.get("text", "") for m in sent if m.get("jid") in ctx.control_jids]
 
 
-def build_webhook_payload(text: str, jid: str, *, from_me: bool = False, group: bool = False, push_name: str = "Sim") -> dict:
+def build_webhook_payload(text: str, jid: str, *, from_me: bool = False, group: bool = False, push_name: str = "Sim", ts: int | None = None) -> dict:
     payload = copy.deepcopy(json.loads(FIXTURE.read_text(encoding="utf-8")))
     msg = payload["data"]["messages"][0]
     msg["key"] = {"id": f"SIM{uuid.uuid4().hex[:16].upper()}", "remoteJid": GROUP_JID if group else jid, "fromMe": from_me}
     if group:
         msg["key"]["participant"] = jid
-    msg["messageTimestamp"] = int(time.time())
+    msg["messageTimestamp"] = int(ts if ts is not None else time.time())
     msg["message"] = {"conversation": text}
     msg["pushName"] = push_name
     return payload
@@ -299,7 +307,7 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
             jid, text = v.get("jid", DEFAULT_CONTACT_JID), v["text"]
             kw = {"from_me": bool(v.get("from_me")), "group": bool(v.get("group")), "push_name": v.get("push_name", "Sim")}
         base = len(_control_replies(ctx))
-        ctx.agent("POST", "/webhooks/evolution", build_webhook_payload(text, jid, **kw))
+        ctx.agent("POST", "/webhooks/evolution", build_webhook_payload(text, jid, ts=ctx.sim_now().timestamp(), **kw))
         if step.type == "whatsapp_control" and ("reply_within_s" in exp or exp.get("no_reply")):
             sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _control_replies(ctx), base, timeout)
         else:
@@ -390,9 +398,8 @@ def cassette_end(ctx: Ctx, scn_id: str, res: "Result") -> None:
         res.failures.insert(0, first + (f" (+{n - 1} more)" if n > 1 else ""))
     elif ctx.llm_mode == "record" and not res.failures:
         data = ctx.exec("agent-api", "sh", "-c", f"cat {CASSETTE_DIR}/{scn_id}.jsonl 2>/dev/null || true")
-        if not data.strip():
-            res.failures.append("runner error (cassette): record produced no LLM calls; repo cassette kept")
-            return
+        # deterministic scenarios (e.g. a briefing-only flow) make no LLM calls: keep an empty
+        # cassette so replay still has a file to ship (any unexpected call is then stale)
         CASSETTES_HOST_DIR.mkdir(parents=True, exist_ok=True)
         (CASSETTES_HOST_DIR / f"{scn_id}.jsonl").write_text(data, encoding="utf-8")
 

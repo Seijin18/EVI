@@ -56,6 +56,9 @@ Google, Telegram API e Evolution API, e conduz cenários YAML contra ela.
 `./scripts/evi-sim run --tag critical --llm replay`.
 Briefing: `./scripts/evi-sim run --tag briefing --repeat 3 --llm live` (passo `job: briefing`;
 `reply_matches` do passo avalia o texto enviado ao Telegram).
+Reply debts: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (sim.env liga
+`EVI_REPLY_DEBTS_ENABLED`; `postgres` aceita `wa_conversation_state`; `reply_not_matches` exige que
+o texto enviado ao Telegram NÃO case com a regex).
 Lembretes: `./scripts/evi-sim run --tag reminders --repeat 3 --llm live` (o loop roda dentro do
 `agent-api` com `EVI_REMINDERS_TICK_SEC=5` e lê o relógio libfaketime). Um passo `clock` aceita
 `expect: {reply_within_s, reply_matches, no_reply}`: captura as mensagens enviadas ao Telegram

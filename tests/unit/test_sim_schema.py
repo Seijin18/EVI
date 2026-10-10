@@ -146,3 +146,21 @@ def test_reminders_tables_are_in_postgres_allowlist():
         {"table": "reminder_fires", "count": 1},
     ]}}]))
     assert len(s.steps[0].expect["postgres"]) == 2
+
+
+def test_wa_conversation_state_in_postgres_allowlist():
+    s = parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"postgres": [
+        {"table": "wa_conversation_state", "where": {"acknowledged_at": None}, "count": 0},
+    ]}}]))
+    assert s.steps[0].expect["postgres"][0]["table"] == "wa_conversation_state"
+
+
+def test_reply_not_matches_eval_and_validation():
+    exp = {"reply_not_matches": "Esperando sua resposta"}
+    assert schema.eval_expect(exp, {"reply": "Bom dia\n1. Standup"}) == []
+    assert schema.eval_expect(exp, {"reply": "Esperando sua resposta\n1. Ana"})
+    assert schema.eval_expect(exp, {"reply": None})
+    with pytest.raises(ScenarioError):
+        parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"reply_not_matches": "("}}]))
+    with pytest.raises(ScenarioError):
+        parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"no_reply": True, "reply_not_matches": "x"}}]))

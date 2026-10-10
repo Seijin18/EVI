@@ -1,0 +1,24 @@
+id: SIM-DEBT-06
+title: Reply debts - "respondido 1" dispensa a pendência do briefing (SCN-DEBT-06)
+tags: [reply-debts]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "consegue me mandar o orçamento?", jid: "5511955550101@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - clock: D0 16:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)esperando sua resposta.*1\\. .*Ana"
+  - telegram: "respondido 1"
+    expect:
+      reply_within_s: 90
+      tools_called_any: [dismiss_reply_debt]
+      postgres:
+        - {table: wa_conversation_state, where: {acknowledged_at: null}, count: 0}
+      outbound_to_third_parties: 0
+  - clock: D1 07:00  # the briefing runs once per day
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_not_matches: "esperando sua resposta"

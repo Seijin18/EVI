@@ -1,0 +1,17 @@
+id: SIM-DEBT-04
+title: Reply debts - promessa do usuário vira pendência e aparece em "Suas promessas" (SCN-DEBT-04)
+tags: [reply-debts]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "te mando a proposta amanhã", from_me: true, jid: "5511955550102@s.whatsapp.net", push_name: "Bruno Exemplo"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {type: promise}, count: 1}
+      outbound_to_third_parties: 0
+  - clock: D1 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)suas promessas.*(Bruno|proposta)"
+      outbound_to_third_parties: 0
