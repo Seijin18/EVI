@@ -128,3 +128,19 @@ retenção de 180 dias pelo `log_retention` existente.
 ## Out of scope
 
 Ver `proposal.md`.
+
+## As-built (2026-10-10)
+
+- Gravação em `_run_chat` (`agent/main.py`), não só na rota HTTP: Telegram chama `chat()`
+  direto e o controle WhatsApp ganhou `_whatsapp_control_invoke_chat`. `channel=job` não é
+  gravado.
+- Coletor = callback LangChain mutável num `ContextVar` (sobrevive ao salto de thread do
+  `ToolNode`); conta chamadas ao LLM e mede `ms` de cada tool. `parse_windmill_result(tool=...)`
+  nas tools Windmill; `list_tasks` entra com `ok: null`.
+- `/jobs/usage-signals` (diário) + retenção de 180 dias (`log_retention` só tratava arquivos).
+- Relatório: semana ISO local que contém `agora − 6 dias`; agendado **segunda 00:30**.
+  Linha de base persistida em `EVI_WORKSPACE/reports/baseline.json` (o prune a deslocaria).
+- Sonda: aviso diário reivindicado atomicamente (`probe_notified`, PK `(day, check_name)`),
+  liberado se o envio falhar.
+- Formatos do Evolution em `./data/payload_shapes` (montado no compose).
+- Testes que escrevem no banco exigem `EVI_TEST_EPHEMERAL_DB=1` (CI) e só tocam os próprios ids.

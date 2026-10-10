@@ -54,6 +54,6 @@
   - Files: `agent/services/payload_shapes.py`, `agent/main.py`, `tests/unit/test_payload_shapes.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_payload_shapes.py -q` — payload gravado não contém nenhum valor de texto original
 
-- [ ] 3.3 Regra "Validação em uso real" em `config.yaml`, `docs/testing.md` (L4), sincronizar spec e arquivar
+- [x] 3.3 Regra "Validação em uso real" em `config.yaml`, `docs/testing.md` (L4), sincronizar spec e arquivar
   - Files: `openspec/config.yaml`, `docs/testing.md`, `openspec/BACKLOG.md`, `Progress.md`
   - Verify: `openspec validate --specs && PYTHONPATH=agent python3 -m pytest tests/unit -q && ./scripts/evi-sim run --tag critical --repeat 3 --llm live && ./scripts/evi-sim run --tag critical --llm replay` (regravar cassettes se o prompt mudou)

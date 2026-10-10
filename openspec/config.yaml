@@ -36,8 +36,10 @@ rules:
   proposal:
     - Max 15 lines of intent; link product priority.
     - List explicit Out of scope.
+    - "Mudança de comportamento observável declara `## Validação em uso real` com KPI, limiar e janela (padrão 7 dias). Arquivar não espera a janela; o resultado é registrado no BACKLOG quando a janela fecha (relatório semanal `/jobs/usage-report`)."
   tasks:
     - "Each task MUST include SCN-* (if applicable), Files (max 5 paths), Verify (evi-test command)."
+    - "Behaviour tasks include a simulation scenario (`tests/sim/scenarios/<area>/`) in Verify: `./scripts/evi-sim run --id <SIM-...> --repeat 3 --llm live`."
     - One logical deliverable per task; 5-12 tasks per change.
   design:
     - RAM impact for new containers; Windmill/Evolution ports.

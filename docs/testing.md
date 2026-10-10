@@ -9,9 +9,28 @@
 | L1c container smoke | imagem montada, /health, /tools | dados | `./scripts/evi-test container` | CI |
 | **L2 `evi-sim`** | imagem, poller Telegram, webhook Evolution, LangGraph, LLM real, scripts Windmill, Postgres | Google, Telegram API, Evolution API, relógio | `./scripts/evi-sim run` | antes de cada change ser arquivado (`--tag critical --repeat 3 --llm live`); CI em modo replay |
 | L3 staging (futuro) | + Windmill server e schedules | Google | — | release maior |
-| **L4 uso real** | tudo | nada | relatório semanal, sonda diária, `/bom` `/ruim` | contínuo — `evi-usage-validation` (`openspec/queued/`) |
+| **L4 uso real** | tudo | nada | relatório semanal, sonda diária, `/bom` `/ruim` | contínuo — `evi-usage-validation` |
 
 Ciclo: L2 aprova antes de integrar → L4 mede depois → falha real vira cenário L2.
+
+### L4 — uso real
+
+| Peça | Onde | Quando |
+|---|---|---|
+| `turn_log` | todo turno de `/chat`, Telegram e controle WhatsApp (tools com `ok`/`reason`, latência, chamadas ao LLM) | sempre |
+| `/bom`, `/ruim [motivo]` | Telegram / controle WhatsApp — avalia o último pedido | quando quiser |
+| Sinais implícitos (correção, reformulação, tool falhou, "não consigo") | `POST /jobs/usage-signals` | Windmill, todo dia |
+| Relatório semanal | `POST /jobs/usage-report` → `EVI_WORKSPACE/reports/usage-YYYY-Www.md` + resumo no Telegram | Windmill, domingo 20h |
+| Sonda somente-leitura | `POST /jobs/probe` (agenda, tarefas, Gmail, Telegram; sem LLM, sem escrita) | Windmill, 06:30 |
+| Formatos novos do Evolution | `data/payload_shapes/` (valores redigidos), listados no relatório | a cada webhook |
+| Tráfego de teste | `X-Evi-Test: 1` ou sessão `evi-test*`/`test-*`/`health-check*`/`tg-digest-verify*` → `is_test`, fora dos KPIs; `scripts/evi-cleanup-test-data` (dry-run; `--apply` apaga) | — |
+
+Falha real → `./scripts/evi-sim promote <turn_id>` gera rascunho anonimizado em
+`tests/sim/scenarios/from-usage/` com `expect: {todo: ...}`; o runner recusa o cenário
+até a expectativa ser escrita por uma pessoa. Revisar o rascunho antes de commitar.
+
+Todo change de comportamento declara `## Validação em uso real` (KPI, limiar, janela de
+7 dias) na proposta; o resultado é registrado no BACKLOG quando a janela fecha.
 
 > **Atenção:** `scripts/evi-telegram-verify.sh`, `scripts/evi-inbox-ux-verify.sh` e
 > as flags `--live-*` rodam contra as contas reais (Telegram, Gmail, Calendar) e
