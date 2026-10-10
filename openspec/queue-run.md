@@ -16,6 +16,8 @@
 - 2026-10-10 evi-usage-validation 1.1: `log_retention` só trata arquivos; a retenção de 180 dias do `turn_log` vai para o job noturno da 2.2 (DELETE por `ts`).
 - 2026-10-10 evi-morning-briefing (sync): Verify da 2.7 não roda o script no Windmill real (conta real) — vira pendência; DB tests com `EVI_TEST_EPHEMERAL_DB`; 1.2 regrava cassettes e roda adversariais live.
 - 2026-10-10 evi-morning-briefing 2.2–2.4: um commit só (mesmo módulo `briefing.py`); `list_events.py` ganhou `id/start_iso/end_iso` (aditivo) para conflitos e refs de evento.
+- 2026-10-10 evi-morning-briefing: a sim rodava sem os arquivos de bootstrap do `EVI_WORKSPACE` (prompt diferente da produção); o runner passa a semear os arquivos versionados + um `USER.md` fictício. Cassettes regravados.
+- 2026-10-10 evi-morning-briefing (revisão): requisito "todo conteúdo de terceiros em qualquer prompt via wrap_external" estreitado aos caminhos cobertos (briefing, resumo WhatsApp, perfil, extração); saídas das tools `summarize_inbox`/`list_calendar_events` ficam para o #37 (`evi-prompt-injection-model`).
 ## Pendências do usuário (não bloqueantes)
 - [ ] Criar projeto Gemini separado e definir `EVI_SIM_GEMINI_API_KEY` no `.env` — a simulação hoje consome a cota de produção — `.env`
 - [ ] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf`

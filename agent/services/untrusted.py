@@ -22,7 +22,7 @@ _MARKER_RE = re.compile(
     r"[«<\[‹]{1,2}\s*/?\s*externo\b[^»>\]›\n]*[»>\]›]{1,2}",
     re.IGNORECASE,
 )
-_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f​-‏  ‪-‮⁠﻿]")
+_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f​-‏  ‪-‮⁠⁡⁢⁣⁤᠎﻿]")
 _SOURCE_BAD_RE = re.compile(r"[^a-z0-9_-]")
 
 
@@ -34,9 +34,12 @@ def _clean_source(source: str | None) -> str:
 def _neutralize(text: str) -> str:
     text = unicodedata.normalize("NFKC", text)
     text = _CONTROL_RE.sub("", text.replace("\r\n", "\n").replace("\r", "\n"))
-    # Duas passadas: remover um marcador pode juntar pedaços de outro.
-    for _ in range(2):
-        text = _MARKER_RE.sub("", text)
+    # Remover um marcador pode juntar pedaços de outro: repete até estabilizar.
+    for _ in range(10):
+        cleaned = _MARKER_RE.sub("", text)
+        if cleaned == text:
+            break
+        text = cleaned
     text = text.replace("«", "‹").replace("»", "›")
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()

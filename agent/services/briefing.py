@@ -179,7 +179,7 @@ def _collect_tasks(day: date, overdue: bool) -> list[tuple[str, dict]]:
             continue  # sem prazo
         if due_d != day and not (overdue and due_d < day):
             continue
-        title = " ".join(str(t.get("title") or "(sem título)").split())[:_FIELD_MAX]
+        title = wrap_external(t.get("title") or "(sem título)", "tarefa", _FIELD_MAX)
         tag = f" (venceu {due_d.strftime('%d/%m')})" if due_d < day else ""
         rows.append((f"{title}{tag}", {"kind": "task", "id": t.get("id") or ""}, due_d))
     rows.sort(key=lambda r: r[2])
@@ -340,14 +340,17 @@ def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime |
 
     Idempotente por ``(dia local, kind)``: com ``force=False`` um envio ``ok``
     anterior vira ``already_sent``; uma falha (``ok=false``) pode ser repetida.
+    Antes de montar, reivindica o slot de forma atômica (``db.claim_briefing``): uma
+    segunda chamada concorrente recebe ``in_progress``. ``force=True`` ignora o claim.
     """
     from services.telegram_notify import send_telegram_message
 
     now = now or now_local()
     day = now.date()
     try:
-        if not force and db.briefing_sent_today(day, kind):
-            return {"status": "already_sent", "kind": kind, "day": day.isoformat()}
+        if not force and db.claim_briefing(day, kind, stale_minutes=10) is None:
+            status = "already_sent" if db.briefing_sent_today(day, kind) else "in_progress"
+            return {"status": status, "kind": kind, "day": day.isoformat()}
     except Exception as exc:
         soft_fail("briefing.deliver.idempotency", exc)
 
@@ -379,6 +382,13 @@ def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime |
         get_session_memory(session_id).add(AIMessage(content=brief.text))
     except Exception as exc:
         soft_fail("briefing.deliver.memory", exc)
+    if os.getenv("DATABASE_URL"):
+        # main._hydrate_memory recarrega a memória do Postgres a cada turno: sem isto
+        # a primeira resposta apagaria o briefing do contexto.
+        try:
+            db.save_message(session_id, "assistant", brief.text)
+        except Exception as exc:
+            soft_fail("briefing.deliver.persist_message", exc)
     try:
         db.save_tool_snapshot(
             session_id,
@@ -404,30 +414,19 @@ def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime |
 def note_user_reply(now: datetime | None = None, user_text: str = "") -> int:
     """Conta engajamento: mensagem do usuário até 3 h após o envio. Nunca levanta.
 
-    Comandos (``/bom``…) não contam. Retorna quantos briefings foram marcados.
+    Comandos (``/bom``…) não contam. Janela relativa a ``now()`` do banco (vale
+    também atravessando a meia-noite). Retorna quantos briefings foram marcados.
     """
     try:
         if (user_text or "").lstrip().startswith("/"):
             return 0
-        now = now or now_local()
-        marked = 0
-        for kind in _KINDS:
-            row = db.get_briefing(now.date(), kind)
-            if not row or not row.get("ok") or row.get("replied_at") is not None:
-                continue
-            sent_at = row.get("sent_at")
-            if sent_at is None:
-                continue
-            if sent_at.tzinfo is None:
-                sent_at = sent_at.replace(tzinfo=now.tzinfo)
-            if not timedelta(0) <= now - sent_at <= REPLY_WINDOW:
-                continue
-            if db.mark_briefing_replied(now.date(), kind):
-                marked += 1
-                from services import metrics
+        kinds = db.mark_briefing_replied_window(hours=int(REPLY_WINDOW.total_seconds() // 3600))
+        if kinds:
+            from services import metrics
 
+            for kind in kinds:
                 metrics.record_briefing_replied(kind)
-        return marked
+        return len(kinds)
     except Exception as exc:
         soft_fail("briefing.note_user_reply", exc)
         return 0

@@ -22,6 +22,31 @@ def extract_jid_from_session(session_id: str) -> str | None:
     return None
 
 
+def _pin_briefing_snapshot(session_id: str, rows: list[dict]) -> list[dict]:
+    """Garante o último snapshot ``morning_briefing`` de hoje (local), mesmo fora do limit."""
+    if any(r.get("tool_name") == "morning_briefing" for r in rows):
+        return rows
+    try:
+        from datetime import datetime
+
+        from db import load_tool_snapshots
+        from tools.calendar_time import now_local
+
+        today = now_local().date()
+        for row in load_tool_snapshots(session_id, limit=50):
+            if row.get("tool_name") != "morning_briefing":
+                continue
+            created = datetime.fromisoformat(str(row.get("created_at")))
+            if created.tzinfo is not None:
+                created = created.astimezone(now_local().tzinfo)
+            if created.date() == today:
+                return [*rows, row]
+            break
+    except Exception:
+        pass
+    return rows
+
+
 def format_tool_snapshots(session_id: str, limit: int = 3) -> str:
     try:
         from db import init_db, load_tool_snapshots
@@ -30,6 +55,7 @@ def format_tool_snapshots(session_id: str, limit: int = 3) -> str:
         rows = load_tool_snapshots(session_id, limit=limit)
     except Exception:
         return ""
+    rows = _pin_briefing_snapshot(session_id, rows)
     if not rows:
         return ""
     lines = ["SESSION TOOL SNAPSHOTS (use for follow-ups):"]

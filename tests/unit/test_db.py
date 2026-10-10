@@ -395,3 +395,68 @@ def test_mark_briefing_replied_first_mark_only(briefing_days):
     assert first is not None
     assert db.mark_briefing_replied(day, "morning") is False
     assert db.get_briefing(day, "morning")["replied_at"] == first
+
+
+@pytest.mark.ephemeral_db
+def test_claim_briefing_atomic_and_stale_reclaim(briefing_days):
+    import db
+
+    day = briefing_days[0]
+    first = db.claim_briefing(day, "morning")
+    assert first is not None
+    assert db.claim_briefing(day, "morning") is None  # in progress
+    with db._conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE briefing_log SET sent_at = now() - interval '11 minutes' "
+                        "WHERE day = %s AND kind = 'morning'", (day,))
+        conn.commit()
+    assert db.claim_briefing(day, "morning") == first  # stale -> reclaimable
+    db.record_briefing(day, "morning", True, {})
+    assert db.claim_briefing(day, "morning") is None  # already sent
+    with db._conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE briefing_log SET sent_at = now() - interval '1 hour' "
+                        "WHERE day = %s AND kind = 'morning'", (day,))
+        conn.commit()
+    assert db.claim_briefing(day, "morning") is None  # ok rows are never reclaimed
+
+
+@pytest.mark.ephemeral_db
+def test_failed_attempt_does_not_downgrade_ok_or_clear_replied(briefing_days):
+    import db
+
+    day = briefing_days[1]
+    db.record_briefing(day, "morning", True, {})
+    assert db.mark_briefing_replied(day, "morning") is True
+    db.record_briefing(day, "morning", False, {"x": 1})
+    row = db.get_briefing(day, "morning")
+    assert row["ok"] is True and row["replied_at"] is not None
+    db.record_briefing(day, "morning", True, {})  # successful resend resets
+    assert db.get_briefing(day, "morning")["replied_at"] is None
+
+
+@pytest.mark.ephemeral_db
+def test_mark_briefing_replied_window(briefing_days):
+    import db
+
+    d1, d2, d3 = briefing_days
+    db.record_briefing(d1, "evening", True, {})
+    db.record_briefing(d2, "morning", True, {})
+    db.record_briefing(d3, "morning", False, {})
+    with db._conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE briefing_log SET sent_at = now() - interval '4 hours' "
+                        "WHERE day = %s", (d2,))
+        conn.commit()
+    assert db.mark_briefing_replied_window(hours=3) == ["evening"]
+    assert db.mark_briefing_replied_window(hours=3) == []
+
+
+@pytest.mark.ephemeral_db
+def test_failed_send_releases_claim_for_immediate_retry(briefing_days):
+    import db
+
+    day = briefing_days[2]
+    assert db.claim_briefing(day, "evening") is not None
+    db.record_briefing(day, "evening", False, {})
+    assert db.claim_briefing(day, "evening") is not None

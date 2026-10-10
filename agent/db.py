@@ -807,9 +807,39 @@ def list_probes(since, until) -> List[Dict[str, Any]]:
 # caller (from now_local()). A failed send (ok=false) is overwritten by a retry.
 
 
+def claim_briefing(day, kind: str, stale_minutes: int = 10) -> int | None:
+    """Atomically claim the (day, kind) send slot before assembling the briefing.
+
+    Inserts an in-progress row (ok=false, sections '{}'). If a row already exists it is
+    re-claimed only when it is a failed/abandoned attempt (not ok) older than
+    ``stale_minutes``. Returns the row id, or None when someone else holds the claim or
+    the briefing was already sent (callers tell the two apart via briefing_sent_today).
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO briefing_log (day, kind, ok, sections)
+                VALUES (%s, %s, false, '{}'::jsonb)
+                ON CONFLICT (day, kind) DO UPDATE
+                SET sent_at = now()
+                WHERE NOT briefing_log.ok
+                  AND briefing_log.sent_at < now() - make_interval(mins => %s)
+                RETURNING id
+                """,
+                (day, kind, int(stale_minutes)),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return int(row[0]) if row else None
+
+
 def record_briefing(day, kind: str, ok: bool, sections: Dict[str, Any]) -> int:
     """UPSERT the (day, kind) briefing row; a retry or force resend overwrites
-    ok/sections/sent_at. Returns the row id. replied_at is reset on overwrite."""
+    sections. Never downgrades ok=true to false; sent_at/replied_at are refreshed only
+    when the new send is ok (a successful resend). A failed attempt on a not-ok row
+    backdates sent_at so the claim is released and an immediate retry is allowed.
+    Returns the row id."""
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -817,10 +847,13 @@ def record_briefing(day, kind: str, ok: bool, sections: Dict[str, Any]) -> int:
                 INSERT INTO briefing_log (day, kind, ok, sections)
                 VALUES (%s, %s, %s, %s::jsonb)
                 ON CONFLICT (day, kind) DO UPDATE
-                SET ok = EXCLUDED.ok,
+                SET ok = briefing_log.ok OR EXCLUDED.ok,
                     sections = EXCLUDED.sections,
-                    sent_at = now(),
-                    replied_at = NULL
+                    sent_at = CASE WHEN EXCLUDED.ok THEN now()
+                                   WHEN briefing_log.ok THEN briefing_log.sent_at
+                                   ELSE now() - interval '1 day' END,
+                    replied_at = CASE WHEN EXCLUDED.ok THEN NULL
+                                      ELSE briefing_log.replied_at END
                 RETURNING id
                 """,
                 (day, kind, ok, json.dumps(sections or {})),
@@ -851,6 +884,28 @@ def get_briefing(day, kind: str) -> Dict[str, Any] | None:
             )
             row = cur.fetchone()
     return dict(row) if row else None
+
+
+def mark_briefing_replied_window(hours: int = 3) -> list[str]:
+    """Mark every ok briefing sent within the last ``hours`` and not yet replied.
+
+    Returns the kinds marked (empty when none). Window-based, so it also works across
+    midnight (an evening briefing answered after 00:00).
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE briefing_log SET replied_at = now()
+                WHERE ok AND replied_at IS NULL
+                  AND sent_at >= now() - make_interval(hours => %s)
+                RETURNING kind
+                """,
+                (int(hours),),
+            )
+            kinds = [r[0] for r in cur.fetchall()]
+        conn.commit()
+    return kinds
 
 
 def mark_briefing_replied(day, kind: str) -> bool:

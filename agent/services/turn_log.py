@@ -122,6 +122,12 @@ def record_tool_outcome(tool: str, ok: bool, reason: str = "") -> None:
         collector.record_outcome(tool, ok, reason)
 
 
+def _briefing_enabled() -> bool:
+    from services.heartbeat import _briefing_enabled as enabled
+
+    return enabled()
+
+
 def record_turn(
     collector: TurnCollector | None,
     *,
@@ -154,7 +160,12 @@ def record_turn(
             metrics.record_turn(channel, outcome)
         except Exception as exc:
             soft_fail("turn_log.record_turn.metrics", exc)
-    if not test and channel == "telegram":
+    if (
+        not test
+        and channel == "telegram"
+        and os.getenv("DATABASE_URL")
+        and _briefing_enabled()
+    ):
         try:
             from services import briefing
 

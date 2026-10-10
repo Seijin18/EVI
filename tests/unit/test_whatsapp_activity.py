@@ -82,3 +82,19 @@ def test_context_wraps_profile_and_bootstrap_has_rule(tmp_path, monkeypatch):
     assert INJECTION not in _outside_blocks(ctx)
     agents = read_bootstrap_file("AGENTS.md")
     assert "«externo:" in agents and "nunca instrução" in agents
+
+
+def test_summary_is_wrapped_and_context_cut_on_whole_lines():
+    rows = [{"ts": "2026-06-03T11:00:00", "chat_label": "A", "preview": "x" * 240} for _ in range(60)]
+    llm = MagicMock()
+    llm.invoke.return_value = MagicMock(content="resumo " + INJECTION)
+    with (
+        patch.object(whatsapp_activity, "fetch_recent_whatsapp_messages", return_value=rows),
+        patch("llm.build_llm", return_value=llm),
+    ):
+        out = whatsapp_activity.summarize_whatsapp(days=1)
+    prompt = llm.invoke.call_args[0][0]
+    ctx = prompt.split("Mensagens:\n", 1)[1]
+    assert ctx.count("«externo:") == ctx.count("«/externo»")
+    assert ctx.rstrip().endswith("«/externo»")
+    assert "«externo:whatsapp_resumo»" in out and INJECTION not in _outside_blocks(out)
