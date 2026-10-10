@@ -1,8 +1,8 @@
 # Execução da fila — iniciada 2026-10-10
 ## Estado
-- Change atual: evi-morning-briefing (fase: implementar) — preflight
+- Change atual: evi-morning-briefing (fase: implementar) — tasks 1.1 + 2.1
 - Ordem: evi-sim-harness → evi-usage-validation → evi-morning-briefing → evi-reminders → evi-reply-debts → evi-voice-input → evi-perceived-reliability → evi-prompt-injection-model
-- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..HEAD do archive)
+- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e)
 - Pulados: evi-background-execution (#38) — condicional: "abrir só se o ack imediato do #44 não bastar na prática"; exige dados de uso real
 ## Decisões tomadas sem o usuário
 - 2026-10-10 fila: agentes de projeto (`.claude/agents/`) não estão registrados nesta sessão; usados via `general-purpose` com `model` equivalente (haiku/sonnet/opus) e instrução de seguir o arquivo do agente.
@@ -14,6 +14,7 @@
 - 2026-10-10 evi-sim-harness: SIM-RU-05 travou 1/3 live (uma chamada ao Gemini sem retorno em 90 s) → `EVI_LLM_TIMEOUT_SEC` (default 60) no cliente Gemini. Muda produção: turno que antes travava agora tem retry após 60 s.
 - 2026-10-10 evi-usage-validation (sync): nome e telefone reais em SCN-USE-04/07 trocados por fictícios; Verify de 1.1 com PG efêmero em container descartável (`evi-unit-pg`); cenários SIM-USE-01/02 adicionados às tasks 1.2 e 2.1.
 - 2026-10-10 evi-usage-validation 1.1: `log_retention` só trata arquivos; a retenção de 180 dias do `turn_log` vai para o job noturno da 2.2 (DELETE por `ts`).
+- 2026-10-10 evi-morning-briefing (sync): Verify da 2.7 não roda o script no Windmill real (conta real) — vira pendência; DB tests com `EVI_TEST_EPHEMERAL_DB`; 1.2 regrava cassettes e roda adversariais live.
 ## Pendências do usuário (não bloqueantes)
 - [ ] Criar projeto Gemini separado e definir `EVI_SIM_GEMINI_API_KEY` no `.env` — a simulação hoje consome a cota de produção — `.env`
 - [ ] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf`
