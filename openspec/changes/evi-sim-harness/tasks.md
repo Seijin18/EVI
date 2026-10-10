@@ -52,7 +52,7 @@
 
 ## 4. CI e documentação
 
-- [ ] 4.1 Provider `sim-replay` (só com `EVI_SIM=1`) + `--llm record|replay` + cassettes dos `critical` + job `sim-replay` na CI
+- [x] 4.1 Provider `sim-replay` (só com `EVI_SIM=1`) + `--llm record|replay` + cassettes dos `critical` + job `sim-replay` na CI
   - SCN-SIM-09
   - Files: `agent/llm.py`, `agent/testing/sim/cassette.py`, `tests/sim/cassettes/`, `.github/workflows/ci.yml`, `tests/unit/test_sim_cassette.py`
   - Verify: `./scripts/evi-sim run --tag critical --llm replay` verde sem `EVI_SIM_GEMINI_API_KEY`; alterar um prompt faz falhar com "cassette stale"

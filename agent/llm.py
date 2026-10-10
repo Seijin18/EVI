@@ -32,9 +32,19 @@ def build_ollama_llm(*, temperature: float | None = None, num_ctx: int | None = 
     )
 
 
+_SIM_PROVIDERS = ("sim-replay", "sim-record")
+
+
+def _is_sim_provider(provider: str) -> bool:
+    """evi-sim cassette providers exist only when EVI_SIM=1 (otherwise: unknown provider)."""
+    return provider in _SIM_PROVIDERS and os.getenv("EVI_SIM", "").strip() == "1"
+
+
 def background_provider() -> str:
     """Provider used by cron/background work. Ollama unless explicitly overridden."""
     override = os.getenv("EVI_BACKGROUND_LLM_PROVIDER", "ollama").strip().lower()
+    if _is_sim_provider(override):
+        return override
     return override if override in ("gemini", "openai", "anthropic") else "ollama"
 
 
@@ -58,6 +68,11 @@ def build_llm(
 ):
     """Return a LangChain BaseChatModel. An explicit `provider` wins over env."""
     provider = (provider or "").strip().lower() or _llm_provider()
+
+    if _is_sim_provider(provider):
+        from testing.sim.cassette import build_sim_llm  # lazy: sim-only, never imported in prod
+
+        return build_sim_llm(provider, temperature=temperature)
 
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
@@ -149,6 +164,6 @@ def _extract_default_text(content: Any) -> str:
 def extract_llm_text(content: Any, *, provider: str | None = None) -> str:
     """Normalize provider-specific AIMessage.content to user-facing plain text."""
     p = (provider or _llm_provider()).strip().lower()
-    if p == "gemini":
+    if p == "gemini" or _is_sim_provider(p):  # sim cassettes replay Gemini-shaped content
         return _extract_gemini_text(content)
     return _extract_default_text(content)

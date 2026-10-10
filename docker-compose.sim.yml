@@ -12,6 +12,9 @@ services:
       - tests/sim/sim.env
     environment:
       GEMINI_API_KEY: ${EVI_SIM_GEMINI_API_KEY:-}
+      # gemini (live) | sim-record | sim-replay; chosen by `scripts/evi-sim --llm`.
+      EVI_LLM_PROVIDER: ${EVI_SIM_LLM_PROVIDER:-gemini}
+      EVI_BACKGROUND_LLM_PROVIDER: ${EVI_SIM_LLM_PROVIDER:-gemini}
     ports: ["127.0.0.1:18000:8000"]
     volumes:
       - sim-clock:/sim

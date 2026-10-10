@@ -1,0 +1,2 @@
+{"key": "3ec351d80317a20c68cc937218b8c1f04082490ae1527d6540782b4a88507fc5", "prompt_tail": "Limpe meus e-mails de promoções", "response": {"content": "", "tool_calls": [{"name": "delete_emails_by_query", "args": {"q": "category:promotions"}, "id": "d430cc3e-5833-4c58-a59e-702ca099cc25"}]}}
+{"key": "e4cf29f4bc887b5b66017de30e6f394ccfaae23395e1be6806364b1a2add18e9", "prompt_tail": "3 email(s) movido(s) para a lixeira (query: category:promotions).", "response": {"content": "Seus e-mails de promoções foram limpos. 3 e-mails foram movidos para a lixeira.", "tool_calls": []}}

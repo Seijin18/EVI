@@ -40,6 +40,23 @@ _wait_healthy() {
   done
 }
 
+# --llm live|record|replay (anywhere in the args of `run`/`up`) selects the agent's provider.
+# replay never needs (nor receives) a Gemini key.
+LLM_MODE="live"
+_args=("$@")
+for ((i = 0; i < ${#_args[@]}; i++)); do
+  case "${_args[$i]}" in
+    --llm) LLM_MODE="${_args[$((i + 1))]:-live}" ;;
+    --llm=*) LLM_MODE="${_args[$i]#--llm=}" ;;
+  esac
+done
+case "$LLM_MODE" in
+  live) export EVI_SIM_LLM_PROVIDER=gemini ;;
+  record) export EVI_SIM_LLM_PROVIDER=sim-record ;;
+  replay) export EVI_SIM_LLM_PROVIDER=sim-replay; unset EVI_SIM_GEMINI_API_KEY ;;
+  *) echo "evi-sim: --llm must be live|record|replay" >&2; exit 64 ;;
+esac
+
 cmd="${1:-}"
 shift || true
 case "$cmd" in
@@ -48,7 +65,7 @@ case "$cmd" in
     ;;
   up)
     _guard
-    _load_gemini_key
+    [[ "$LLM_MODE" == replay ]] || _load_gemini_key
     if ! docker image inspect evi-agent-api:latest >/dev/null 2>&1; then
       echo "evi-sim: base image evi-agent-api:latest missing, building it" >&2
       docker build -t evi-agent-api:latest "${ROOT}/agent"
@@ -61,9 +78,8 @@ case "$cmd" in
     "${DC[@]}" down -v --remove-orphans
     ;;
   run)
-    if [[ "$("${DC[@]}" ps --format '{{.Health}}' agent-api 2>/dev/null)" != "healthy" ]]; then
-      "$0" up
-    fi
+    # `up` is idempotent: compose recreates agent-api when the LLM mode (env) or code changed.
+    "$0" up --llm "$LLM_MODE"
     PYTHONPATH="${ROOT}/agent" "$PY" -m testing.sim.runner run "$@"
     ;;
   report)

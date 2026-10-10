@@ -66,3 +66,25 @@ jobs:
 
       - name: Container smoke
         run: ./scripts/evi-container-smoke.sh
+
+  sim-replay:
+    # evi-sim critical scenarios against the composed stack with recorded LLM
+    # cassettes (SCN-SIM-09): no secrets, no network LLM. A prompt change without
+    # re-recording (`evi-sim run --llm record`) fails here with "cassette stale".
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runner dependency
+        run: pip install pyyaml
+
+      - name: Run critical scenarios in replay
+        run: ./scripts/evi-sim run --tag critical --llm replay
+
+      - name: Tear down
+        if: always()
+        run: ./scripts/evi-sim down

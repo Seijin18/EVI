@@ -1,7 +1,7 @@
 """evi-sim scenario runner (task 3.1).
 
     PYTHONPATH=agent python -m testing.sim.runner run [--tag a,b] [--id X] [--repeat N]
-                                                      [--llm live] [--max-llm-calls N]
+                                                      [--llm live|record|replay] [--max-llm-calls N]
                                                       [--scenarios-dir DIR]
 
 Per scenario: reset (fakes + agent tables + session memory + audit logs), set clock,
@@ -53,6 +53,9 @@ COMPOSE = ["docker", "compose", "-p", "evi-sim", "--env-file", "/dev/null", "-f"
 AUDIT_LOG = "/tmp/evi-sim-logs"
 LLM_COUNT_FILE = "/tmp/evi-sim-llm-calls"  # written by testing.sim.llm_counter in the container
 DEFAULT_MAX_LLM_CALLS = 200
+CASSETTE_DIR = "/tmp/evi-sim-cassettes"  # inside the agent container (see testing.sim.cassette)
+CASSETTES_HOST_DIR = REPO_ROOT / "tests" / "sim" / "cassettes"
+LLM_MODES = ("live", "record", "replay")
 SIM_LOG_DIR = REPO_ROOT / "logs" / "sim"
 DEFAULT_REPLY_TIMEOUT_S = 120
 SETTLE_S = 2.0
@@ -75,6 +78,7 @@ class Ctx:
     fakes_url: str = "http://127.0.0.1:18080"
     agent_url: str = "http://127.0.0.1:18000"
     env: dict = field(default_factory=read_env)
+    llm_mode: str = "live"
 
     @property
     def tz(self) -> str:
@@ -316,11 +320,44 @@ def llm_call_count(ctx: Ctx) -> int:
         return 0
 
 
+def cassette_begin(ctx: Ctx, scn_id: str) -> None:
+    """Tell the agent which cassette is active (new nonce per attempt); in replay, ship the file in."""
+    if ctx.llm_mode == "live":
+        return
+    ctx.exec("agent-api", "sh", "-c", f"mkdir -p {CASSETTE_DIR} && rm -f {CASSETTE_DIR}/stale.log {CASSETTE_DIR}/ctl {CASSETTE_DIR}/{scn_id}.jsonl")
+    if ctx.llm_mode == "replay":
+        host = CASSETTES_HOST_DIR / f"{scn_id}.jsonl"
+        if not host.exists():
+            raise RuntimeError(f"cassette stale: regrave com --llm record (no cassette for {scn_id})")
+        ctx.exec("agent-api", "sh", "-c", f"cat > {CASSETTE_DIR}/{scn_id}.jsonl", input_=host.read_text(encoding="utf-8"))
+    ctl = json.dumps({"id": scn_id, "nonce": uuid.uuid4().hex})
+    ctx.exec("agent-api", "sh", "-c", f"cat > {CASSETTE_DIR}/ctl", input_=ctl)
+
+
+def cassette_end(ctx: Ctx, scn_id: str, res: "Result") -> None:
+    """Surface stale-cassette errors as the failure reason; in record, save a passing attempt."""
+    if ctx.llm_mode == "live":
+        return
+    stale = ctx.exec("agent-api", "sh", "-c", f"cat {CASSETTE_DIR}/stale.log 2>/dev/null || true").strip()
+    if stale:
+        first = stale.splitlines()[0]
+        n = len(stale.splitlines())
+        res.failures.insert(0, first + (f" (+{n - 1} more)" if n > 1 else ""))
+    elif ctx.llm_mode == "record" and not res.failures:
+        data = ctx.exec("agent-api", "sh", "-c", f"cat {CASSETTE_DIR}/{scn_id}.jsonl 2>/dev/null || true")
+        if not data.strip():
+            res.failures.append("runner error (cassette): record produced no LLM calls; repo cassette kept")
+            return
+        CASSETTES_HOST_DIR.mkdir(parents=True, exist_ok=True)
+        (CASSETTES_HOST_DIR / f"{scn_id}.jsonl").write_text(data, encoding="utf-8")
+
+
 def run_scenario(scn: Scenario, ctx: Ctx) -> Result:
     res = Result(scn.id)
     t0 = time.monotonic()
     calls0 = llm_call_count(ctx)
     try:
+        cassette_begin(ctx, scn.id)
         reset_world(ctx)
         base = ctx.today()
         ctx.set_clock(schema.parse_relative(scn.clock, base, ctx.tz) if scn.clock else ctx.now())
@@ -342,6 +379,10 @@ def run_scenario(scn: Scenario, ctx: Ctx) -> Result:
         res.tools_called = tools_called(ctx)
     except Exception as exc:  # infra error = failure with the reason, not a crash
         res.failures.append(f"runner error: {type(exc).__name__}: {exc}")
+    try:
+        cassette_end(ctx, scn.id, res)
+    except Exception as exc:
+        res.failures.append(f"runner error (cassette): {type(exc).__name__}: {exc}")
     res.duration_s = time.monotonic() - t0
     res.llm_calls = max(0, llm_call_count(ctx) - calls0)
     res.passed = not res.failures
@@ -354,8 +395,8 @@ def _csv(v: str | None) -> list[str] | None:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    if args.llm != "live":
-        print("evi-sim: only --llm live is supported for now (record/replay comes in task 4.1)", file=sys.stderr)
+    if args.llm not in LLM_MODES:
+        print(f"evi-sim: --llm must be one of {', '.join(LLM_MODES)}", file=sys.stderr)
         return 2
     if args.repeat < 1:
         print("evi-sim: --repeat must be >= 1", file=sys.stderr)
@@ -368,7 +409,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if not scenarios:
         print("evi-sim: no scenarios matched", file=sys.stderr)
         return 2
-    ctx = Ctx()
+    ctx = Ctx(llm_mode=args.llm)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     records: list[dict] = []
     total_calls = 0
