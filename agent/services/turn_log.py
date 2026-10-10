@@ -50,6 +50,9 @@ class TurnCollector(BaseCallbackHandler):
         self._windmill: list[dict[str, Any]] = []
         self._calls: list[dict[str, Any]] = []
         self._running: dict[Any, tuple[int, float]] = {}
+        from services.slow_ack import SlowAck
+
+        self._slow_ack = SlowAck(self)
         self.llm_calls = 0
         self.tokens_in = 0
         self.tokens_out = 0
@@ -82,8 +85,10 @@ class TurnCollector(BaseCallbackHandler):
         with self._lock:
             self._calls.append({"name": name, "ok": None, "reason": None, "ms": None, "_err": False})
             self._running[run_id] = (len(self._calls) - 1, time.monotonic())
+        self._slow_ack.tool_started(run_id, name)
 
     def _finish_call(self, run_id, *, error: bool) -> None:
+        self._slow_ack.tool_ended(run_id)
         with self._lock:
             started = self._running.pop(run_id, None)
             if started is None:
@@ -99,6 +104,10 @@ class TurnCollector(BaseCallbackHandler):
         self._finish_call(run_id, error=True)
 
     # -- result -----------------------------------------------------------
+    def close(self) -> None:
+        """End of turn: drop any pending slow-tool ack timer."""
+        self._slow_ack.cancel()
+
     def tools(self) -> list[dict[str, Any]]:
         """Tool calls in order, each merged with its Windmill outcome by name."""
         with self._lock:
@@ -154,6 +163,12 @@ def current_is_test() -> bool:
 
 
 def end_turn(token: Any) -> None:
+    collector = _current.get()
+    if collector is not None:
+        try:
+            collector.close()
+        except Exception as exc:
+            soft_fail("turn_log.end_turn.close", exc)
     try:
         _current.reset(token)
     except ValueError:  # token from another context; leave the var as is

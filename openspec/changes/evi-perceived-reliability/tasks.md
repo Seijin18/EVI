@@ -12,7 +12,7 @@
   - Files: `agent/services/help_text.py`, `agent/services/chat_commands.py`, `EVI_WORKSPACE/AGENTS.md`, `tests/unit/test_chat_commands.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_chat_commands.py -q`
 
-- [ ] 2.2 Ack de tool lenta (`EVI_SLOW_ACK_SEC`) pelo canal do turno, uma vez por turno
+- [x] 2.2 Ack de tool lenta (`EVI_SLOW_ACK_SEC`) pelo canal do turno, uma vez por turno
   - SCN-REL-03
   - Files: `agent/services/slow_ack.py`, `agent/services/turn_log.py`, `tests/unit/test_slow_ack.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_slow_ack.py tests/unit/test_turn_log.py -q`
