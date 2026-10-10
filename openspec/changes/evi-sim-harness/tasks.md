@@ -17,7 +17,7 @@
   - Files: `agent/testing/sim/fake_google.py`, `tests/unit/test_sim_fake_google.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_fake_google.py -q` — endpoint não implementado responde 500 com a URL
 
-- [ ] 2.2 Fake Windmill executando os scripts reais de `windmill/f/integrations/` com `urlopen` roteado e falhas injetáveis
+- [x] 2.2 Fake Windmill executando os scripts reais de `windmill/f/integrations/` com `urlopen` roteado e falhas injetáveis
   - SCN-SIM-03, SCN-SIM-06
   - Files: `agent/testing/sim/fake_windmill.py`, `tests/unit/test_sim_fake_windmill.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_fake_windmill.py -q` — os 8 scripts rodam contra o fake Google; `oauth_expired` produz o mesmo envelope que `parse_windmill_result` classifica como `reason=oauth`
