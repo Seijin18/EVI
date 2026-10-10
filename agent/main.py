@@ -285,7 +285,9 @@ def _chat_impl(
 ) -> Dict[str, Any]:
     from services.turn_log import end_turn, record_turn, start_turn
 
-    collector, token = start_turn(channel, session_id, is_test, input_kind)
+    collector, token = start_turn(
+        channel, session_id, is_test, input_kind, user_text=request.message
+    )
     started = time.monotonic()
     reply: Optional[str] = None
     error: Optional[str] = None

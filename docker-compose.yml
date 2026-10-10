@@ -142,6 +142,7 @@ services:
       - WINDMILL_WEBHOOK_EMAIL=${WINDMILL_WEBHOOK_EMAIL}
       - WINDMILL_WEBHOOK_EMAIL_DELETE=${WINDMILL_WEBHOOK_EMAIL_DELETE:-http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/delete_emails}
       - WINDMILL_WEBHOOK_EMAIL_DELETE_QUERY=${WINDMILL_WEBHOOK_EMAIL_DELETE_QUERY:-http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/delete_emails_by_query}
+      - WINDMILL_WEBHOOK_EMAIL_SEARCH=${WINDMILL_WEBHOOK_EMAIL_SEARCH:-http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/search_emails}
       - WINDMILL_WEBHOOK_TELEGRAM=${WINDMILL_WEBHOOK_TELEGRAM}
       - WINDMILL_TOKEN=${WINDMILL_TOKEN:-}
       - WINDMILL_CALENDAR_ID=${WINDMILL_CALENDAR_ID:-primary}

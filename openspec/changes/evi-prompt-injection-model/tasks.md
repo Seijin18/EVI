@@ -6,7 +6,7 @@
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_handler.py -q` — chat desconhecido não chega ao grafo; sem `TELEGRAM_CHAT_ID` configurado, comportamento atual (aviso no log)
 
 
-- [ ] 1.1 Exclusão em dois passos com token em snapshot, turno posterior e confirmação do texto do usuário; `max_messages` ≤ 50
+- [x] 1.1 Exclusão em dois passos com token em snapshot, turno posterior e confirmação do texto do usuário; `max_messages` ≤ 50
   - SCN-INJ-01, SCN-INJ-02
   - Files: `agent/tools/email_tool.py`, `agent/services/write_guard.py`, `agent/services/turn_log.py`, `tests/unit/test_email_delete_confirm.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_email_delete_confirm.py -q`

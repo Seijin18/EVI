@@ -32,6 +32,19 @@ def is_test_session(session_id: str | None) -> bool:
     return bool(session_id) and str(session_id).startswith(TEST_SESSION_PREFIXES)
 
 
+_seq_lock = threading.Lock()
+_last_seq = 0
+
+
+def _next_turn_seq() -> int:
+    """Strictly increasing turn id, comparable across turns (and restarts):
+    wall-clock nanoseconds, bumped by 1 when two turns start in the same tick."""
+    global _last_seq
+    with _seq_lock:
+        _last_seq = max(time.time_ns(), _last_seq + 1)
+        return _last_seq
+
+
 class TurnCollector(BaseCallbackHandler):
     """Collects tool outcomes, tool timings and LLM call count for one turn."""
 
@@ -41,8 +54,11 @@ class TurnCollector(BaseCallbackHandler):
         is_test: bool = False,
         session_id: str | None = None,
         input_kind: str = "text",
+        user_text: str = "",
     ) -> None:
         self.channel = channel
+        self.user_text = user_text or ""
+        self.turn_seq = _next_turn_seq()
         self.input_kind = input_kind or "text"
         self.session_id = session_id
         self.is_test = bool(is_test)
@@ -137,9 +153,14 @@ def start_turn(
     session_id: str | None = None,
     is_test: bool = False,
     input_kind: str = "text",
+    user_text: str = "",
 ) -> tuple[TurnCollector, Any]:
     collector = TurnCollector(
-        channel, bool(is_test) or is_test_session(session_id), session_id, input_kind
+        channel,
+        bool(is_test) or is_test_session(session_id),
+        session_id,
+        input_kind,
+        user_text,
     )
     return collector, _current.set(collector)
 
@@ -154,6 +175,19 @@ def current_session_id() -> str | None:
     """Session id of the turn in progress (None outside a /chat turn)."""
     collector = _current.get()
     return getattr(collector, "session_id", None) if collector is not None else None
+
+
+def current_user_text() -> str:
+    """The user's message of the turn in progress, as set by the handler (never by
+    the model). Empty outside a /chat turn."""
+    collector = _current.get()
+    return str(getattr(collector, "user_text", "") or "") if collector is not None else ""
+
+
+def current_turn_seq() -> int | None:
+    """Strictly increasing id of the turn in progress (None outside a /chat turn)."""
+    collector = _current.get()
+    return getattr(collector, "turn_seq", None) if collector is not None else None
 
 
 def current_is_test() -> bool:

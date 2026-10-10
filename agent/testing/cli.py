@@ -932,14 +932,19 @@ def run_inbox_ux() -> bool:
     try:
         from unittest.mock import MagicMock
 
-        with patch("integrations.factory.get_integration") as get_int:
+        search_raw = json.dumps(
+            {"status": "ok", "count": 1, "messages": [{"id": "a", "subject": "s", "from": "f"}]}
+        )
+        with patch("tools.email_tool.get_integration") as get_int:
             integration = MagicMock()
-            integration.post.return_value = delete_raw
+            integration.post.return_value = search_raw
             get_int.return_value = integration
             from tools.email_tool import delete_emails_by_query
 
             out = delete_emails_by_query.invoke({"q": "from:aliexpress OR from:olx"})
-        ok = ok and "2 email" in str(out) and "failed" not in str(out).lower()
+        # two-step deletion: the first call only searches, never trashes
+        ops = [c[0][0] for c in integration.post.call_args_list]
+        ok = ok and ops == ["search_emails"] and "movido" not in str(out)
     except ImportError:
         pass
 

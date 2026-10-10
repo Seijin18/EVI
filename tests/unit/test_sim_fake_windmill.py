@@ -264,3 +264,12 @@ def test_undeclared_payload_keys_are_dropped_like_real_windmill(wm, google):
     status, raw = run(wm, "schedule_event", payload)
     assert status == 200, raw
     assert [e["summary"] for e in google.state()["created"]["calendar"]] == ["Dentista"]
+
+
+def test_search_emails_lists_without_trashing(wm, google):
+    status, raw = run(wm, "search_emails", {"q": "category:promotions", "gmail": "$res:gmail"})
+    assert status == 200, raw
+    out = json.loads(raw)
+    assert out["status"] == "ok" and out["count"] == len(out["messages"]) >= 1
+    assert all({"id", "subject", "from"} <= set(m) for m in out["messages"])
+    assert google.state()["trashed"] == []
