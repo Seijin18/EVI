@@ -12,7 +12,7 @@
 
 ## 2. Fakes
 
-- [ ] 2.1 Fake Google com estado (Calendar, Tasks, Gmail — subconjunto usado pelos scripts) + `/_sim/seed|state|reset`
+- [x] 2.1 Fake Google com estado (Calendar, Tasks, Gmail — subconjunto usado pelos scripts) + `/_sim/seed|state|reset`
   - SCN-SIM-03
   - Files: `agent/testing/sim/fake_google.py`, `tests/unit/test_sim_fake_google.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_fake_google.py -q` — endpoint não implementado responde 500 com a URL
