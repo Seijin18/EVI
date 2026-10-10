@@ -273,6 +273,17 @@ def render_markdown(r: Dict[str, Any]) -> str:
         for k, v in p.items():
             L.append(f"- {k}: {v} dia(s)")
     L.append("")
+    L.append("## Formatos novos do Evolution")
+    sh = r.get("shapes")
+    if sh is None:
+        L.append(UNAVAILABLE)
+    elif not sh:
+        L.append("Nenhum.")
+    else:
+        L.append(f"{len(sh)} assinatura(s) nova(s); virar fixture do fake Evolution:")
+        for item in sh:
+            L.append(f"- data/payload_shapes/{item['file']} ({item.get('event') or 'sem evento'})")
+    L.append("")
     L.append("## Turnos para revisar")
     rev = r["review"]
     if rev is None:
@@ -422,6 +433,13 @@ def build_report(week_start: datetime, now: datetime | None = None) -> Dict[str,
             db.list_probes(week_start.date(), (end - timedelta(days=1)).date())
         ),
     )
+
+    def _shapes():
+        from services.payload_shapes import list_new_shapes
+
+        return list_new_shapes(week_start, end)
+
+    r["shapes"] = _section("payload_shapes", _shapes)
     return r
 
 

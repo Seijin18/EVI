@@ -423,6 +423,12 @@ def evolution_webhook(
     log_path = log_dir / "evolution_webhook.jsonl"
     ts = datetime.now(timezone.utc).isoformat()
     event = body.get("event") or body.get("type") or "unknown"
+    try:
+        from services.payload_shapes import capture as capture_payload_shape
+
+        capture_payload_shape(body)
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("main.evolution_webhook.payload_shape", exc)
     raw = parse_evolution_webhook(body)
     from services.evolution_client import is_evi_bot_message
     from services.whatsapp_control import (

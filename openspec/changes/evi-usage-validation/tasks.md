@@ -49,7 +49,7 @@
   - Files: `agent/testing/sim/promote.py`, `agent/testing/sim/runner.py`, `scripts/evi-sim`, `tests/unit/test_sim_promote.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_promote.py -q` — nenhum telefone, e-mail ou nome do seed original no YAML gerado
 
-- [ ] 3.2 Assinatura de formato de payload do Evolution + gravação estrutural de formatos novos
+- [x] 3.2 Assinatura de formato de payload do Evolution + gravação estrutural de formatos novos
   - SCN-USE-08
   - Files: `agent/services/payload_shapes.py`, `agent/main.py`, `tests/unit/test_payload_shapes.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_payload_shapes.py -q` — payload gravado não contém nenhum valor de texto original

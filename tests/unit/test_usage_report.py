@@ -198,3 +198,14 @@ def test_endpoint_end_to_end(tmp_path, monkeypatch):
     assert len(sent) == 1 and len(sent[0].splitlines()) <= 10 and "consulta unica" not in sent[0]
     assert TestClient(main.app).post("/jobs/usage-report?week=bad").status_code == 400
     assert TestClient(main.app).post("/jobs/usage-signals").json()["ok"] is True
+
+
+def test_report_lists_new_payload_shapes_without_values():
+    base = {
+        "label": "2026-W41", "start": datetime(2026, 10, 5, tzinfo=timezone.utc),
+        "end": datetime(2026, 10, 12, tzinfo=timezone.utc), "kpis": None, "review": None,
+        "prev_kpis": None, "base_kpis": None, "commitments": None, "probes": None,
+    }
+    md = ur.render_markdown({**base, "shapes": [{"file": "abc123.json", "event": "messages.upsert"}]})
+    assert "## Formatos novos do Evolution" in md and "abc123.json" in md
+    assert ur.UNAVAILABLE in ur.render_markdown({**base, "shapes": None}).split("Formatos novos")[1]
