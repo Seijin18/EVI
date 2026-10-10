@@ -205,3 +205,16 @@ if __name__ == "__main__":
     test_extract_meeting_hoje()
     test_extract_dinner_proxima_semana()
     print("All whatsapp unit tests passed")
+
+
+def test_extract_uses_local_date_at_2230_sao_paulo(monkeypatch):
+    # 22:30 in São Paulo on 06-03 is 01:30 UTC on 06-04: "amanhã" is local 06-04, not 06-05.
+    monkeypatch.setenv("EVI_TIMEZONE", "America/Sao_Paulo")
+    msg = IncomingMessage(
+        id="w_tz",
+        sender="Maria",
+        text="Reunião com o cliente amanhã às 14h na sala 3",
+        ts="2026-06-04T01:30:00+00:00",
+    )
+    c = extract_commitment(msg)
+    assert c is not None and c.date == "2026-06-04"

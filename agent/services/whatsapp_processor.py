@@ -84,7 +84,17 @@ _PERIOD_TIME = {"manhã": "09:00", "manha": "09:00", "tarde": "14:00", "noite": 
 
 
 def _parse_ref_dt(ts: str) -> datetime:
-    return datetime.fromisoformat(ts.replace("Z", "+00:00").split("+")[0])
+    """Message timestamp as a naive datetime on the LOCAL (EVI_TIMEZONE) calendar.
+
+    Timestamps are UTC (or carry an offset); "amanhã" must mean the user's local
+    tomorrow, not the UTC one.
+    """
+    from tools.calendar_time import now_local
+
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(now_local().tzinfo).replace(tzinfo=None)
 
 
 def _next_weekday(ref: datetime, weekday: int) -> datetime:
