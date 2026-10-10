@@ -1,0 +1,13 @@
+id: SIM-WA-02
+title: WhatsApp - mensagem de grupo fora da whitelist é ignorada
+tags: [whatsapp, commitments]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "Pessoal, churrasco amanhã às 13h na casa do Beltrano", group: true, jid: "5511955550004@s.whatsapp.net", push_name: "Membro Teste"}
+    expect:
+      postgres:
+        - {table: pending_commitments, count: 0}
+      calendar: {count: 0}
+      tasks: {count: 0}
+      outbound_to_third_parties: 0

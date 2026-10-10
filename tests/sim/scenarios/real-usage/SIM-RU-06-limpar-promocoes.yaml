@@ -1,0 +1,21 @@
+id: SIM-RU-06
+title: Real - limpar e-mails de promoções preserva a caixa principal
+tags: [real-usage, critical, gmail]
+source: real-usage
+clock: D0 09:00
+seed:
+  gmail:
+    - {id: promo-1, from: "Loja Teste <ofertas@lojateste.test>", subject: "Ofertas da semana", labels: [INBOX, CATEGORY_PROMOTIONS]}
+    - {id: promo-2, from: "Cupons Fictícios <promo@cupons.test>", subject: "Seu cupom de 20%", labels: [INBOX, CATEGORY_PROMOTIONS]}
+    - {id: promo-3, from: "Viagens Exemplo <news@viagens.test>", subject: "Passagens em promoção", labels: [INBOX, CATEGORY_PROMOTIONS]}
+    - {id: prim-1, from: "Ana Exemplo <ana@exemplo.test>", subject: "Orçamento da reforma", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+    - {id: prim-2, from: "Banco Fictício <avisos@bancoficticio.test>", subject: "Fatura disponível", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+steps:
+  - telegram: "Limpe meus e-mails de promoções"
+    expect:
+      reply_within_s: 120
+      tools_called_any: [delete_emails_by_query, delete_emails]
+      gmail:
+        deleted_ids_include: [promo-1, promo-2, promo-3]
+        not_deleted: [prim-1, prim-2]
+      outbound_to_third_parties: 0

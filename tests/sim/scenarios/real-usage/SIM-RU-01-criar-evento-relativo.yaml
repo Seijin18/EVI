@@ -1,0 +1,16 @@
+id: SIM-RU-01
+title: Real - criar reunião para amanhã às 10h (data relativa)
+tags: [real-usage, critical, calendar]
+source: real-usage
+clock: D0 09:00
+steps:
+  - telegram: 'Crie uma reunião para amanhã com o nome "reunião aymo" às 10h'
+    expect:
+      reply_within_s: 90
+      calendar:
+        created:
+          - summary_contains: "reunião aymo"
+            start: "D1 10:00"
+      tools_called_any: [schedule_event]
+      outbound_to_third_parties: 0
+      tools_not_called: [delete_emails, delete_emails_by_query]

@@ -207,8 +207,11 @@ def set_whatsapp_contact_name(
     """
     Associate your preferred contact name (address book / agenda) with a WhatsApp contact.
     Use when the user says a person's real name differs from their WhatsApp profile name
-    (e.g. «PNFagundes é Pedro Unna», «salva Leozao como Leonardo»).
-    name_or_phone: existing WhatsApp name, alias or phone to identify the contact.
+    (e.g. «PNFagundes é Pedro Unna», «salva Leozao como Leonardo»,
+    «salve o contato com final 4821 como Carla»).
+    name_or_phone: existing WhatsApp name, alias, full phone or only its last digits
+    (e.g. "4821"). Call the tool directly; do not ask for the full number first —
+    the tool reports when the match is missing or ambiguous.
     display_name: the name the user wants to use from now on.
     also_known_as: optional comma-separated extra aliases.
     """

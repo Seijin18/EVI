@@ -37,6 +37,7 @@ Faults (``set_faults({op_or_"*": fault})``, per scenario ``faults:``):
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -240,6 +241,11 @@ class FakeWindmill:
             os.environ.update(env)
             try:
                 mod = self._load(script, op, expired)
+                # Real Windmill only forwards args declared in main()'s signature
+                # (extra payload keys such as the client's `action` are dropped).
+                params = inspect.signature(mod.main).parameters
+                if not any(p.kind is p.VAR_KEYWORD for p in params.values()):
+                    args = {k: v for k, v in args.items() if k in params}
                 result = mod.main(**args)
             except Exception as e:  # noqa: BLE001 - Windmill reports any script failure as 500
                 entry["error"] = f"{type(e).__name__}: {e}"

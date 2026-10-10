@@ -1,0 +1,11 @@
+id: SIM-RU-07
+title: Real - "o que você sabe sobre X" é só leitura
+tags: [real-usage, contacts]
+source: real-usage
+clock: D0 09:00
+steps:
+  - telegram: "O que você sabe sobre a Marina Exemplo?"
+    expect:
+      reply_within_s: 90
+      outbound_to_third_parties: 0
+      tools_not_called: [schedule_event, create_task, delete_emails, delete_emails_by_query, confirm_commitments, dismiss_commitments, set_whatsapp_contact_name, learn_whatsapp_contact]

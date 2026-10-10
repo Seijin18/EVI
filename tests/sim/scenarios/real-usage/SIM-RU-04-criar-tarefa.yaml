@@ -1,0 +1,16 @@
+id: SIM-RU-04
+title: Real - criar tarefa com prazo
+tags: [real-usage, critical, tasks]
+source: real-usage
+clock: D0 09:00
+steps:
+  - telegram: "Crie uma tarefa: renovar o seguro do carro, para depois de amanhã"
+    expect:
+      reply_within_s: 90
+      tasks:
+        created:
+          - title_contains: "seguro"
+            due: "D2"
+      tools_called_any: [create_task]
+      outbound_to_third_parties: 0
+      tools_not_called: [delete_emails, delete_emails_by_query]

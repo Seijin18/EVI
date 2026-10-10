@@ -1,0 +1,19 @@
+id: SIM-RU-08
+title: Real - renomear contato identificado pelo final do número
+tags: [real-usage, contacts]
+source: real-usage
+clock: D0 09:00
+seed:
+  evolution:
+    contacts:
+      - {remoteJid: "5511955554821@s.whatsapp.net", pushName: "Cati"}
+      - {remoteJid: "5511955550077@s.whatsapp.net", pushName: "Rafa Teste"}
+steps:
+  - telegram: "Salve o contato com final 4821 como Carla Exemplo"
+    expect:
+      reply_within_s: 90
+      tools_called_any: [set_whatsapp_contact_name]
+      postgres:
+        - {table: whatsapp_contacts, where: {display_name: "Carla Exemplo"}, count: 1}
+      outbound_to_third_parties: 0
+      tools_not_called: [delete_emails, delete_emails_by_query]

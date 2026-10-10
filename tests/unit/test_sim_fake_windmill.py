@@ -240,3 +240,11 @@ def test_starlette_app(wm):
     assert c.post("/_sim/faults", json={"x": "bad"}).status_code == 400
     c.delete("/_sim/faults")
     assert c.post(RUN + "list_tasks", json=OPS["list_tasks"]).status_code == 200
+
+
+def test_undeclared_payload_keys_are_dropped_like_real_windmill(wm, google):
+    # the agent client always adds "action"; main() does not declare it
+    payload = dict(OPS["schedule_event"], action="schedule_event", bogus=1)
+    status, raw = run(wm, "schedule_event", payload)
+    assert status == 200, raw
+    assert [e["summary"] for e in google.state()["created"]["calendar"]] == ["Dentista"]

@@ -1,0 +1,27 @@
+id: SIM-WA-01
+title: WhatsApp - contato propõe horário, usuário confirma, evento criado sem responder ao terceiro (SCN-SIM-05)
+tags: [whatsapp, critical, commitments]
+source: synthetic
+description: >
+  O corpus real usa "quinta 19h", mas o schema só expressa datas D<n> relativas ao dia
+  real da execução (sem "próxima quinta"), então o contato diz "amanhã às 19h" para
+  manter o start determinístico (D1 19:00).
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "Bora jogar vôlei amanhã às 19h?", jid: "5511955550003@s.whatsapp.net", push_name: "Beltrano Teste"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {status: pending}, count: 1}
+      outbound_to_third_parties: 0
+  - telegram: "confirma o vôlei"
+    expect:
+      reply_within_s: 90
+      tools_called_any: [confirm_commitments]
+      calendar:
+        created:
+          - summary_contains: "vôlei"
+            start: "D1 19:00"
+      postgres:
+        - {table: pending_commitments, where: {status: scheduled}, count: 1}
+      outbound_to_third_parties: 0
+      tools_not_called: [delete_emails, delete_emails_by_query]

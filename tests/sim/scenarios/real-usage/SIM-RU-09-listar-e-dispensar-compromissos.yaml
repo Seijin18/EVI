@@ -1,0 +1,23 @@
+id: SIM-RU-09
+title: Real - listar e dispensar todos os compromissos pendentes
+tags: [real-usage, commitments]
+source: real-usage
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "Vamos jantar amanhã às 20h?", jid: "5511955550001@s.whatsapp.net", push_name: "Beltrano Teste"}
+  # why: heuristic extractor (whatsapp_processor.extract_commitment) drops a bare "reunião" title
+  # (generic) and only keeps "reunião com X"; Ollama LLM fallback is off in the sim.
+  - whatsapp_contact: {text: "Lembra da reunião com o síndico amanhã às 18h", jid: "5511955550002@s.whatsapp.net", push_name: "Sicrana Teste"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {status: pending}, count: 2}
+  - telegram: "Liste meus compromissos pendentes e dispense todos"
+    expect:
+      reply_within_s: 90
+      tools_called_any: [dismiss_commitments]
+      postgres:
+        - {table: pending_commitments, where: {status: pending}, count: 0}
+        - {table: pending_commitments, where: {status: dismissed}, count: 2}
+      calendar: {count: 0}
+      outbound_to_third_parties: 0
+      tools_not_called: [delete_emails, delete_emails_by_query]

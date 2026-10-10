@@ -39,10 +39,11 @@
   - Files: `agent/testing/sim/runner.py`, `agent/testing/sim/report.py`, `tests/unit/test_sim_report.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_sim_report.py -q` — `critical` 2/3 reprova; `--max-llm-calls` interrompe com relatório parcial
 
-- [ ] 3.3 Corpus de uso real (11 cenários) + fluxo WhatsApp (3), com dados fictícios
+- [x] 3.3 Corpus de uso real (11 cenários) + fluxo WhatsApp (3), com dados fictícios
   - SCN-SIM-04, SCN-SIM-05
   - Files: `tests/sim/scenarios/real-usage/`, `tests/sim/scenarios/whatsapp/`
   - Verify: `./scripts/evi-sim run --tag real-usage,whatsapp --repeat 3 --llm live` — registrar a taxa no relatório; cenário reprovado vira bug aberto ou ajuste de expectativa justificado no próprio YAML
+  - As-built 2026-10-10: 15/15 no limiar (SIM-RU-08 3/3 após ajuste da docstring de `set_whatsapp_contact_name`); relatórios em `logs/sim/`
 
 - [ ] 3.4 Cenários de falha (3) e adversariais (3)
   - SCN-SIM-06, SCN-SIM-08

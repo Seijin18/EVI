@@ -1,0 +1,12 @@
+id: SIM-WA-03
+title: WhatsApp - mensagem própria (from_me) não gera compromisso
+tags: [whatsapp, commitments]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "Marcado então, amanhã às 19h no clube", from_me: true, jid: "5511955550005@s.whatsapp.net", push_name: "Beltrano Teste"}
+    expect:
+      postgres:
+        - {table: pending_commitments, count: 0}
+      calendar: {count: 0}
+      outbound_to_third_parties: 0
