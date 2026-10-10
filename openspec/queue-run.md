@@ -1,6 +1,6 @@
 # Execução da fila — iniciada 2026-10-10
 ## Estado
-- Change atual: evi-usage-validation (fase: implementar) — task 1.2 (3.1 em paralelo)
+- Change atual: evi-usage-validation (fase: implementar) — task 2.3
 - Ordem: evi-sim-harness → evi-usage-validation → evi-morning-briefing → evi-reminders → evi-reply-debts → evi-voice-input → evi-perceived-reliability → evi-prompt-injection-model
 - Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5)
 - Pulados: evi-background-execution (#38) — condicional: "abrir só se o ack imediato do #44 não bastar na prática"; exige dados de uso real
@@ -17,5 +17,6 @@
 ## Pendências do usuário (não bloqueantes)
 - [ ] Criar projeto Gemini separado e definir `EVI_SIM_GEMINI_API_KEY` no `.env` — a simulação hoje consome a cota de produção — `.env`
 - [ ] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf`
+- [ ] Revisar o dry-run e apagar dados de teste em produção (4 compromissos "Teste digest Telegram" ids 21/36/40/41; 8 linhas de `messages` de sessões de teste) — destrutivo, decisão sua — `scripts/evi-cleanup-test-data` e depois `scripts/evi-cleanup-test-data --apply`
 ## Bloqueios
 - —

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# List harness/test rows left in production tables (turn_log, pending_commitments,
+# messages). Dry-run by default; pass --apply to delete. See --help for the SQL.
+# Pipes agent/testing/cleanup.py to the running agent-api container (works with
+# an image older than the module). EVI_CLEANUP_LOCAL=1 runs it with the local
+# .venv and DATABASE_URL instead.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MOD="${ROOT}/agent/testing/cleanup.py"
+if [[ "${EVI_CLEANUP_LOCAL:-}" == "1" ]]; then
+  exec "${ROOT}/.venv/bin/python" "$MOD" "$@"
+fi
+cd "$ROOT"
+exec docker compose exec -T agent-api python - "$@" < "$MOD"

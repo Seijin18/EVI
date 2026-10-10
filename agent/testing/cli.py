@@ -446,7 +446,7 @@ def run_telegram(live: bool = False) -> bool:
         try:
             import httpx
 
-            headers = {}
+            headers = {"X-Evi-Test": "1"}
             key = os.getenv("EVI_API_KEY", "").strip()
             if key:
                 headers["X-Api-Key"] = key
@@ -994,7 +994,7 @@ def run_chat(*, strict: bool = False) -> bool:
         try:
             import httpx
 
-            headers: dict[str, str] = {}
+            headers: dict[str, str] = {"X-Evi-Test": "1"}
             key = os.getenv("EVI_API_KEY", "").strip()
             if key:
                 headers["X-Api-Key"] = key

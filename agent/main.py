@@ -98,8 +98,12 @@ def _compact_session(session_id: str) -> None:
         memory.add(msg)
 
 
-def _telegram_invoke_chat(message: str, session_id: str) -> Dict[str, Any]:
-    return _run_chat(ChatRequest(message=message, session_id=session_id), session_id, "telegram")
+def _telegram_invoke_chat(
+    message: str, session_id: str, is_test: bool = False
+) -> Dict[str, Any]:
+    return _run_chat(
+        ChatRequest(message=message, session_id=session_id), session_id, "telegram", is_test
+    )
 
 
 def _whatsapp_control_invoke_chat(message: str, session_id: str) -> Dict[str, Any]:
@@ -222,13 +226,21 @@ def reset_memory(
 def chat(
     request: ChatRequest,
     x_session_id: Optional[str] = Header(default=None),
+    x_evi_test: Optional[str] = Header(default=None),
     _: None = Depends(verify_api_key),
 ):
     session_id = request.session_id or x_session_id or app_state.default_session
-    return _run_chat(request, session_id, "api")
+    return _run_chat(request, session_id, "api", _header_is_test(x_evi_test))
 
 
-def _run_chat(request: ChatRequest, session_id: str, channel: str) -> Dict[str, Any]:
+def _header_is_test(value: Optional[str]) -> bool:
+    """`X-Evi-Test: 1` marks a harness turn (excluded from every KPI)."""
+    return isinstance(value, str) and value.strip().lower() in ("1", "true")
+
+
+def _run_chat(
+    request: ChatRequest, session_id: str, channel: str, is_test: bool = False
+) -> Dict[str, Any]:
     """Single entry for every turn (HTTP, Telegram, WhatsApp control); `channel`
     is only used to label the turn_log row."""
     if not app_state.graph:
@@ -237,10 +249,12 @@ def _run_chat(request: ChatRequest, session_id: str, channel: str) -> Dict[str, 
     from services.session_lane import session_lane
 
     with session_lane(session_id):
-        return _chat_impl(request, session_id, channel)
+        return _chat_impl(request, session_id, channel, is_test)
 
 
-def _chat_impl(request: ChatRequest, session_id: str, channel: str = "api") -> Dict[str, Any]:
+def _chat_impl(
+    request: ChatRequest, session_id: str, channel: str = "api", is_test: bool = False
+) -> Dict[str, Any]:
     from services.turn_log import end_turn, record_turn, start_turn
 
     collector, token = start_turn()
@@ -264,6 +278,7 @@ def _chat_impl(request: ChatRequest, session_id: str, channel: str = "api") -> D
             reply_text=reply,
             latency_ms=int((time.monotonic() - started) * 1000),
             error=error,
+            is_test=is_test,
         )
 
 
@@ -367,15 +382,17 @@ def generate_insight(request: InsightRequest, _: None = Depends(verify_api_key))
 @app.post("/webhooks/telegram")
 def telegram_webhook(
     update: TelegramUpdate,
+    x_evi_test: Optional[str] = Header(default=None),
     _: None = Depends(verify_api_key),
 ):
     """Telegram webhook → EVI chat (use TELEGRAM_MODE=polling to skip tunnel)."""
     from services.telegram_handler import process_telegram_update
 
     payload = update.model_dump() if hasattr(update, "model_dump") else {"message": update.message}
+    flagged = _header_is_test(x_evi_test)
     return process_telegram_update(
         payload,
-        _telegram_invoke_chat,
+        (lambda m, sid: _telegram_invoke_chat(m, sid, True)) if flagged else _telegram_invoke_chat,
         reset_session=_reset_session,
         compact_session=_compact_session,
     )

@@ -10,7 +10,7 @@
   - Files: `agent/services/turn_log.py`, `agent/services/tool_result.py`, `agent/main.py`, `tests/unit/test_turn_log.py`, `tests/sim/scenarios/usage/SIM-USE-01.yaml`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_turn_log.py tests/unit/test_tool_result.py tests/unit/test_main_endpoints.py -q` — tool Windmill que falha grava `ok=false, reason`; erro no log não derruba o turno; `./scripts/evi-sim run --id SIM-USE-01 --repeat 3 --llm live` (Telegram + controle WhatsApp gravam `turn_log`; OAuth expirado em `schedule_event` → `reason=oauth`; `turn_log` entra na allowlist de `postgres:` do schema)
 
-- [ ] 1.3 `is_test` (prefixos + `X-Evi-Test`) nos harnesses e `scripts/evi-cleanup-test-data` (dry-run por padrão)
+- [x] 1.3 `is_test` (prefixos + `X-Evi-Test`) nos harnesses e `scripts/evi-cleanup-test-data` (dry-run por padrão)
   - SCN-USE-02
   - Files: `agent/services/turn_log.py`, `agent/testing/cli.py`, `scripts/evi-cleanup-test-data`, `scripts/evi-telegram-verify.sh`
   - Verify: `./scripts/evi-test smoke` grava turnos com `is_test=true`; `scripts/evi-cleanup-test-data` lista as 3 linhas "Teste digest Telegram" sem apagar

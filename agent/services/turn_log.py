@@ -131,10 +131,29 @@ def record_turn(
     reply_text: str | None,
     latency_ms: int,
     error: str | None = None,
+    is_test: bool = False,
 ) -> None:
-    """Persist one turn to `turn_log`. Never raises; no-op without DATABASE_URL."""
+    """Persist one turn to `turn_log`. Never raises; no-op without DATABASE_URL.
+
+    `is_test` forces the flag (X-Evi-Test header); test-prefixed session ids are
+    flagged regardless. Test turns never feed the Prometheus turn counter."""
     import os
 
+    test = bool(is_test) or is_test_session(session_id)
+    tools = collector.tools() if collector else []
+    if not test:
+        try:
+            from services import metrics
+
+            if error:
+                outcome = "error"
+            elif any(t.get("ok") is False for t in tools):
+                outcome = "tool_failed"
+            else:
+                outcome = "ok"
+            metrics.record_turn(channel, outcome)
+        except Exception as exc:
+            soft_fail("turn_log.record_turn.metrics", exc)
     if not os.getenv("DATABASE_URL"):
         return
     try:
@@ -145,11 +164,11 @@ def record_turn(
             channel=channel,
             user_text=user_text,
             reply_text=reply_text,
-            tools=collector.tools() if collector else [],
+            tools=tools,
             latency_ms=latency_ms,
             llm_calls=collector.llm_calls if collector else None,
             error=error,
-            is_test=is_test_session(session_id),
+            is_test=test,
         )
     except Exception as exc:
         soft_fail("turn_log.record_turn", exc)
