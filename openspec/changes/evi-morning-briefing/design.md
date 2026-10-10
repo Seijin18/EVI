@@ -142,3 +142,21 @@ Python nova.
 
 Ver `proposal.md`. Além disso: personalização de seções pelo usuário via chat,
 briefing semanal, envio por WhatsApp.
+
+## As-built (2026-10-10)
+
+- Snapshot compacto `{"kind","day","refs":{"<n>":"<kind>:<id>"}}`, fixado no contexto
+  durante o dia mesmo depois de 3 outras tools; texto do briefing também salvo em
+  `messages` (a reidratação do histórico apagaria só a memória em processo).
+- Idempotência por **claim atômico** de `(day, kind)` antes de montar (`in_progress`
+  enquanto outro envio está em curso; reclamável após 10 min); envio que falha nunca
+  rebaixa uma linha `ok`.
+- Engajamento: um `UPDATE` sobre a janela de 3 h de `sent_at` (cobre a virada da noite),
+  só com a flag e banco ligados.
+- `wrap_external` também em títulos de tarefa e na saída do resumo WhatsApp; corte do
+  contexto em linhas inteiras. Saídas das tools `summarize_inbox`/`list_calendar_events`
+  ficam para o #37.
+- `summarize_inbox` devolve `labelIds`/`date`; `list_events` devolve `id/start_iso/end_iso`
+  (aditivo; exige `wmill sync push`).
+- A simulação passou a semear os arquivos versionados do `EVI_WORKSPACE` + `USER.md`
+  fictício (antes rodava sem bootstrap). Cenários `SIM-BRIEF-01..04`.

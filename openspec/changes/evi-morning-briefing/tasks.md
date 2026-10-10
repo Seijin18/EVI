@@ -60,6 +60,6 @@
   - Verify: `./scripts/evi-test briefing && ./scripts/evi-test smoke && ./scripts/evi-sim run --tag briefing --repeat 3 --llm live` (smoke passa a 14/14; `SIM-BRIEF-*` 3/3)
 
 
-- [ ] 3.2 Sincronizar specs com o as-built, atualizar contagens (10 specs, smoke 14/14) em `CLAUDE.md`/`Progress.md`/`BACKLOG.md`, `openspec archive`
+- [x] 3.2 Sincronizar specs com o as-built, atualizar contagens (10 specs, smoke 14/14) em `CLAUDE.md`/`Progress.md`/`BACKLOG.md`, `openspec archive`
   - Files: `openspec/changes/evi-morning-briefing/specs/`, `CLAUDE.md`, `Progress.md`, `openspec/BACKLOG.md`
   - Verify: `openspec validate --specs && PYTHONPATH=agent python3 -m pytest tests/unit -q && ruff check agent/ --select E,W,F --ignore E501`
