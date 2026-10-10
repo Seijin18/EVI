@@ -142,7 +142,8 @@ def test_build_llm_gemini_sets_request_timeout():
         with patch.dict(os.environ, {"EVI_LLM_PROVIDER": "gemini"}):
             os.environ.pop("EVI_LLM_TIMEOUT_SEC", None)
             llm_mod.build_llm()
-            assert fake_module.ChatGoogleGenerativeAI.call_args.kwargs["timeout"] == 60.0
+            assert fake_module.ChatGoogleGenerativeAI.call_args.kwargs["timeout"] == 30.0
+            assert fake_module.ChatGoogleGenerativeAI.call_args.kwargs["max_retries"] == 2
             with patch.dict(os.environ, {"EVI_LLM_TIMEOUT_SEC": "25"}):
                 llm_mod.build_llm()
             assert fake_module.ChatGoogleGenerativeAI.call_args.kwargs["timeout"] == 25.0

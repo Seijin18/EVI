@@ -103,9 +103,10 @@ def build_llm(
             model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
             google_api_key=os.getenv("GEMINI_API_KEY", ""),
             temperature=temperature if temperature is not None else 0.1,
-            # Without a timeout a hung request blocks the turn forever (seen in evi-sim);
-            # on timeout the client retries.
-            timeout=float(os.getenv("EVI_LLM_TIMEOUT_SEC", "60")),
+            # Per-attempt timeout + few retries: a hung request must not block the turn
+            # for minutes (seen in evi-sim; the library default is 6 retries).
+            timeout=float(os.getenv("EVI_LLM_TIMEOUT_SEC", "30")),
+            max_retries=int(os.getenv("EVI_LLM_MAX_RETRIES", "2")),
             **_gemini_thinking_kwargs(),
         )
 
