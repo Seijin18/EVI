@@ -3,12 +3,12 @@
 - [ ] 1.1 Tabela `turn_log` + `probe_log` + funções de gravação/consulta
   - SCN-USE-01
   - Files: `agent/db.py`, `tests/unit/test_db.py`
-  - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_db.py -q` (PG efêmero; migração idempotente)
+  - Verify: `DATABASE_URL=postgresql://postgres:t@127.0.0.1:55432/postgres PYTHONPATH=agent python3 -m pytest tests/unit/test_db.py -q` com PG efêmero (`docker run --rm -d --name evi-unit-pg -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=t postgres:15-alpine`; sem `DATABASE_URL` o teste é pulado); migração idempotente
 
 - [ ] 1.2 Coletor por turno (`ContextVar`) alimentado por `parse_windmill_result` + gravação no handler de `/chat` em `soft_fail`
   - SCN-USE-01
-  - Files: `agent/services/turn_log.py`, `agent/services/tool_result.py`, `agent/main.py`, `tests/unit/test_turn_log.py`
-  - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_turn_log.py tests/unit/test_tool_result.py tests/unit/test_main_endpoints.py -q` — tool Windmill que falha grava `ok=false, reason`; erro no log não derruba o turno
+  - Files: `agent/services/turn_log.py`, `agent/services/tool_result.py`, `agent/main.py`, `tests/unit/test_turn_log.py`, `tests/sim/scenarios/usage/SIM-USE-01.yaml`
+  - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_turn_log.py tests/unit/test_tool_result.py tests/unit/test_main_endpoints.py -q` — tool Windmill que falha grava `ok=false, reason`; erro no log não derruba o turno; `./scripts/evi-sim run --id SIM-USE-01 --repeat 3 --llm live` (Telegram + controle WhatsApp gravam `turn_log`; OAuth expirado em `schedule_event` → `reason=oauth`; `turn_log` entra na allowlist de `postgres:` do schema)
 
 - [ ] 1.3 `is_test` (prefixos + `X-Evi-Test`) nos harnesses e `scripts/evi-cleanup-test-data` (dry-run por padrão)
   - SCN-USE-02
@@ -19,8 +19,8 @@
 
 - [ ] 2.1 `/bom` e `/ruim [motivo]` sobre o último turno da sessão
   - SCN-USE-03
-  - Files: `agent/services/chat_commands.py`, `tests/unit/test_chat_commands.py`
-  - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_chat_commands.py -q`
+  - Files: `agent/services/chat_commands.py`, `tests/unit/test_chat_commands.py`, `tests/sim/scenarios/usage/SIM-USE-02.yaml`
+  - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_chat_commands.py -q` e `./scripts/evi-sim run --id SIM-USE-02 --repeat 3 --llm live` (`/ruim marcou o dia errado` pelo Telegram marca o turno anterior)
 
 - [ ] 2.2 Sinais implícitos (correção, reformulação, tool_failed, cant_do) — job noturno idempotente
   - SCN-USE-04
@@ -56,4 +56,4 @@
 
 - [ ] 3.3 Regra "Validação em uso real" em `config.yaml`, `docs/testing.md` (L4), sincronizar spec e arquivar
   - Files: `openspec/config.yaml`, `docs/testing.md`, `openspec/BACKLOG.md`, `Progress.md`
-  - Verify: `openspec validate --specs && PYTHONPATH=agent python3 -m pytest tests/unit -q && ./scripts/evi-sim run --tag critical --llm replay`
+  - Verify: `openspec validate --specs && PYTHONPATH=agent python3 -m pytest tests/unit -q && ./scripts/evi-sim run --tag critical --repeat 3 --llm live && ./scripts/evi-sim run --tag critical --llm replay` (regravar cassettes se o prompt mudou)
