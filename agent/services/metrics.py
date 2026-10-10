@@ -65,10 +65,29 @@ PROBE_FAILURES_TOTAL = (
     if _HAS_PROM
     else None
 )
+BRIEFING_SENT_TOTAL = (
+    Counter(
+        "evi_briefing_sent_total",
+        "Briefing delivery attempts by kind and outcome",
+        ["kind", "ok"],
+    )
+    if _HAS_PROM
+    else None
+)
+BRIEFING_REPLIED_TOTAL = (
+    Counter(
+        "evi_briefing_replied_total",
+        "Briefings the user replied to within the engagement window",
+        ["kind"],
+    )
+    if _HAS_PROM
+    else None
+)
 
 _TURN_CHANNELS = frozenset({"telegram", "whatsapp_control", "api", "job"})
 _TURN_OUTCOMES = frozenset({"ok", "error", "tool_failed"})
 _PROBE_CHECKS = frozenset({"calendar", "tasks", "gmail", "telegram"})
+_BRIEFING_KINDS = frozenset({"morning", "evening"})
 
 
 def _bounded(value: str, allowed: frozenset[str]) -> str:
@@ -102,6 +121,18 @@ def record_turn(channel: str, outcome: str) -> None:
 def record_probe_failure(check: str) -> None:
     if metrics_enabled() and PROBE_FAILURES_TOTAL is not None:
         PROBE_FAILURES_TOTAL.labels(check=_bounded(check, _PROBE_CHECKS)).inc()
+
+
+def record_briefing_sent(kind: str, ok: bool) -> None:
+    if metrics_enabled() and BRIEFING_SENT_TOTAL is not None:
+        BRIEFING_SENT_TOTAL.labels(
+            kind=_bounded(kind, _BRIEFING_KINDS), ok="true" if ok else "false"
+        ).inc()
+
+
+def record_briefing_replied(kind: str) -> None:
+    if metrics_enabled() and BRIEFING_REPLIED_TOTAL is not None:
+        BRIEFING_REPLIED_TOTAL.labels(kind=_bounded(kind, _BRIEFING_KINDS)).inc()
 
 
 def metrics_response() -> Response:

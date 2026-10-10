@@ -55,7 +55,7 @@ Itens numerados de forma contínua (1..N) entre seções. Após o envio:
 
 1. `get_session_memory(f"telegram-{chat_id}").add(AIMessage(texto))` — o modelo vê
    o briefing como a última fala dele.
-2. `save_tool_snapshot(session_id, "morning_briefing", {"items": [{n, ref}…]})` —
+2. `save_tool_snapshot(session_id, "morning_briefing", {"kind", "day", "refs": {"<n>": "<kind>:<id>"}})` (compacto, cabe no corte de 1200 caracteres do bloco de snapshots) —
    o bloco SESSION TOOL SNAPSHOTS já é injetado pelo `context_assembly`.
 3. Linha no `EVI_WORKSPACE/AGENTS.md`: "Se o usuário se referir a um número do
    último briefing, use o snapshot `morning_briefing` para obter o id."

@@ -154,6 +154,13 @@ def record_turn(
             metrics.record_turn(channel, outcome)
         except Exception as exc:
             soft_fail("turn_log.record_turn.metrics", exc)
+    if not test and channel == "telegram":
+        try:
+            from services import briefing
+
+            briefing.note_user_reply(user_text=user_text)
+        except Exception as exc:
+            soft_fail("turn_log.record_turn.briefing_reply", exc)
     if not os.getenv("DATABASE_URL"):
         return
     try:

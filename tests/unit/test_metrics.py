@@ -63,6 +63,21 @@ def test_exposed_text_contains_metric_names(monkeypatch):
     assert "evi_probe_failures_total" in body
 
 
+def test_briefing_counters_bounded_and_gated(monkeypatch):
+    from services import metrics
+
+    monkeypatch.setenv("EVI_METRICS_ENABLED", "true")
+    sent = metrics.BRIEFING_SENT_TOTAL.labels(kind="evening", ok="false")._value.get()
+    metrics.record_briefing_sent("evening", False)
+    assert metrics.BRIEFING_SENT_TOTAL.labels(kind="evening", ok="false")._value.get() == sent + 1
+    other = metrics.BRIEFING_REPLIED_TOTAL.labels(kind="other")._value.get()
+    metrics.record_briefing_replied("bogus")
+    assert metrics.BRIEFING_REPLIED_TOTAL.labels(kind="other")._value.get() == other + 1
+    monkeypatch.setenv("EVI_METRICS_ENABLED", "false")
+    metrics.record_briefing_replied("bogus")
+    assert metrics.BRIEFING_REPLIED_TOTAL.labels(kind="other")._value.get() == other + 1
+
+
 if __name__ == "__main__":
     test_metrics_route_in_main_scn_ops_03()
     test_metrics_module_wiring()

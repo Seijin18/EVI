@@ -218,3 +218,173 @@ def test_calls_use_windmill_payloads(setup):
     ops = {op: p for op, p in fake.calls}
     assert ops["list_events"]["on_date"] == "2026-10-10"
     assert ops["summarize_inbox"]["max_messages"] == 15
+
+
+# --- delivery / engagement (SCN-BRIEF-05, SCN-BRIEF-08) ---------------------
+
+from datetime import timedelta  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+from services import metrics  # noqa: E402
+from services.session_memory import get_session_memory, reset_for_tests  # noqa: E402
+
+
+class _FakeDb:
+    """In-memory stand-in for the briefing_log / snapshot functions of db."""
+
+    def __init__(self):
+        self.rows, self.snaps = {}, []
+
+    def briefing_sent_today(self, day, kind):
+        r = self.rows.get((day, kind))
+        return bool(r and r["ok"])
+
+    def record_briefing(self, day, kind, ok, sections):
+        self.rows[(day, kind)] = {"ok": ok, "sections": sections, "sent_at": self.now, "replied_at": None}
+        return 1
+
+    def get_briefing(self, day, kind):
+        return self.rows.get((day, kind))
+
+    def mark_briefing_replied(self, day, kind):
+        r = self.rows.get((day, kind))
+        if r and r["ok"] and r["replied_at"] is None:
+            r["replied_at"] = self.now
+            return True
+        return False
+
+    def save_tool_snapshot(self, session_id, tool_name, payload):
+        self.snaps.append((session_id, tool_name, payload))
+
+
+@pytest.fixture
+def delivery(monkeypatch):
+    fake = _FakeDb()
+    fake.now = NOW
+    for name in ("briefing_sent_today", "record_briefing", "get_briefing",
+                 "mark_briefing_replied", "save_tool_snapshot"):
+        monkeypatch.setattr(db, name, getattr(fake, name))
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "42")
+    monkeypatch.setenv("EVI_METRICS_ENABLED", "true")
+    items = [briefing.BriefItem(1, "a", {"kind": "commitment", "id": 12}),
+             briefing.BriefItem(2, "b", {"kind": "email", "id": "18f"})]
+    sec = [briefing.Section("tasks", "Tarefas", items=items), briefing.Section("email", "E-mail", error="x")]
+    monkeypatch.setattr(briefing, "assemble_briefing",
+                        lambda kind="morning", now=None: briefing.Briefing("TEXTO", sec, items))
+    sent = []
+    result = {"r": SimpleNamespace(sent=True, reason="")}
+
+    class R:
+        def __bool__(self):
+            return result["r"].sent
+
+        reason = property(lambda self: result["r"].reason)
+
+    def _send(text, chat_id=None):
+        sent.append((text, chat_id))
+        return R()
+
+    monkeypatch.setattr("services.telegram_notify.send_telegram_message", _send)
+    reset_for_tests()
+    return SimpleNamespace(db=fake, sent=sent, result=result)
+
+
+def _sent(kind="morning", ok="true"):
+    return metrics.BRIEFING_SENT_TOTAL.labels(kind=kind, ok=ok)._value.get()
+
+
+def _replied(kind="morning"):
+    return metrics.BRIEFING_REPLIED_TOTAL.labels(kind=kind)._value.get()
+
+
+def test_deliver_sets_memory_snapshot_log_and_metric_scn_brief_05(delivery):
+    before = _sent()
+    out = briefing.deliver_briefing("morning", now=NOW)
+    assert out["status"] == "sent"
+    assert delivery.sent == [("TEXTO", "42")]
+    assert get_session_memory("telegram-42").get_messages()[-1].content == "TEXTO"
+    sid, tool, payload = delivery.db.snaps[0]
+    assert (sid, tool) == ("telegram-42", "morning_briefing")
+    assert payload["refs"] == {"1": "commitment:12", "2": "email:18f"}
+    row = delivery.db.rows[(NOW.date(), "morning")]
+    assert row["ok"] and row["sections"] == {"tasks": {"count": 2, "error": ""},
+                                             "email": {"count": 0, "error": "x"}}
+    assert _sent() == before + 1
+
+
+def test_already_sent_unless_force(delivery):
+    briefing.deliver_briefing("morning", now=NOW)
+    assert briefing.deliver_briefing("morning", now=NOW)["status"] == "already_sent"
+    assert len(delivery.sent) == 1
+    assert briefing.deliver_briefing("morning", force=True, now=NOW)["status"] == "sent"
+    assert len(delivery.sent) == 2
+    assert briefing.deliver_briefing("evening", now=NOW)["status"] == "sent"
+
+
+def test_send_failure_logs_not_ok_and_allows_retry(delivery):
+    delivery.result["r"] = SimpleNamespace(sent=False, reason="http_500")
+    before = _sent(ok="false")
+    out = briefing.deliver_briefing("morning", now=NOW)
+    assert out == {"status": "failed", "kind": "morning", "reason": "http_500"}
+    assert delivery.db.rows[(NOW.date(), "morning")]["ok"] is False
+    assert delivery.db.snaps == []
+    assert _sent(ok="false") == before + 1
+    delivery.result["r"] = SimpleNamespace(sent=True, reason="")
+    assert briefing.deliver_briefing("morning", now=NOW)["status"] == "sent"
+
+
+def test_reply_counted_once_within_3h_scn_brief_08(delivery):
+    briefing.deliver_briefing("morning", now=NOW)
+    before = _replied()
+    assert briefing.note_user_reply(NOW + timedelta(minutes=30), "oi") == 1
+    delivery.db.now = NOW + timedelta(minutes=31)
+    assert briefing.note_user_reply(NOW + timedelta(hours=1), "de novo") == 0
+    assert _replied() == before + 1
+
+
+def test_reply_after_3h_or_command_not_counted(delivery):
+    briefing.deliver_briefing("morning", now=NOW)
+    before = _replied()
+    assert briefing.note_user_reply(NOW + timedelta(minutes=5), "/bom") == 0
+    assert briefing.note_user_reply(NOW + timedelta(hours=3, minutes=1), "oi") == 0
+    assert _replied() == before
+
+
+def test_reply_hook_never_raises(monkeypatch):
+    monkeypatch.setattr(db, "get_briefing", lambda *a: (_ for _ in ()).throw(RuntimeError("db")))
+    assert briefing.note_user_reply(NOW, "oi") == 0
+
+
+def test_turn_log_hook_only_telegram_non_test(monkeypatch):
+    from services import turn_log
+
+    calls = []
+    monkeypatch.setattr(briefing, "note_user_reply", lambda now=None, user_text="": calls.append(user_text))
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    turn_log.record_turn(None, session_id="telegram-42", channel="telegram", user_text="oi",
+                         reply_text="r", latency_ms=1)
+    turn_log.record_turn(None, session_id="telegram-42", channel="telegram", user_text="x",
+                         reply_text="r", latency_ms=1, is_test=True)
+    turn_log.record_turn(None, session_id="api-1", channel="api", user_text="y",
+                         reply_text="r", latency_ms=1)
+    assert calls == ["oi"]
+
+
+def test_snapshot_of_max_briefing_survives_render_cut(delivery, monkeypatch):
+    from services import session_context
+
+    ids = ([("event", "e" * 26)] * 8 + [("task", "T" * 22 + "AAAA")] * 5
+           + [("email", "18f3a9c2b7d4e601")] * 3 + [("commitment", 123456)] * 5)
+    items = [briefing.BriefItem(i + 1, "x", {"kind": k, "id": v}) for i, (k, v) in enumerate(ids)]
+    monkeypatch.setattr(briefing, "assemble_briefing", lambda kind="morning", now=None:
+                        briefing.Briefing("T", [briefing.Section("tasks", "T", items=items)], items))
+    briefing.deliver_briefing("evening", now=NOW)
+    sid, tool, payload = delivery.db.snaps[0]
+    assert tool == "morning_briefing" and payload["kind"] == "evening"
+    monkeypatch.setattr(db, "init_db", lambda: None, raising=False)
+    monkeypatch.setattr(db, "load_tool_snapshots",
+                        lambda session_id, limit=5: [{"tool_name": tool, "payload": payload}])
+    rendered = session_context.format_tool_snapshots(sid)
+    assert len(rendered) < 1200 + 100
+    for i, (k, v) in enumerate(ids):
+        assert f'"{i + 1}": "{k}:{v}"' in rendered

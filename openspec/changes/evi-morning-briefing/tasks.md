@@ -32,7 +32,7 @@
   - Files: `agent/services/briefing.py`, `tests/unit/test_briefing.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py -q -k format`
 
-- [ ] 2.5 Entrega: Telegram + memória da sessão + snapshot `morning_briefing` + `briefing_log` + métricas (`evi_briefing_sent_total`, `evi_briefing_replied_total`)
+- [x] 2.5 Entrega: Telegram + memória da sessão + snapshot `morning_briefing` + `briefing_log` + métricas (`evi_briefing_sent_total`, `evi_briefing_replied_total`)
   - SCN-BRIEF-05, SCN-BRIEF-08
   - Files: `agent/services/briefing.py`, `tests/unit/test_briefing.py`, `agent/services/metrics.py`, `tests/unit/test_metrics.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_metrics.py -q` — snapshot contém `{n, ref}` para cada item; falha de envio grava `ok=false` e permite reenvio; resposta na sessão em até 3 h incrementa `replied`
