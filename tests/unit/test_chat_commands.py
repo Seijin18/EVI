@@ -78,3 +78,61 @@ def test_session_lane_does_not_serialize_across_sessions():
         assert not t.is_alive()
 
     assert not errors, f"sessions blocked each other: {errors}"
+
+
+def test_feedback_commands_call_set_turn_feedback(monkeypatch):
+    import db
+
+    calls = []
+    monkeypatch.setattr(db, "init_db", lambda: None)
+    monkeypatch.setattr(
+        db, "set_turn_feedback", lambda sid, fb, note=None: calls.append((sid, fb, note)) or 7
+    )
+    out = try_chat_command("/ruim marcou o dia errado", session_id="s1")
+    assert out and "marcou o dia errado" in out and "\n" not in out
+    out = try_chat_command("/bom", session_id="s1")
+    assert out and "Anotado" in out
+    assert calls == [("s1", "ruim", "marcou o dia errado"), ("s1", "bom", None)]
+
+
+def test_feedback_without_turn_or_db_is_soft(monkeypatch):
+    import db
+
+    monkeypatch.setattr(db, "init_db", lambda: None)
+    monkeypatch.setattr(db, "set_turn_feedback", lambda *a, **k: None)
+    assert try_chat_command("/bom", session_id="s1") == "Não encontrei um pedido anterior para avaliar."
+
+    def boom(*a, **k):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db, "set_turn_feedback", boom)
+    assert try_chat_command("/ruim x", session_id="s1") == "Não encontrei um pedido anterior para avaliar."
+
+
+PG_URL = os.getenv("DATABASE_URL", "")
+
+
+def test_feedback_scn_use_03_real_db(monkeypatch):
+    """SCN-USE-03: /ruim <motivo> marks the latest non-command turn."""
+    import pytest
+
+    if not PG_URL:
+        pytest.skip("DATABASE_URL not set")
+    import db
+
+    monkeypatch.setattr(db, "DATABASE_URL", PG_URL)
+    db.init_db()
+    sid = f"test-feedback-{time.time_ns()}"
+    db.insert_turn(session_id=sid, channel="telegram", user_text="Crie uma reunião amanhã", is_test=True)
+    db.insert_turn(session_id=sid, channel="telegram", user_text="/status", is_test=True)
+    out = try_chat_command("/ruim marcou o dia errado", session_id=sid)
+    assert out and "marcou o dia errado" in out
+    with db._conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT user_text, feedback, feedback_note FROM turn_log WHERE session_id=%s ORDER BY id",
+            (sid,),
+        )
+        rows = cur.fetchall()
+    assert rows[0] == ("Crie uma reunião amanhã", "ruim", "marcou o dia errado")
+    assert rows[1][1] is None
+    assert try_chat_command("/bom", session_id="nunca-existiu-xyz") == "Não encontrei um pedido anterior para avaliar."

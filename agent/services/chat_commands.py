@@ -43,6 +43,25 @@ def _memoria_text() -> str:
     return format_memory_audit()
 
 
+def _feedback_reply(session_id: str, feedback: str, note: str | None) -> str:
+    """Attach /bom or /ruim feedback to the session's latest non-command turn."""
+    turn_id = None
+    try:
+        from db import init_db, set_turn_feedback
+
+        init_db()
+        turn_id = set_turn_feedback(session_id, feedback, note)
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+        soft_fail("chat_commands._feedback_reply", exc)
+    if turn_id is None:
+        return "Não encontrei um pedido anterior para avaliar."
+    if feedback == "bom":
+        return "Anotado 👍 — obrigado pelo retorno."
+    suffix = f" ({note})" if note else ""
+    return f"Anotado: vou usar isso para melhorar.{suffix}"
+
+
 def try_chat_command(
     text: str,
     *,
@@ -65,6 +84,9 @@ def try_chat_command(
         if on_compact:
             on_compact()
         return "Memória compactada (flush + trim aplicado)."
+    if cmd in ("/bom", "/ruim"):
+        note = raw[len(cmd):].strip() or None
+        return _feedback_reply(session_id, cmd[1:], note)
     if cmd in ("/memoria", "/memory"):
         return _memoria_text()
     return None

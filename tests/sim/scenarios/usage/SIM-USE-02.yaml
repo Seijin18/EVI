@@ -1,0 +1,17 @@
+id: SIM-USE-02
+title: Uso - /ruim registra feedback no último turno (SCN-USE-03)
+description: >
+  Depois de um pedido de agendamento, `/ruim <motivo>` marca o turno anterior
+  com feedback='ruim' (e feedback_note). O comando não chega ao LLM.
+tags: [usage]
+source: synthetic
+clock: D0 09:00
+steps:
+  - telegram: "Crie uma reunião amanhã às 10h chamada revisão"
+    expect:
+      reply_within_s: 90
+  - telegram: "/ruim marcou o dia errado"
+    expect:
+      reply_within_s: 30
+      postgres:
+        - {table: turn_log, where: {feedback: ruim}, count: 1}
