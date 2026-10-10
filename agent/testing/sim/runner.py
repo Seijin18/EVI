@@ -42,7 +42,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from testing.sim import report, schema
+from testing.sim import report, schema, workspace_seed
 from testing.sim.schema import Scenario, Step
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -157,6 +157,16 @@ class Result:
 
 
 # --------------------------------------------------------------------------- reset
+def seed_workspace(ctx: Ctx, ws: str) -> None:
+    """Copy the versioned bootstrap files (+ fictitious USER.md) into the sim workspace."""
+    data = workspace_seed.build_tar(REPO_ROOT, REPO_ROOT / "tests" / "sim" / "workspace")
+    proc = subprocess.run(
+        [*COMPOSE, "exec", "-T", "agent-api", "tar", "-x", "-C", ws], input=data, capture_output=True, timeout=120
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"workspace seed failed: {proc.stderr.decode(errors='replace').strip()[:300]}")
+
+
 def reset_world(ctx: Ctx) -> None:
     ctx.fakes("POST", "/_sim/reset")
     tables = [t for t in ctx.psql("SELECT tablename FROM pg_tables WHERE schemaname='public'").split() if t]
@@ -166,6 +176,9 @@ def reset_world(ctx: Ctx) -> None:
     for d in (ctx.env.get("EVI_WORKSPACE"), ctx.env.get("EVI_CONTACT_MEMORY_DIR")):
         if d and d.startswith("/tmp/evi-sim-"):  # only the sim container's own dirs
             ctx.exec("agent-api", "sh", "-c", f"mkdir -p '{d}' && find '{d}' -mindepth 1 -delete")
+    ws = ctx.env.get("EVI_WORKSPACE")
+    if ws and ws.startswith("/tmp/evi-sim-"):
+        seed_workspace(ctx, ws)
     sessions = [f"telegram-{ctx.chat_id}"] + [f"whatsapp-{j}" for j in sorted(ctx.control_jids)]
     for sid in sessions:
         ctx.agent("POST", "/reset", {"session_id": sid}, timeout=30)
@@ -295,8 +308,13 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
         else:
             ctx.set_clock(ctx.now() + schema.parse_delta(v))
     elif step.type == "job":
+        base = len(_telegram_replies(ctx))
         ctx.agent("POST", f"/jobs/{step.value}", {})
         sr.latency_s = time.monotonic() - t0
+        # a job's observable output is what it sent to the user's Telegram chat
+        # (so reply_matches/reply_within_s can assert the delivered text)
+        sent = _telegram_replies(ctx)[base:]
+        sr.reply = "\n".join(sent) if sent else None
     elif step.type == "fault":
         if "windmill" in step.value:
             f = step.value["windmill"]
