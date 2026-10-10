@@ -1,6 +1,6 @@
 ## 1. Fora do ar
 
-- [ ] 1.1 `scripts/evi-watchdog` + units systemd de usuário + `--dry-run` + testes com servidor falso
+- [x] 1.1 `scripts/evi-watchdog` + units systemd de usuário + `--dry-run` + testes com servidor falso
   - SCN-REL-01
   - Files: `scripts/evi-watchdog`, `scripts/systemd/evi-watchdog.service`, `scripts/systemd/evi-watchdog.timer`, `tests/unit/test_watchdog.py`, `docs/operations.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_watchdog.py -q` — 1 falha não alerta, 2 alertam uma vez, volta avisa uma vez

@@ -1,0 +1,9 @@
+[Unit]
+Description=EVI watchdog (health check + Telegram alert)
+
+[Service]
+Type=oneshot
+# Assumes the repo lives at ~/Projects/EVI. If not, edit this path (or run
+# `systemctl --user edit evi-watchdog.service` and override ExecStart).
+# The script finds the repo .env relative to its own location.
+ExecStart=%h/Projects/EVI/scripts/evi-watchdog

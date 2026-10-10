@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""EVI watchdog: run once a minute (systemd user timer) outside the EVI process.
+
+GET the agent's /health; HTTP error / timeout / JSON status "down" is a failure
+("degraded" is not). On the 2nd consecutive failure send ONE Telegram alert; when
+health returns after an alert send ONE recovery message.
+
+Env (all optional): EVI_WATCHDOG_URL, EVI_WATCHDOG_TIMEOUT (s, default 10),
+TELEGRAM_API_BASE, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, XDG_STATE_HOME.
+The token/chat id are read from the process env first, else from ONLY those two
+lines of the repo .env (never sourced). The token is never printed.
+
+Usage: evi-watchdog [--dry-run]   (dry-run: print the decision, send/write nothing)
+"""
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+DEFAULT_URL = "http://127.0.0.1:8002/health"  # agent-api publishes 8002:8000
+ALERT_AFTER = 2
+
+
+def env_value(name: str) -> str:
+    if os.environ.get(name):
+        return os.environ[name]
+    try:
+        for line in (REPO / ".env").read_text(encoding="utf-8").splitlines():
+            if line.startswith(name + "="):
+                return line.split("=", 1)[1].strip().strip("'\"")
+    except OSError:
+        pass
+    return ""
+
+
+def check_health(url: str, timeout: float) -> tuple[bool, str]:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            body = resp.read()
+    except urllib.error.HTTPError as e:
+        return False, f"HTTP {e.code}"
+    except TimeoutError:
+        return False, "timeout"
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, TimeoutError):
+            return False, "timeout"
+        return False, "sem conexão"
+    except OSError:
+        return False, "sem conexão"
+    try:
+        status = json.loads(body).get("status")
+    except (ValueError, AttributeError):
+        return True, "ok"  # 2xx without JSON status: reachable, not "down"
+    if status == "down":
+        return False, "status down"
+    return True, str(status or "ok")
+
+
+def load_state(path: Path) -> dict:
+    state = {"failures": 0, "alerted": 0, "since": 0}
+    try:
+        for line in path.read_text().splitlines():
+            k, _, v = line.partition("=")
+            if k in state and v.strip().isdigit():
+                state[k] = int(v)
+    except OSError:
+        pass
+    return state
+
+
+def save_state(path: Path, state: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text("".join(f"{k}={v}\n" for k, v in state.items()))
+    tmp.replace(path)
+
+
+def send_telegram(text: str) -> bool:
+    token, chat = env_value("TELEGRAM_BOT_TOKEN"), env_value("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        print("watchdog: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID ausentes", file=sys.stderr)
+        return False
+    base = os.environ.get("TELEGRAM_API_BASE", "https://api.telegram.org").rstrip("/")
+    data = urllib.parse.urlencode({"chat_id": chat, "text": text}).encode()
+    try:
+        with urllib.request.urlopen(f"{base}/bot{token}/sendMessage", data, timeout=10):
+            return True
+    except Exception as e:  # never echo e: its text can contain the token URL
+        print(f"watchdog: falha ao enviar Telegram ({type(e).__name__})", file=sys.stderr)
+        return False
+
+
+def main(argv: list[str]) -> int:
+    dry = "--dry-run" in argv
+    url = os.environ.get("EVI_WATCHDOG_URL", DEFAULT_URL)
+    timeout = float(os.environ.get("EVI_WATCHDOG_TIMEOUT", "10"))
+    state_home = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local/state")
+    state_path = Path(state_home) / "evi-watchdog" / "state"
+    state = load_state(state_path)
+    now = int(time.time())
+
+    ok, reason = check_health(url, timeout)
+    prefix = "[dry-run] " if dry else ""
+    if ok:
+        if state["alerted"]:
+            minutes = max(0, (now - state["since"]) // 60)
+            print(f"{prefix}{'would send' if dry else 'sending'} recovery (down {minutes} min)")
+            if not dry and not send_telegram(f"✅ EVI voltou (fora por {minutes} min)"):
+                return 1  # keep alerted=1 so the recovery is retried next run
+        else:
+            print(f"{prefix}ok ({reason})")
+        new = {"failures": 0, "alerted": 0, "since": 0}
+    else:
+        failures = state["failures"] + 1
+        since = state["since"] if state["failures"] else now
+        new = {"failures": failures, "alerted": state["alerted"], "since": since}
+        if failures >= ALERT_AFTER and not state["alerted"]:
+            hhmm = time.strftime("%H:%M", time.localtime(since))
+            print(f"{prefix}fail {failures} ({reason}): {'would alert' if dry else 'alerting'}")
+            if not dry and send_telegram(f"⚠️ EVI fora do ar desde {hhmm} — {reason}"):
+                new["alerted"] = 1
+        else:
+            print(f"{prefix}fail {failures} ({reason})")
+    if not dry:
+        save_state(state_path, new)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

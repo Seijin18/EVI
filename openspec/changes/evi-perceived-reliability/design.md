@@ -2,7 +2,7 @@
 
 ### 1. Watchdog fora do EVI
 
-`scripts/evi-watchdog` (bash + curl): `GET http://127.0.0.1:${EVI_PORT:-8000}/health`
+`scripts/evi-watchdog` (Python stdlib): `GET http://127.0.0.1:8002/health` (porta publicada do `agent-api`)
 com timeout de 10 s; `status` `down` ou falha HTTP conta como falha (`degraded` não).
 Estado em `${XDG_STATE_HOME:-~/.local/state}/evi-watchdog/state` (falhas seguidas,
 `alerted`). Na 2ª falha seguida: `sendMessage` direto em `api.telegram.org` com
@@ -38,7 +38,7 @@ mesmo controle diário da sonda, então sonda e turno nunca avisam duas vezes no
 | Env | Default | Efeito |
 |---|---|---|
 | `EVI_SLOW_ACK_SEC` | `0` | Liga o ack (sugerido 5) |
-| `EVI_WATCHDOG_URL` | `http://127.0.0.1:8000/health` | Alvo do watchdog |
+| `EVI_WATCHDOG_URL` | `http://127.0.0.1:8002/health` | Alvo do watchdog |
 
 ## RAM / containers
 
