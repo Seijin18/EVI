@@ -693,6 +693,19 @@ def update_turn_signals(turn_id: int, signals: Dict[str, Any]) -> None:
         conn.commit()
 
 
+def delete_turns_older_than(days: int) -> int:
+    """Retention: delete turn_log rows older than `days`. Returns rows deleted."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM turn_log WHERE ts < now() - make_interval(days => %s)",
+                (int(days),),
+            )
+            deleted = cur.rowcount
+        conn.commit()
+    return int(deleted)
+
+
 def insert_probe(day, check_name: str, ok: bool, reason: str | None = None, ms: int | None = None) -> int:
     with _conn() as conn:
         with conn.cursor() as cur:

@@ -22,7 +22,7 @@
   - Files: `agent/services/chat_commands.py`, `tests/unit/test_chat_commands.py`, `tests/sim/scenarios/usage/SIM-USE-02.yaml`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_chat_commands.py -q` e `./scripts/evi-sim run --id SIM-USE-02 --repeat 3 --llm live` (`/ruim marcou o dia errado` pelo Telegram marca o turno anterior)
 
-- [ ] 2.2 Sinais implícitos (correção, reformulação, tool_failed, cant_do) — job noturno idempotente
+- [x] 2.2 Sinais implícitos (correção, reformulação, tool_failed, cant_do) — job noturno idempotente
   - SCN-USE-04
   - Files: `agent/services/usage_signals.py`, `tests/unit/test_usage_signals.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_usage_signals.py -q` — inclui os pares reais "Você consegue listar meus compromissos?" → "Listar compromissos" (reformulação) e "Esse número na verdade é de…" (correção)
