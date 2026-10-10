@@ -43,6 +43,8 @@ class TurnCollector(BaseCallbackHandler):
         self._calls: list[dict[str, Any]] = []
         self._running: dict[Any, tuple[int, float]] = {}
         self.llm_calls = 0
+        self.tokens_in = 0
+        self.tokens_out = 0
 
     # -- fed by parse_windmill_result -------------------------------------
     def record_outcome(self, tool: str, ok: bool, reason: str = "") -> None:
@@ -58,6 +60,14 @@ class TurnCollector(BaseCallbackHandler):
         # Chat models fire on_chat_model_start only; this covers plain LLMs.
         with self._lock:
             self.llm_calls += 1
+
+    def on_llm_end(self, response, **kwargs) -> None:
+        from llm_usage import extract_usage
+
+        tin, tout, _ = extract_usage(response)
+        with self._lock:
+            self.tokens_in += tin
+            self.tokens_out += tout
 
     def on_tool_start(self, serialized, input_str, *, run_id=None, **kwargs) -> None:
         name = kwargs.get("name") or (serialized or {}).get("name") or "?"
@@ -201,6 +211,8 @@ def record_turn(
             tools=tools,
             latency_ms=latency_ms,
             llm_calls=collector.llm_calls if collector else None,
+            tokens_in=(collector.tokens_in or None) if collector else None,
+            tokens_out=(collector.tokens_out or None) if collector else None,
             error=error,
             is_test=test,
         )

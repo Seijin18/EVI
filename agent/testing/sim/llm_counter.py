@@ -10,10 +10,14 @@ code: ``Dockerfile.sim`` starts uvicorn via ``python -c "import testing.sim.llm_
 
 from __future__ import annotations
 
+import json
 import time
 from contextvars import ContextVar
 
 COUNT_FILE = "/tmp/evi-sim-llm-calls"
+# One JSON line {"in","out","reasoning"} per finished REAL model call (the runner sums deltas).
+USAGE_FILE = "/tmp/evi-sim-llm-usage"
+_WRAPPER = "SimCassetteChatModel"  # cassette wrapper: its inner model fires its own callbacks
 
 
 def _record(kind: str) -> None:
@@ -24,13 +28,34 @@ def _record(kind: str) -> None:
         pass
 
 
+def _record_usage(tin: int, tout: int, reasoning: int) -> None:
+    try:
+        with open(USAGE_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"in": tin, "out": tout, "reasoning": reasoning}) + "\n")
+    except OSError:
+        pass
+
+
 def install() -> None:
+    from llm_usage import extract_usage
     from langchain_core.callbacks import BaseCallbackHandler
     from langchain_core.tracers.context import register_configure_hook
 
     class _Counter(BaseCallbackHandler):
-        def on_chat_model_start(self, serialized, messages, **kwargs):  # noqa: ANN001
+        def __init__(self) -> None:
+            self._wrappers: set = set()
+
+        def on_chat_model_start(self, serialized, messages, *, run_id=None, **kwargs):  # noqa: ANN001
+            ident = (serialized or {}).get("id") or []
+            if kwargs.get("name") == _WRAPPER or (ident and ident[-1] == _WRAPPER):
+                self._wrappers.add(run_id)  # record mode: count tokens on the inner model only
             _record("chat")
+
+        def on_llm_end(self, response, *, run_id=None, **kwargs):  # noqa: ANN001
+            if run_id in self._wrappers:
+                self._wrappers.discard(run_id)
+                return  # replay: nothing was billed; record: the inner call reports it
+            _record_usage(*extract_usage(response))
 
         def on_llm_start(self, serialized, prompts, **kwargs):  # noqa: ANN001
             _record("llm")

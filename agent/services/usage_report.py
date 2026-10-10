@@ -15,6 +15,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Any, Callable, Dict, List, Tuple
 
+from llm_usage import estimate_cost
 from services.usage_signals import (
     NEXT_TURN_WINDOW_S,
     prune_turn_log,
@@ -122,6 +123,7 @@ def compute_kpis(turns: List[Dict[str, Any]], weeks: float = 1.0) -> Dict[str, A
     ok_n = corr_n = 0
     lat: List[float] = []
     llm: List[float] = []
+    tok_in = tok_out = 0
     for t in real:
         ts = t.get("ts")
         if ts is not None:
@@ -137,11 +139,17 @@ def compute_kpis(turns: List[Dict[str, Any]], weeks: float = 1.0) -> Dict[str, A
             lat.append(float(t["latency_ms"]))
         if t.get("llm_calls") is not None:
             llm.append(float(t["llm_calls"]))
+        tok_in += int(t.get("tokens_in") or 0)
+        tok_out += int(t.get("tokens_out") or 0)
         for tool in t.get("tools") or []:
             if isinstance(tool, dict) and tool.get("ok") is False:
                 key = f"{tool.get('name') or '?'} / {tool.get('reason') or 'sem reason'}"
                 failures[key] = failures.get(key, 0) + 1
+    cost_usd, cost_brl = estimate_cost(tok_in, tok_out)
     return {
+        "tokens": (tok_in + tok_out) / weeks,
+        "cost_brl": cost_brl / weeks,
+        "cost_usd": cost_usd / weeks,
         "active_days": len(days) / weeks,
         "turns": n / weeks,
         "by_channel": {k: v / weeks for k, v in by_channel.items()},
@@ -214,6 +222,8 @@ def _kpi_rows(cur: Dict, prev: Dict | None, base: Dict | None) -> List[Tuple[str
         ("Latência p50", "latency_p50", "ms"),
         ("Latência p95", "latency_p95", "ms"),
         ("Chamadas LLM/turno", "llm_calls_per_turn", "num"),
+        ("Tokens (entrada+saída)", "tokens", "num"),
+        ("Custo estimado (R$)", "cost_brl", "num"),
         ("Falhas de tool", "failure_total", "num"),
     ]
     rows = []
@@ -327,7 +337,8 @@ def render_telegram(r: Dict[str, Any]) -> str:
         L.append(f"KPIs {UNAVAILABLE}")
     else:
         prev = r["prev_kpis"]
-        L.append(f"Turnos {_fmt(k['turns'])} em {_fmt(k['active_days'])} dia(s) ativos")
+        cost = f" · ≈ R$ {k['cost_brl']:.2f}" if k.get("tokens") else ""
+        L.append(f"Turnos {_fmt(k['turns'])} em {_fmt(k['active_days'])} dia(s) ativos{cost}")
         L.append(
             f"Sucesso {_fmt(k['success_rate'], 'pct')} "
             f"(Δ sem. {_delta(k['success_rate'], prev.get('success_rate') if prev else None, 'pct')})"

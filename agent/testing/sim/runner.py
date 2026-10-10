@@ -52,6 +52,7 @@ FIXTURE = REPO_ROOT / "tests" / "fixtures" / "evolution" / "messages_upsert.json
 COMPOSE = ["docker", "compose", "-p", "evi-sim", "--env-file", "/dev/null", "-f", str(REPO_ROOT / "docker-compose.sim.yml")]
 AUDIT_LOG = "/tmp/evi-sim-logs"
 LLM_COUNT_FILE = "/tmp/evi-sim-llm-calls"  # written by testing.sim.llm_counter in the container
+LLM_USAGE_FILE = "/tmp/evi-sim-llm-usage"  # JSON lines {in,out,reasoning} per real model call
 DEFAULT_MAX_LLM_CALLS = 200
 CASSETTE_DIR = "/tmp/evi-sim-cassettes"  # inside the agent container (see testing.sim.cassette)
 CASSETTES_HOST_DIR = REPO_ROOT / "tests" / "sim" / "cassettes"
@@ -154,6 +155,9 @@ class Result:
     outbound: dict = field(default_factory=dict)
     duration_s: float = 0.0
     llm_calls: int = 0
+    tokens_in: int = 0
+    tokens_out: int = 0
+    tokens_reasoning: int = 0
 
 
 # --------------------------------------------------------------------------- reset
@@ -343,6 +347,24 @@ def llm_call_count(ctx: Ctx) -> int:
         return 0
 
 
+def llm_usage_totals(ctx: Ctx) -> tuple[int, int, int]:
+    """Cumulative (in, out, reasoning) tokens recorded by the in-container counter."""
+    tin = tout = treason = 0
+    try:
+        raw = ctx.exec("agent-api", "sh", "-c", f"cat {LLM_USAGE_FILE} 2>/dev/null")
+    except RuntimeError:
+        return 0, 0, 0
+    for line in raw.splitlines():
+        try:
+            d = json.loads(line)
+            tin += int(d.get("in") or 0)
+            tout += int(d.get("out") or 0)
+            treason += int(d.get("reasoning") or 0)
+        except (ValueError, TypeError, AttributeError):
+            continue
+    return tin, tout, treason
+
+
 def cassette_begin(ctx: Ctx, scn_id: str) -> None:
     """Tell the agent which cassette is active (new nonce per attempt); in replay, ship the file in."""
     if ctx.llm_mode == "live":
@@ -379,6 +401,7 @@ def run_scenario(scn: Scenario, ctx: Ctx) -> Result:
     res = Result(scn.id)
     t0 = time.monotonic()
     calls0 = llm_call_count(ctx)
+    usage0 = llm_usage_totals(ctx)
     try:
         cassette_begin(ctx, scn.id)
         reset_world(ctx)
@@ -408,6 +431,8 @@ def run_scenario(scn: Scenario, ctx: Ctx) -> Result:
         res.failures.append(f"runner error (cassette): {type(exc).__name__}: {exc}")
     res.duration_s = time.monotonic() - t0
     res.llm_calls = max(0, llm_call_count(ctx) - calls0)
+    usage1 = llm_usage_totals(ctx)
+    res.tokens_in, res.tokens_out, res.tokens_reasoning = (max(0, b - a) for a, b in zip(usage0, usage1))
     res.passed = not res.failures
     return res
 
@@ -448,13 +473,13 @@ def cmd_run(args: argparse.Namespace) -> int:
             res = run_scenario(scn, ctx)
             total_calls += res.llm_calls
             records.append(report.attempt_record(scn.id, scn.tags, n, res))
-            print(f"{'PASS' if res.passed else 'FAIL'} {label} ({res.duration_s:.1f}s, {res.llm_calls} LLM calls)")
+            print(f"{'PASS' if res.passed else 'FAIL'} {label} ({res.duration_s:.1f}s, {res.llm_calls} LLM calls, {res.tokens_in} in / {res.tokens_out} out tok)")
             for f in res.failures:
                 print(f"    - {f}")
     summary = report.summarize(records, args.repeat)
     meta = {"ts": ts, "repeat": args.repeat, "max_llm_calls": args.max_llm_calls, "llm_calls": total_calls, "budget_hit": budget_hit}
     jsonl, md = report.write_reports(records, summary, meta, SIM_LOG_DIR, ts)
-    print(report.console_summary(summary, meta))
+    print(report.console_summary(summary, meta, records))
     print(f"report: {jsonl}\n        {md}")
     return 0 if summary["ok"] else 1
 
