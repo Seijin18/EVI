@@ -131,6 +131,9 @@ async def lifespan(app: FastAPI):
             reset_session=_reset_session,
             compact_session=_compact_session,
         )
+    from services.reminder_loop import start_loop
+
+    start_loop()
     try:
         from pathlib import Path
         from services.log_retention import prune_logs
@@ -142,6 +145,14 @@ async def lifespan(app: FastAPI):
     if gmail_res:
         print(f"EVI: WINDMILL_GMAIL_RESOURCE={gmail_res}", flush=True)
     yield
+    try:
+        from services.reminder_loop import stop_loop
+        from services.telegram_poller import stop_poller
+
+        stop_loop()
+        stop_poller()
+    except Exception as exc:
+        soft_fail("main.lifespan.shutdown", exc)
 
 
 app = FastAPI(title="EVI — Evolving Virtual Intelligence", lifespan=lifespan)

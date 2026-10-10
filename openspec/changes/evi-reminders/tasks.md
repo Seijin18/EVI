@@ -10,7 +10,7 @@
   - Files: `agent/services/reminders.py`, `tests/unit/test_reminders.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reminders.py -q` — recorrente atrasado 3 dias dispara uma vez e avança; falha de envio volta a `pending`; DST/fim de mês
 
-- [ ] 1.3 Loop in-process (thread daemon, tick, flag, `soft_fail`) iniciado e parado no `lifespan`
+- [x] 1.3 Loop in-process (thread daemon, tick, flag, `soft_fail`) iniciado e parado no `lifespan`
   - SCN-REM-01
   - Files: `agent/services/reminder_loop.py`, `agent/main.py`, `tests/unit/test_reminder_loop.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reminder_loop.py tests/unit/test_main_endpoints.py -q` — com a flag desligada nenhuma thread sobe; start idempotente; exceção no tick não mata o loop
