@@ -1,4 +1,4 @@
-# WhatsApp message processing (fixture mode)
+# WhatsApp message processing
 
 ## Purpose
 

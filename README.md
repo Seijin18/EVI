@@ -174,15 +174,18 @@ Verificação live: [`docs/testing.md`](docs/testing.md) · `./scripts/evi-teleg
 
 Ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md). Resumo:
 
-| Item | Tipo | Notas |
-|------|------|-------|
-| Contrato estruturado de tools | Arquitetura | Substituir `if "failed" in result` — BACKLOG #34 |
-| Cobertura: calendar_tool, auth, poller, db | Testes | BACKLOG #35 |
-| Threat model de prompt injection | Segurança | BACKLOG #37 |
-| Execução em background | Runtime | Tarefas longas fora do turno de chat — BACKLOG #38 |
-| Import de agenda (vCard) | Memória | ~1000 contatos aparecem só como número |
-| Compose profile Ollama | Infra | Stack 100% containerizada |
-| Heartbeat cron produção | Runtime v3 | `EVI_HEARTBEAT_ENABLED` |
+Direção desde a revisão de produto de 2026-10-10
+([`docs/ux-review-2026-10.md`](docs/ux-review-2026-10.md)): o EVI deve chegar até
+a pessoa com o que exige ação, em vez de esperar ser perguntado.
+
+| Etapa | Item | Notas |
+|-------|------|-------|
+| 18 | Briefing matinal no Telegram | **Ativo** — `evi-morning-briefing`; inclui delimitação de conteúdo externo |
+| 19 | Lembretes com horário | "me lembra às 18h…", recorrência, adiar/feito |
+| 20 | Pendências de resposta | Substitui a extração de compromissos (0/37 confirmados) |
+| 21 | Mensagens de voz | Transcrição via Gemini, só áudio do usuário |
+| 22 | Confiabilidade percebida | Watchdog externo, `/ajuda`, ack imediato, aviso de OAuth |
+| 23–24 | Injeção de prompt e background (restantes) | BACKLOG #37/#38 |
 
 **Removido:** dev bridge (execução remota de código) — nunca funcionou no
 container e o custo de segurança não se justificava; use `ssh`.

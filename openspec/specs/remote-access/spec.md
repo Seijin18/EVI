@@ -37,8 +37,8 @@ For list/review intents, Telegram handler SHALL call calendar or commitment tool
 - **WHEN** user sends "revise agendamentos" or "listar compromissos pendentes" via Telegram
 - **THEN** handler returns `list_calendar_events` or `list_pending_commitments` result with `listed_direct: true`
 
-### Requirement: Live WhatsApp API deferred
-The system SHALL NOT require Meta Cloud or Twilio for current verification; Evolution + fixtures cover WhatsApp.
+### Requirement: No official WhatsApp carrier API
+The system SHALL NOT require Meta Cloud or Twilio; Evolution + fixtures cover WhatsApp. The official Business API forbids general-purpose assistants since 2026-01-15, so no carrier adapter is planned.
 
 #### Scenario: SCN-WA-DEF-01
 - **WHEN** OpenSpec archive for messaging is validated

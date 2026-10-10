@@ -1,9 +1,33 @@
 # EVI OpenSpec backlog
 
 **Source of truth for requirements:** `openspec/specs/`  
-**One active change at a time:** `openspec list` must be empty before `openspec new change`.
+**One active change at a time:** `openspec list` must be empty before `openspec new change`.  
+**O porquê de cada item:** [`specs/roadmap.md`](specs/roadmap.md) · revisão de produto:
+[`docs/ux-review-2026-10.md`](../docs/ux-review-2026-10.md)
 
-## Série ativa (arquitetura revisada — jun 2026)
+## Fila atual (revisão de produto — 10 Out 2026)
+
+A base está fechada (Etapas 12–14, 17). A fila agora prioriza o que o usuário
+percebe: o EVI passar a chegar até a pessoa em vez de esperar ser perguntado.
+Em ordem — um por vez.
+
+| # | Change | Etapa | Status | Resumo |
+|---|--------|-------|--------|--------|
+| 40 | `evi-morning-briefing` | 18 | **Ativo** | Briefing matinal determinístico no Telegram; responder age sobre os itens; falha parcial visível. Inclui delimitação de conteúdo externo (parte mínima do #37) |
+| 41 | `evi-reminders` | 19 | Próximo | Lembretes com horário e recorrência disparados pelo próprio EVI (loop in-process); adiar/feito por resposta |
+| 42 | `evi-reply-debts` | 20 | Fila | Troca "compromissos" (0/37 confirmados) por: esperando sua resposta (determinístico), promessas suas, combinados com data |
+| 43 | `evi-voice-input` | 21 | Fila | Áudio do usuário no Telegram/controle WhatsApp → transcrição via Gemini |
+| 44 | `evi-perceived-reliability` | 22 | Fila | Watchdog externo, `/ajuda`, ack imediato em tool lenta, aviso de OAuth expirado |
+| 37 | `evi-prompt-injection-model` | 23 | Fila (reduzido) | Confirmação de tool destrutiva, allowlist por origem do turno, corpus adversarial |
+| 38 | `evi-background-execution` | 24 | Fila (reduzido) | Tarefas longas desacopladas; abrir só se o ack do #44 não bastar |
+
+**Deferido / cortado:** ver [`specs/roadmap.md`](specs/roadmap.md).
+
+---
+
+# Histórico
+
+## Série WhatsApp (arquitetura revisada — jun 2026)
 
 Substitui `evi-whatsapp-reply` (cancelado) por review multicanal + canal de controle WhatsApp.
 
@@ -125,9 +149,9 @@ antes do #31.
 |---|--------|--------|-------|
 | 39 | `evi-contact-vcard-import` | Done | Arquivado 2026-08-12. ~1000 dos 2553 contatos apareciam só como número: o WhatsApp nunca envia os nomes da sua agenda, só o `pushName` que a própria pessoa escolheu. Parser vCard + casamento por `DDD + últimos 8 dígitos` (valida o nono dígito brasileiro; 1192 contatos reais → 1191 chaves, zero colisões). Job local, dry-run por padrão, `pushName` vira alias. |
 
-## Fila de propostas (pós-#31)
+## Etapas 13–14 — correção e testes (12 Ago 2026)
 
-Uma proposta por vez, na ordem — ver [`specs/roadmap.md`](specs/roadmap.md) para o porquê.
+Fila da revisão de 2026-08-12, concluída exceto #37/#38 (reescopados).
 
 | # | Change sugerido | Etapa | Resumo |
 |---|-----------------|-------|--------|
@@ -138,8 +162,8 @@ Uma proposta por vez, na ordem — ver [`specs/roadmap.md`](specs/roadmap.md) pa
 | 34b | Snapshots estruturados de sessão | 13.2 | Descopado do #34: exige `response_format="content_and_artifact"` do LangChain (conteúdo para o modelo, artifact para o código) — muda assinatura de tool e o ToolNode. Hoje `persist_tool_snapshots` grava `{"raw": prosa}` e o bloco SESSION TOOL SNAPSHOTS não tem ids. |
 | 35 | `evi-test-coverage-core` | 14.2–14.7 | **Done** — arquivado 2026-08-12. +62 testes: `telegram_poller` (invariantes do loop), `evolution_client` (envio, echo guard, limite de contatos), `db` contra Postgres real (migrações, dedupe `ON CONFLICT`, transições de status), `main.py` (webhook Evolution). Postgres efêmero como service na CI. `calendar_tool`/`auth`/`session_lane` já cobertos em #31/#34. |
 | 36 | `evi-small-correctness` | 13.3–13.5 | **Done** — arquivado 2026-08-12. Retry + motivo visível nos envios Telegram/WhatsApp, heartbeat sempre-verdadeiro, eviction do `evolution_seen_ids.json`. Promovido à frente da fila: `evi-telegram-verify.sh` falhou em produção porque uma instabilidade de rede de ~2 min fez `send_telegram_message` descartar a resposta em silêncio |
-| 37 | `evi-prompt-injection-model` | 15 | Threat model + spec para conteúdo de terceiros que chega ao grafo principal. |
-| 38 | `evi-background-execution` | 16 | Tarefas longas desacopladas do turno de chat; ack imediato + resultado depois. |
+| 37 | `evi-prompt-injection-model` | 15 | **Reescopado em 2026-10-10** — delimitação de conteúdo externo foi para o #40; o restante (confirmação de tool destrutiva, allowlist por origem, corpus adversarial) está na fila atual. |
+| 38 | `evi-background-execution` | 16 | **Reescopado em 2026-10-10** — ack imediato foi para o #44; o restante está na fila atual. |
 
 **Cortado do roadmap** (motivos em [`specs/roadmap.md`](specs/roadmap.md)): MCP servers
 isolados, multimodal Llava/Whisper, cache Redis de embeddings.

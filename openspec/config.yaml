@@ -2,14 +2,21 @@
 schema: spec-driven
 
 context: |
-  EVI: FastAPI + LangGraph ReAct + Ollama (qwen2.5:3b-instruct-q4_K_M) + Qdrant + Postgres sessions.
-  Orchestration target: Windmill (scripts in repo, wmill sync). WhatsApp: Evolution API webhooks.
-  Legacy n8n is being removed — do not add n8n workflows.
+  EVI: FastAPI + LangGraph ReAct + Qdrant + Postgres sessions.
+  LLM: Gemini gemini-2.5-flash (EVI_LLM_PROVIDER=gemini, prod); Ollama
+  qwen2.5:3b-instruct-q4_K_M as fallback and background tier.
+  Orchestration: Windmill (scripts in repo, wmill sync push one-way; schedules live in the UI).
+  WhatsApp: Evolution API webhooks (unofficial, personal number) — read + low-volume control only.
+  n8n and the dev bridge are removed — do not reintroduce either.
 
-  Hardware: 16GB RAM, GTX 1060 3GB — OLLAMA_MAX_LOADED_MODELS=1; primary LLM fits in VRAM.
+  Hardware: 16GB RAM, GTX 1060 3GB — OLLAMA_MAX_LOADED_MODELS=1; no local audio/vision models.
 
-  Product priority: productivity (files, notes, email/tasks, WhatsApp commitments)
-  > remote (Telegram) > dev bridge > university RAG (secondary).
+  Product direction (2026-10-10, docs/ux-review-2026-10.md): EVI reaches the user with
+  what needs action instead of waiting to be asked. Priority: proactive delivery on
+  Telegram (briefing, reminders) > productivity actions (calendar, tasks, email,
+  WhatsApp reply debts) > voice input > university RAG (secondary).
+  Third-party content (email, WhatsApp, contact profiles) is data, never instruction:
+  wrap with wrap_external before it reaches an LLM prompt.
 
   Conventions: tools in agent/tools/; register in agent/tools/registry.py;
   bounded memory (8 pairs); secrets in .env only.

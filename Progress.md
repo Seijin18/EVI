@@ -1,6 +1,6 @@
 # EVI — Progresso de desenvolvimento
 
-> **Atualizado:** 1 Ago 2026  
+> **Atualizado:** 10 Out 2026  
 > **README / arquitetura:** [`README.md`](README.md)  
 > **Requisitos:** [`openspec/specs/`](openspec/specs/) · **Backlog:** [`openspec/BACKLOG.md`](openspec/BACKLOG.md) · **Adiado:** [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md)  
 > **Verify:** `./scripts/evi-test smoke` (13/13) · `openspec validate --specs`
@@ -20,10 +20,19 @@
 | Autonomia (heartbeat, background LLM, session lane) | **Done** (17 Jun 2026) |
 | Dev bridge multi-CLI | **Removido** (12 Ago 2026) — nunca rodou no container |
 | Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Done** (12 Ago 2026) |
-| Roadmap deferido | Ver tabela abaixo |
+| Contrato de tools + cobertura do caminho crítico + import vCard | **Done** (12 Ago 2026) |
+| Assistente proativo (briefing, lembretes, voz) | **Em andamento** — Etapa 18 ativa |
 
-**Foco atual:** #34 (contrato de tools) e #35 (cobertura). Fora da fila numerada,
-o import de agenda por vCard resolve os contatos que aparecem só como número. Ver [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
+**Foco atual:** #40 `evi-morning-briefing` (Etapa 18) — briefing matinal no Telegram
+com guarda mínima de injeção. Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
+porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
+
+> **Revisão de produto de 2026-10-10** ([`docs/ux-review-2026-10.md`](docs/ux-review-2026-10.md)).
+> Avaliou o EVI pelo dia a dia do usuário. Achados: uso do `/chat` caiu de 520
+> mensagens (jun) para 0 (set/out); 0 de 37 compromissos extraídos do WhatsApp foram
+> confirmados; a stack ficou ~6 semanas parada sem ninguém notar. O EVI só age
+> quando chamado. A fila foi reordenada para proatividade: briefing (18), lembretes
+> (19), pendências de resposta (20), voz (21), confiabilidade percebida (22).
 
 > **Revisão de 2026-08-12.** Uma revisão geral do sistema encontrou três itens antes
 > marcados Done que não funcionavam como descrito. Dois foram corrigidos na Etapa 12:
@@ -81,19 +90,25 @@ o import de agenda por vCard resolve os contatos que aparecem só como número. 
 | Heartbeat + background LLM tiers | `services/heartbeat.py`, `build_background_llm()` |
 | `list_calendars` LangGraph tool | `agent/tools/calendar_tool.py` |
 
-### Planejado (roadmap reordenado em 12 Ago 2026)
+| Contrato estruturado de tools (`ToolResult`) | `test_tool_result.py` · SCN-TOOL-01/02 |
+| Import de agenda vCard | `test_vcard_import.py` · `data-long-memory` |
 
-| Feature | Prioridade | Referência |
-|---------|------------|------------|
-| Contrato estruturado de tools | Média | roadmap 13.2 · BACKLOG #34 |
-| Cobertura: calendar_tool, auth, poller, db | Média | roadmap 14.2–14.7 · BACKLOG #35 |
-| Threat model de prompt injection | Média | roadmap 15 · BACKLOG #37 |
-| Execução em background | Média | roadmap 16 · BACKLOG #38 |
-| Compose profile Ollama | Baixa | Infra |
-| WhatsApp Meta/Twilio adapter | Baixa | `providers` spec |
+### Planejado (roadmap reordenado em 10 Out 2026)
 
-**Cortados:** MCP servers isolados, multimodal (Llava/Whisper — incompatível com
-GTX 1060 3 GB), cache Redis de embeddings. Motivos em `openspec/specs/roadmap.md`.
+| Feature | Etapa | Referência |
+|---------|-------|------------|
+| Briefing matinal no Telegram + delimitação de conteúdo externo | 18 · **ativo** | BACKLOG #40 · `openspec/changes/evi-morning-briefing/` |
+| Lembretes com horário e recorrência | 19 | BACKLOG #41 |
+| Pendências de resposta e promessas (substitui extração de compromissos) | 20 | BACKLOG #42 |
+| Mensagens de voz via Gemini | 21 | BACKLOG #43 |
+| Watchdog externo, `/ajuda`, ack imediato, aviso de OAuth | 22 | BACKLOG #44 |
+| Injeção de prompt — restante | 23 | BACKLOG #37 |
+| Execução em background — restante | 24 | BACKLOG #38 |
+
+**Cortados:** MCP servers isolados, Llava/Whisper **locais** (áudio reaberto via
+Gemini na Etapa 21), cache Redis de embeddings, adapter WhatsApp Meta/Twilio
+(Business API proíbe chatbot de uso geral desde 15/01/2026). Motivos em
+`openspec/specs/roadmap.md`.
 
 ---
 
@@ -120,7 +135,12 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **14.1** | **Container smoke no CI** | **Done** | Job `container`, `evi-test container`, guarda de isolamento de volumes |
 | **14.2** | **Cobertura do caminho crítico** | **Done** | poller, evolution_client, db (PG real), webhook Evolution — +62 testes |
 | **17** | **Import de agenda (vCard)** | **Done** | Nomes da agenda por `.vcf`; casamento tolerante ao nono dígito |
-| 15–16 | Injeção de prompt, background | **—** | Ver `openspec/specs/roadmap.md` |
+| **18** | **Briefing matinal** | **Ativo** | `evi-morning-briefing` — briefing no Telegram, resposta age sobre itens, `wrap_external` |
+| 19 | Lembretes | **—** | `evi-reminders` |
+| 20 | Pendências de resposta | **—** | `evi-reply-debts` |
+| 21 | Voz | **—** | `evi-voice-input` |
+| 22 | Confiabilidade percebida | **—** | `evi-perceived-reliability` |
+| 23–24 | Injeção (restante), background (restante) | **—** | Ver `openspec/specs/roadmap.md` |
 
 ### Série Runtime v3 (17 Jun 2026) — Done
 

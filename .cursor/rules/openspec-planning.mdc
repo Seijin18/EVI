@@ -9,7 +9,7 @@ alwaysApply: true
 
 1. `openspec list` — prefer **zero** active changes; archive or finish the current one first.
 2. **One feature = one change** (kebab-case), e.g. `evi-commitment-review-multichannel`.
-3. Product priority (from `openspec/config.yaml`): WhatsApp commitments / productivity > Telegram > dev bridge > university RAG.
+3. Product priority (from `openspec/config.yaml`): proactive delivery on Telegram (briefing, reminders) > productivity actions > voice input > university RAG.
 
 ## Propose a change
 

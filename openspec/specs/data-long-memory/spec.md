@@ -1,8 +1,8 @@
-# Data — long-term memory (planned)
+# Data — long-term memory
 
 ## Purpose
 
-Define phased long-term memory for EVI: hot Postgres, cold per-contact filesystem, and optional Neo4j knowledge graph (compose profile `graph`).
+Long-term memory for EVI: hot Postgres, cold per-contact filesystem, and optional Neo4j knowledge graph (compose profile `graph`).
 ## Requirements
 ### Requirement: Hot memory layer
 The system SHALL persist recent chat turns in Postgres `messages` and structured commitments in `pending_commitments` including `source_chat`, `source_label`, and `raw_text`.

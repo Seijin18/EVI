@@ -34,7 +34,7 @@ Implement **one change at a time**. Read only `contextFiles` from apply instruct
 | WhatsApp | `specs/messaging-whatsapp/spec.md` | `agent/services/whatsapp_processor.py` |
 | Remote | `specs/remote-access/spec.md` | `agent/auth.py`, webhooks |
 | Testing | `specs/testing/spec.md` | `scripts/evi-test`, `tests/` |
-| Roadmap (deferred) | `specs/roadmap.md` | — |
+| Roadmap (fila + deferido) | `specs/roadmap.md` | — |
 
 ## Verify (low token)
 
@@ -48,7 +48,7 @@ openspec validate <change>
 ## Backlog and review
 
 - Propose queue: [`BACKLOG.md`](BACKLOG.md)
-- Deferred only: [`specs/roadmap.md`](specs/roadmap.md)
+- Fila ordenada, deferidos e cortados: [`specs/roadmap.md`](specs/roadmap.md)
 - After archive: update BACKLOG status; `openspec validate --specs`
 
 ## Do not read by default
