@@ -22,10 +22,11 @@
 | Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Done** (12 Ago 2026) |
 | Contrato de tools + cobertura do caminho crítico + import vCard | **Done** (12 Ago 2026) |
 | Verificação realista (simulação + validação em uso real) | **Done** (10 Out 2026) — V1 + V2 |
-| Assistente proativo (briefing, lembretes, voz) | **Em andamento** — Etapa 18 Done (10 Out 2026), 19 ativa |
+| Assistente proativo (briefing, lembretes, voz) | **Em andamento** — Etapas 18–19 Done (10 Out 2026), 20 ativa |
 
-**Foco atual:** #41 `evi-reminders` (Etapa 19). Arquivados em 2026-10-10: #45
-`evi-sim-harness` (V1), #46 `evi-usage-validation` (V2), #40 `evi-morning-briefing` (18). Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
+**Foco atual:** #42 `evi-reply-debts` (Etapa 20). Arquivados em 2026-10-10: #45
+`evi-sim-harness` (V1), #46 `evi-usage-validation` (V2), #40 `evi-morning-briefing` (18),
+#41 `evi-reminders` (19). Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
 porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de produto de 2026-10-10** ([`docs/ux-review-2026-10.md`](docs/ux-review-2026-10.md)).
@@ -95,6 +96,7 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 | Simulação do sistema montado (L2 `evi-sim`) | `./scripts/evi-sim run --tag critical --llm replay` · `testing` SCN-SIM-01..09 |
 | Validação em uso real (L4): `turn_log`, `/bom` `/ruim`, relatório semanal, sonda | `test_turn_log.py`, `test_usage_report.py`, `test_probe.py` · SIM-USE-01/02 · `testing` SCN-USE-01..08 |
 | Briefing matinal no Telegram + guarda `wrap_external` | `./scripts/evi-test briefing` · SIM-BRIEF-01..04 · `proactive` |
+| Lembretes que disparam (loop in-process) | `test_reminders.py`, `test_reminder_loop.py` · SIM-REM-01..05 · `proactive` |
 | Contrato estruturado de tools (`ToolResult`) | `test_tool_result.py` · SCN-TOOL-01/02 |
 | Import de agenda vCard | `test_vcard_import.py` · `data-long-memory` |
 
@@ -102,8 +104,7 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 | Feature | Etapa | Referência |
 |---------|-------|------------|
-| Lembretes com horário e recorrência | 19 · **ativo** | BACKLOG #41 · `openspec/changes/evi-reminders/` |
-| Pendências de resposta e promessas (substitui extração de compromissos) | 20 | BACKLOG #42 |
+| Pendências de resposta e promessas (substitui extração de compromissos) | 20 · **ativo** | BACKLOG #42 · `openspec/changes/evi-reply-debts/` |
 | Mensagens de voz via Gemini | 21 | BACKLOG #43 |
 | Watchdog externo, `/ajuda`, ack imediato, aviso de OAuth | 22 | BACKLOG #44 |
 | Injeção de prompt — restante | 23 | BACKLOG #37 |

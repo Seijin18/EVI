@@ -98,9 +98,10 @@ age sobre os itens. Inclui a parte mínima do #37: conteúdo de terceiros delimi
 **Pronto quando:** briefing chega todo dia por 2 semanas; `evi_briefing_replied_total`
 > 0 em pelo menos metade dos dias.
 
-### Etapa 19 — Lembretes que disparam — `evi-reminders` — **ativo**
+### Etapa 19 — Lembretes que disparam — `evi-reminders` — **Done** (2026-10-10)
 
-Change: [`evi-reminders`](../changes/evi-reminders/proposal.md).
+Change: [`evi-reminders`](../changes/archive/2026-10-10-evi-reminders/proposal.md).
+As-built: loop in-process com claim atômico, recorrência por preset com `anchor_day`, adiar/feito sem mover a série, atrasado nunca descartado. Ligar com `EVI_REMINDERS_ENABLED=true`.
 
 **Por quê.** "Me lembra às 18h de pagar o boleto" é o recurso mais básico de
 qualquer assistente por mensagem (Zapia, Perplexity, Poke) e hoje é impossível: o
@@ -125,7 +126,9 @@ EVI só cria evento no Google Calendar e depende da notificação de outro app.
 **Dependência.** Etapa 18 (padrão de entrega + snapshot + `wrap_external`).
 **Pronto quando:** desvio de disparo < 60 s em 95% dos casos (medido no log).
 
-### Etapa 20 — Pendências de resposta e promessas — `evi-reply-debts`
+### Etapa 20 — Pendências de resposta e promessas — `evi-reply-debts` — **ativo**
+
+Change: [`evi-reply-debts`](../changes/evi-reply-debts/proposal.md).
 
 **Por quê.** A extração de "compromissos" teve 0 confirmações em 37 itens. Os
 itens chegam sem data ("Jantar"), sem sentido ("baixeii pra te mandar") ou sem
