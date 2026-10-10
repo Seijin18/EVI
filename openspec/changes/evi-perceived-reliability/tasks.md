@@ -7,7 +7,7 @@
 
 ## 2. No turno
 
-- [ ] 2.1 `/ajuda` determinístico (features ligadas) + "o que você pode fazer" sem LLM + `AGENTS.md`
+- [x] 2.1 `/ajuda` determinístico (features ligadas) + "o que você pode fazer" sem LLM + `AGENTS.md`
   - SCN-REL-02
   - Files: `agent/services/help_text.py`, `agent/services/chat_commands.py`, `EVI_WORKSPACE/AGENTS.md`, `tests/unit/test_chat_commands.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_chat_commands.py -q`

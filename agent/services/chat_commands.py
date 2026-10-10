@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+import unicodedata
 from typing import Callable
 
 CompactFn = Callable[[], None]
@@ -62,6 +64,21 @@ def _feedback_reply(session_id: str, feedback: str, note: str | None) -> str:
     return f"Anotado: vou usar isso para melhorar.{suffix}"
 
 
+_HELP_QUESTIONS = {
+    "o que voce pode fazer",
+    "o que vc pode fazer",
+    "o que voce sabe fazer",
+    "o que vc sabe fazer",
+}
+
+
+def _is_help_question(text: str) -> bool:
+    folded = unicodedata.normalize("NFD", text.lower())
+    folded = "".join(c for c in folded if unicodedata.category(c) != "Mn")
+    folded = re.sub(r"[^a-z0-9 ]+", " ", folded)
+    return " ".join(folded.split()) in _HELP_QUESTIONS
+
+
 def try_chat_command(
     text: str,
     *,
@@ -71,9 +88,17 @@ def try_chat_command(
 ) -> str | None:
     """Return reply text if message is a slash command, else None."""
     raw = (text or "").strip()
+    if _is_help_question(raw):
+        from services.help_text import build_help
+
+        return build_help()
     if not raw.startswith("/"):
         return None
     cmd = raw.split()[0].lower()
+    if cmd in ("/ajuda", "/help"):
+        from services.help_text import build_help
+
+        return build_help()
     if cmd in ("/status", "/estado"):
         return _status_text()
     if cmd in ("/reset", "/new"):

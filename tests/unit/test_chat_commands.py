@@ -135,3 +135,61 @@ def test_feedback_scn_use_03_real_db(monkeypatch):
     assert rows[0] == ("Crie uma reunião amanhã", "ruim", "marcou o dia errado")
     assert rows[1][1] is None
     assert try_chat_command("/bom", session_id="nunca-existiu-xyz") == "Não encontrei um pedido anterior para avaliar."
+
+
+_HELP_FLAGS = (
+    "EVI_BRIEFING_ENABLED",
+    "EVI_REMINDERS_ENABLED",
+    "EVI_REPLY_DEBTS_ENABLED",
+    "EVI_VOICE_ENABLED",
+)
+
+
+@pytest.fixture
+def no_llm(monkeypatch):
+    import llm
+
+    def _boom(*a, **k):
+        raise AssertionError("LLM must not be built for /ajuda")
+
+    monkeypatch.setattr(llm, "build_llm", _boom)
+    for f in _HELP_FLAGS:
+        monkeypatch.delenv(f, raising=False)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "/ajuda",
+        "/help",
+        "/AJUDA",
+        "O que você pode fazer?",
+        "o que voce pode fazer",
+        "  O QUE VC PODE FAZER?!  ",
+        "o que você sabe fazer?",
+    ],
+)
+def test_help_variants_no_llm(no_llm, text):
+    out = try_chat_command(text, session_id="t")
+    assert out and "Marca reunião amanhã às 10h com a Ana" in out
+    assert "/bom e /ruim" in out
+    assert len(out.splitlines()) <= 12
+
+
+def test_help_unrelated_question_not_intercepted(no_llm):
+    assert try_chat_command("o que você pode fazer por mim hoje?", session_id="t") is None
+
+
+def test_help_flags_off_hides_optional_items(no_llm):
+    out = try_chat_command("/ajuda", session_id="t")
+    for frag in ("esperando minha resposta", "Me lembra", "Confirma 2", "áudio"):
+        assert frag not in out
+
+
+def test_help_flags_on_shows_optional_items(no_llm, monkeypatch):
+    for f in _HELP_FLAGS:
+        monkeypatch.setenv(f, "true")
+    out = try_chat_command("/help", session_id="t")
+    for frag in ("esperando minha resposta", "Me lembra às 18h", "Confirma 2", "Pode mandar áudio"):
+        assert frag in out
+    assert len(out.splitlines()) <= 12
