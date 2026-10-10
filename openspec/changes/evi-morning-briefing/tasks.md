@@ -1,6 +1,6 @@
 ## 1. Guarda de injeção (antes de qualquer conteúdo novo chegar à sessão)
 
-- [ ] 1.1 `wrap_external(text, source)` com neutralização dos marcadores e truncamento
+- [x] 1.1 `wrap_external(text, source)` com neutralização dos marcadores e truncamento
   - SCN-SEC-01
   - Files: `agent/services/untrusted.py`, `tests/unit/test_untrusted.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_untrusted.py -q`
