@@ -40,5 +40,6 @@
 - [ ] Decidir se a produção usa `EVI_GEMINI_THINKING_BUDGET=0` (a simulação inteira passou com 0; custo cai ~50%) — `.env`
 - [ ] Ligar pendências de resposta: `EVI_REPLY_DEBTS_ENABLED=true` (para de mandar notificação avulsa de compromisso; o briefing passa a ter 3 grupos)
 - [ ] Avaliar em 2026-10-24 a validação do evi-reply-debts (ação ≥ 30% em "esperando resposta"; se promessas+combinados < 30%, desligar `EVI_WHATSAPP_LLM_EXTRACT`) — relatório semanal
+- [ ] Flake da simulação: `getUpdates error: TimeoutError` no poller dentro do evi-sim (SIM-VOICE-03 1/3, VOICE-01 ~60 s). O fake usa relógio monotônico; investigar o servidor de fakes (threads) — `agent/testing/sim/fake_telegram.py`
 ## Bloqueios
 - (resolvido 2026-10-10 — usuário ampliou o orçamento em R$ 10) evi-reminders 3.1: cota diária do Gemini esgotada (429 RESOURCE_EXHAUSTED) com a chave de produção compartilhada. SIM-REM-01..04 passaram 3/3; SIM-REM-05 falhou só por 429. Faltam, quando a cota voltar: `./scripts/evi-sim up` → `./scripts/evi-sim run --id SIM-REM-05 --repeat 3 --llm live` → `--tag critical --llm record` (cassettes estão defasados pelas tools novas; o job `sim-replay` da CI fica vermelho até regravar) → `--tag critical --llm replay` → `--tag critical,adversarial,briefing --repeat 3 --llm live` → task 3.2 (arquivar). Tentado: esperar e repetir SIM-REM-05 uma vez (0/3, 429).

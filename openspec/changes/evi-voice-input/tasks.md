@@ -29,6 +29,6 @@
   - Files: `agent/testing/sim/fake_telegram.py`, `agent/testing/sim/fake_evolution.py`, `tests/fixtures/audio/`, `tests/sim/scenarios/voice/`, `tests/sim/sim.env`
   - Verify: `./scripts/evi-sim run --tag voice --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --llm replay`
 
-- [ ] 3.2 Sincronizar specs com o as-built, atualizar `BACKLOG.md`/`Progress.md`/roadmap e arquivar
+- [x] 3.2 Sincronizar specs com o as-built, atualizar `BACKLOG.md`/`Progress.md`/roadmap e arquivar
   - Files: `openspec/changes/evi-voice-input/`, `openspec/BACKLOG.md`, `Progress.md`, `openspec/specs/roadmap.md`
   - Verify: `openspec validate --specs && PYTHONPATH=agent python3 -m pytest tests/unit -q && ./scripts/evi-sim run --tag critical,adversarial --repeat 3 --llm live && ./scripts/evi-sim run --tag critical --llm replay`

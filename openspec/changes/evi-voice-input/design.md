@@ -66,3 +66,15 @@ Nenhum container novo; áudio em memória (≤ 20 MB), descartado após transcre
 ## Out of scope
 
 Ver `proposal.md`.
+
+## As-built (2026-10-10)
+
+- Fixtures de áudio gerados por espeak-ng + opusenc num container descartável; a frase
+  virou "marca consulta no dentista amanhã às três da tarde" (o TTS robótico tornava
+  "marca dentista" ininteligível). Ver `tests/fixtures/audio/README.md`.
+- Voz no Telegram verifica `TELEGRAM_CHAT_ID`. Achado: o **texto** não verifica — qualquer
+  chat conversa com o EVI; correção na task 1.0 do `evi-prompt-injection-model`.
+- Áudio de terceiros só conta como atividade ("[áudio]") para pendências de resposta;
+  nunca é baixado nem transcrito.
+- Erros de download do Telegram não carregam o token.
+- `turn_log.input_kind` e linha de voz no relatório semanal.
