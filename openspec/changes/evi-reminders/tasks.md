@@ -1,11 +1,11 @@
 ## 1. Armazenamento e disparo
 
-- [x] 1.1 `python-dateutil` pinado + tabela `reminders` + helpers (`create`, `list`, `claim_due` atômico, `finish_fired`, `release`, `snooze`, `complete`, `cancel`, `requeue_stuck`)
+- [x] 1.1 Tabela `reminders` + helpers (`create`, `list`, `claim_due` atômico, `finish_fired`, `release`, `snooze`, `complete`, `cancel`, `requeue_stuck`)
   - SCN-REM-02, SCN-REM-03
   - Files: `agent/requirements.txt`, `agent/db.py`, `tests/unit/test_db.py`
   - Verify: `DATABASE_URL=<PG efêmero> EVI_TEST_EPHEMERAL_DB=1 PYTHONPATH=agent python3 -m pytest tests/unit/test_db.py -q` — duas chamadas concorrentes de `claim_due` não devolvem o mesmo id; migração idempotente
 
-- [ ] 1.2 `services/reminders.py`: validação, próxima ocorrência por preset (hora de parede em `EVI_TIMEZONE`, fim de mês), formatação (marca "atrasado"), `fire_due(now)` (claim → envio → histórico/snapshot → `sent`/reagenda/libera)
+- [x] 1.2 `services/reminders.py`: validação, próxima ocorrência por preset (hora de parede em `EVI_TIMEZONE`, fim de mês), formatação (marca "atrasado"), `fire_due(now)` (claim → envio → histórico/snapshot → `sent`/reagenda/libera)
   - SCN-REM-02, SCN-REM-03, SCN-REM-04, SCN-REM-05
   - Files: `agent/services/reminders.py`, `tests/unit/test_reminders.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reminders.py -q` — recorrente atrasado 3 dias dispara uma vez e avança; falha de envio volta a `pending`; DST/fim de mês

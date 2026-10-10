@@ -74,6 +74,24 @@ BRIEFING_SENT_TOTAL = (
     if _HAS_PROM
     else None
 )
+REMINDERS_FIRED_TOTAL = (
+    Counter(
+        "evi_reminders_fired_total",
+        "Reminders delivered, by whether they were late (>5 min after due_at)",
+        ["late"],
+    )
+    if _HAS_PROM
+    else None
+)
+REMINDER_DRIFT_SECONDS = (
+    Histogram(
+        "evi_reminder_drift_seconds",
+        "Seconds between a reminder's due_at and its delivery",
+        buckets=(1, 5, 15, 30, 60, 120, 300, 900, 3600, 21600, 86400),
+    )
+    if _HAS_PROM
+    else None
+)
 BRIEFING_REPLIED_TOTAL = (
     Counter(
         "evi_briefing_replied_total",
@@ -128,6 +146,15 @@ def record_briefing_sent(kind: str, ok: bool) -> None:
         BRIEFING_SENT_TOTAL.labels(
             kind=_bounded(kind, _BRIEFING_KINDS), ok="true" if ok else "false"
         ).inc()
+
+
+def record_reminder_fired(late: bool, drift_s: float) -> None:
+    if not metrics_enabled():
+        return
+    if REMINDERS_FIRED_TOTAL is not None:
+        REMINDERS_FIRED_TOTAL.labels(late="true" if late else "false").inc()
+    if REMINDER_DRIFT_SECONDS is not None:
+        REMINDER_DRIFT_SECONDS.observe(max(0.0, float(drift_s)))
 
 
 def record_briefing_replied(kind: str) -> None:

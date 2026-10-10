@@ -13,8 +13,8 @@ Roadmap: Etapa 19; análise em [`docs/ux-review-2026-10.md`](../../../docs/ux-re
   `snooze_reminder`, `complete_reminder` (registradas em `registry.py`).
 - Disparo por **loop in-process** no `agent-api` (thread daemon, tick de 30 s, mesmo
   padrão do `telegram_poller`), atrás de `EVI_REMINDERS_ENABLED` (default `false`).
-- Recorrência por preset (`daily`, `weekdays`, `weekly`, `monthly`) calculada com
-  `dateutil.rrule` no fuso `EVI_TIMEZONE`.
+- Recorrência por preset (`daily`, `weekdays`, `weekly`, `monthly`) calculada em
+  datas locais no fuso `EVI_TIMEZONE` (sem dependência nova).
 - Responder ao lembrete age sobre ele ("feito", "adia 1h", "adia para amanhã"): o
   lembrete entra no histórico da sessão Telegram e num snapshot `last_reminder`,
   como o briefing.
@@ -29,7 +29,7 @@ Novo: `agent/services/reminders.py`, `agent/services/reminder_loop.py`,
 `agent/tools/reminder_tools.py`, `tests/sim/scenarios/reminders/`.
 Alterado: `agent/db.py`, `agent/main.py` (lifespan), `agent/tools/registry.py`,
 `agent/services/metrics.py`, `agent/services/usage_report.py`,
-`EVI_WORKSPACE/AGENTS.md`, `agent/requirements.txt` (`python-dateutil`, pinado),
+`EVI_WORKSPACE/AGENTS.md`,
 `.env.example`, `tests/sim/sim.env`. Spec: `proactive`. Sem container novo.
 
 ## Validação em uso real

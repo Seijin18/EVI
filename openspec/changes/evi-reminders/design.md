@@ -51,10 +51,11 @@ avança para a próxima ocorrência futura — não dispara N vezes.
 
 ### 4. Recorrência
 
-Presets mapeados para `dateutil.rrule` (`DAILY`, `DAILY` com `byweekday=MO..FR`,
-`WEEKLY`, `MONTHLY` com `bymonthday` do primeiro `due_at`, que cai no último dia do
-mês quando não existe), calculados em hora local e convertidos para UTC — o horário
-de parede se mantém. `python-dateutil` pinado em `agent/requirements.txt`.
+Presets calculados com aritmética de datas locais (diário, dias úteis, semanal,
+mensal); o mensal guarda `anchor_day` (dia do primeiro `due_at`) e cai no último dia
+do mês quando ele não existe, voltando ao dia original no mês seguinte. Hora local
+convertida para UTC — o horário de parede se mantém. As-built: `dateutil.rrule` foi
+descartado (pula meses sem o dia em vez de ajustar); nenhuma dependência nova.
 
 ### 5. Criação pelo LLM
 

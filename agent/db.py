@@ -151,6 +151,16 @@ def _run_migrations() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS reminders_due
                     ON reminders (status, due_at);
+                ALTER TABLE reminders ADD COLUMN IF NOT EXISTS anchor_day SMALLINT;
+                CREATE TABLE IF NOT EXISTS reminder_fires (
+                    id SERIAL PRIMARY KEY,
+                    reminder_id INTEGER NOT NULL,
+                    due_at TIMESTAMPTZ NOT NULL,
+                    fired_at TIMESTAMPTZ NOT NULL,
+                    drift_s INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS reminder_fires_fired_at
+                    ON reminder_fires (fired_at);
                 """
             )
         conn.commit()
@@ -947,13 +957,26 @@ def mark_briefing_replied(day, kind: str) -> bool:
 
 
 def create_reminder(text: str, due_at, repeat: str | None, chat_id: str,
-                    created_from: str) -> int:
+                    created_from: str, anchor_day: int | None = None) -> int:
+    """anchor_day (monthly only): local day of month of the original due_at, so a
+    31st reminder clamped to Feb 28 returns to the 31st in March."""
+    if repeat == "monthly" and anchor_day is None:
+        from tools.calendar_time import evi_timezone
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            tz = ZoneInfo(evi_timezone())
+        except (ZoneInfoNotFoundError, ValueError):
+            tz = ZoneInfo("America/Sao_Paulo")
+        anchor_day = due_at.astimezone(tz).day
+    if repeat != "monthly":
+        anchor_day = None
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO reminders (text, due_at, repeat, chat_id, created_from) "
-                "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                (text, due_at, repeat, chat_id, created_from),
+                "INSERT INTO reminders (text, due_at, repeat, chat_id, created_from, anchor_day) "
+                "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                (text, due_at, repeat, chat_id, created_from, anchor_day),
             )
             rid = cur.fetchone()[0]
         conn.commit()
@@ -999,10 +1022,32 @@ def claim_due(now, limit: int = 20) -> List[Dict[str, Any]]:
     return sorted((dict(r) for r in rows), key=lambda r: (r["due_at"], r["id"]))
 
 
-def finish_fired(reminder_id: int, fired_at, drift_s: int, next_due_at=None) -> None:
-    """Record a delivered occurrence: one-off -> 'sent'; recurring -> 'pending' at next_due_at."""
+_FIRE_LOG_SQL = (
+    "INSERT INTO reminder_fires (reminder_id, due_at, fired_at, drift_s) "
+    "SELECT id, due_at, %s, %s FROM reminders WHERE id = %s"
+)
+
+
+def log_reminder_fire(reminder_id: int, fired_at, drift_s: int) -> None:
+    """Per-occurrence fire log (a recurring row is overwritten on every fire).
+
+    due_at is read from the row, so call before it advances. finish_fired() does
+    this in its own transaction; this is for callers that need it standalone.
+    """
     with _conn() as conn:
         with conn.cursor() as cur:
+            cur.execute(_FIRE_LOG_SQL, (fired_at, drift_s, reminder_id))
+        conn.commit()
+
+
+def finish_fired(reminder_id: int, fired_at, drift_s: int, next_due_at=None) -> None:
+    """Record a delivered occurrence: one-off -> 'sent'; recurring -> 'pending' at next_due_at.
+
+    Also appends the occurrence to reminder_fires (same transaction, before due_at moves).
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(_FIRE_LOG_SQL, (fired_at, drift_s, reminder_id))
             if next_due_at is None:
                 cur.execute(
                     "UPDATE reminders SET status = 'sent', fired_at = %s, drift_s = %s "
@@ -1086,8 +1131,8 @@ def reminder_stats(since, until) -> Dict[str, Any]:
             )
             created = cur.fetchone()[0]
             cur.execute(
-                "SELECT drift_s FROM reminders WHERE fired_at >= %s AND fired_at < %s "
-                "AND drift_s IS NOT NULL ORDER BY drift_s",
+                "SELECT drift_s FROM reminder_fires WHERE fired_at >= %s AND fired_at < %s "
+                "ORDER BY drift_s",
                 (since, until),
             )
             drifts = [r[0] for r in cur.fetchall()]

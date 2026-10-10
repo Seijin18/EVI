@@ -475,6 +475,7 @@ def rem_ids():
     yield ids
     with db._conn() as conn:
         with conn.cursor() as cur:
+            cur.execute("DELETE FROM reminder_fires WHERE reminder_id = ANY(%s)", (ids,))
             cur.execute("DELETE FROM reminders WHERE id = ANY(%s)", (ids,))
         conn.commit()
 
@@ -623,3 +624,37 @@ def test_reminder_stats(rem_ids):
     st = db.reminder_stats(since, until)
     assert st["created"] >= 4 and st["fired"] >= 4 and st["late"] >= 1
     assert {1, 2, 400, 3} <= set(st["drifts"]) and st["p95_drift_s"] >= 3
+
+
+@pytest.mark.ephemeral_db
+def test_reminder_stats_counts_every_recurring_fire(rem_ids):
+    """A recurring row is overwritten on each fire; reminder_fires keeps each occurrence."""
+    import db
+
+    rec = _mk(rem_ids, _t(-1), repeat="daily")
+    since, until = _window()
+    before = db.reminder_stats(since, until)
+    for d, nxt in ((10, 60), (500, 120), (2, 180)):
+        db.claim_due(_t(0), limit=1000)
+        db.finish_fired(rec, _t(0), d, next_due_at=_t(-1) if nxt != 180 else _t(nxt))
+    st = db.reminder_stats(since, until)
+    assert st["fired"] - before["fired"] == 3
+    assert st["late"] - before["late"] == 1
+    assert {10, 500, 2} <= set(st["drifts"])
+    with db._conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM reminder_fires WHERE reminder_id = ANY(%s)", (rem_ids,))
+        conn.commit()
+
+
+@pytest.mark.ephemeral_db
+def test_create_reminder_stores_monthly_anchor_day(rem_ids):
+    import db
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    due = datetime(2026, 1, 31, 23, 30, tzinfo=ZoneInfo("America/Sao_Paulo"))  # Feb 1 in UTC
+    m = _mk(rem_ids, due, repeat="monthly")
+    d = _mk(rem_ids, due, repeat="daily")
+    assert db.get_reminder(m)["anchor_day"] == 31
+    assert db.get_reminder(d)["anchor_day"] is None
