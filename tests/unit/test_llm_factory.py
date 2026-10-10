@@ -132,3 +132,17 @@ if __name__ == "__main__":
     test_build_llm_provider_env_read()
     test_build_embeddings_provider_env_read()
     print("ok")
+
+
+def test_build_llm_gemini_sets_request_timeout():
+    """Gemini client gets a request timeout so a hung call cannot block the turn."""
+    fake_module = MagicMock()
+    with patch.dict("sys.modules", {"langchain_google_genai": fake_module}):
+        import llm as llm_mod
+        with patch.dict(os.environ, {"EVI_LLM_PROVIDER": "gemini"}):
+            os.environ.pop("EVI_LLM_TIMEOUT_SEC", None)
+            llm_mod.build_llm()
+            assert fake_module.ChatGoogleGenerativeAI.call_args.kwargs["timeout"] == 60.0
+            with patch.dict(os.environ, {"EVI_LLM_TIMEOUT_SEC": "25"}):
+                llm_mod.build_llm()
+            assert fake_module.ChatGoogleGenerativeAI.call_args.kwargs["timeout"] == 25.0
