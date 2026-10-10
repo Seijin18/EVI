@@ -29,6 +29,19 @@ Este projeto usa OpenSpec (`openspec/`). CLI instalado: `openspec`.
 Fonte de verdade é `openspec/specs/`, **não** `Progress.md` nem `README.md` —
 esses são resumo/overview e podem estar defasados.
 
+## Implementação de changes e uso de modelos
+
+`/implement-change [slug]` ([`.claude/commands/implement-change.md`](.claude/commands/implement-change.md))
+roda todas as tasks do change ativo até o archive. A sessão (Opus) orquestra e
+delega para agentes de projeto em [`.claude/agents/`](.claude/agents/):
+
+| Agente | Modelo | Papel |
+|---|---|---|
+| `implementer` | Sonnet | código + testes de uma task |
+| `reviewer` | Opus | revisão de correção/segurança de tasks com risco |
+| `explorer` | Haiku | localizar código (read-only) |
+| `test-runner` | Haiku | rodar Verify/gates e resumir |
+
 ## MCP: codebase-memory
 
 Servidor declarado em [`.mcp.json`](.mcp.json). Projeto no grafo:
