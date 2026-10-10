@@ -17,7 +17,7 @@
   - Files: `agent/services/slow_ack.py`, `agent/services/turn_log.py`, `tests/unit/test_slow_ack.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_slow_ack.py tests/unit/test_turn_log.py -q`
 
-- [ ] 2.3 Aviso de OAuth no turno com o controle diário da sonda
+- [x] 2.3 Aviso de OAuth no turno com o controle diário da sonda
   - SCN-REL-04
   - Files: `agent/services/tool_result.py`, `agent/services/probe.py`, `tests/unit/test_probe.py`, `tests/unit/test_tool_result.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_probe.py tests/unit/test_tool_result.py -q`

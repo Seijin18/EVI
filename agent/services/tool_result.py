@@ -15,6 +15,7 @@ split `SendResult` uses on the send path.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -94,6 +95,8 @@ def parse_windmill_result(
     result = _classify_windmill_result(
         raw, action=action, resource_env=resource_env, fallback_message=fallback_message
     )
+    if tool and not result.ok and result.reason == OAUTH:
+        _warn_oauth_in_turn(tool)
     if tool:
         try:
             from services.turn_log import record_tool_outcome
@@ -102,6 +105,42 @@ def parse_windmill_result(
         except Exception:  # observability must never change a tool outcome
             pass
     return result
+
+
+# tool name -> probe check name (one OAuth warning per integration per day)
+_TOOL_CHECK = {
+    "schedule_event": "calendar",
+    "list_calendar_events": "calendar",
+    "list_calendars": "calendar",
+    "create_task": "tasks",
+    "list_tasks": "tasks",
+    "summarize_inbox": "gmail",
+}
+
+
+def _tool_check(tool: str) -> str:
+    if tool in _TOOL_CHECK:
+        return _TOOL_CHECK[tool]
+    return "gmail" if tool.startswith("delete_emails") else ""
+
+
+def _warn_oauth_in_turn(tool: str) -> None:
+    """Proactive reconnect warning, sharing the probe's daily claim. Never raises."""
+    try:
+        check = _tool_check(tool)
+        if not check or not os.getenv("DATABASE_URL"):
+            return
+        from services.turn_log import current_channel, current_is_test
+
+        if current_channel() is None or current_is_test():
+            return
+        from services import probe
+
+        probe.notify_oauth(check)
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+
+        soft_fail("tool_result.notify_oauth", exc)
 
 
 def _classify_windmill_result(

@@ -163,6 +163,13 @@ def _notify(day: date, check: str, reason: str, detail: str) -> bool:
         return False
 
 
+def notify_oauth(check: str) -> bool:
+    """In-turn OAuth warning; shares the probe's per-day claim so only one goes out."""
+    if check not in _RESOURCE_DEFAULTS:
+        return False
+    return _notify(_today(), check, OAUTH, "")
+
+
 def run_probe() -> dict:
     """Run the four read-only checks. Each is timed and soft-failed independently."""
     day = _today()

@@ -264,3 +264,100 @@ def test_notify_releases_claim_when_send_fails(env, monkeypatch):
     monkeypatch.setattr("services.telegram_notify.send_telegram_message", lambda text, chat_id=None: False)
     probe.run_probe()
     assert env.db.claimed == set()  # released: the next run may retry
+
+
+# --- SCN-REL-04: in-turn OAuth warning shares the probe's daily claim ---
+
+from services import turn_log  # noqa: E402
+from services.tool_result import parse_windmill_result  # noqa: E402
+
+
+def _gmail_turn_hit(**start_kw):
+    token = None
+    if start_kw is not None:
+        _, token = turn_log.start_turn(**start_kw)
+    try:
+        return parse_windmill_result(OAUTH_ERR, action="acessar o Gmail",
+                                     resource_env="WINDMILL_GMAIL_RESOURCE", tool="summarize_inbox")
+    finally:
+        if token is not None:
+            turn_log.end_turn(token)
+
+
+def test_scn_rel_04_probe_plus_two_turns_one_warning(env, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    env.install({"summarize_inbox": OAUTH_ERR})
+    probe.run_probe()
+    _gmail_turn_hit(channel="telegram")
+    _gmail_turn_hit(channel="telegram")
+    assert len([t for t in env.sent if "Gmail" in t]) == 1
+
+
+def test_two_turns_without_probe_send_once(env, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    _gmail_turn_hit(channel="telegram")
+    _gmail_turn_hit(channel="telegram")
+    assert len(env.sent) == 1 and "Windmill → Resources → gmail" in env.sent[0]
+
+
+def test_outside_a_turn_no_send(env, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    parse_windmill_result(OAUTH_ERR, action="acessar o Gmail",
+                          resource_env="WINDMILL_GMAIL_RESOURCE", tool="summarize_inbox")
+    assert env.sent == []
+
+
+def test_test_turn_no_send(env, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    _gmail_turn_hit(channel="telegram", is_test=True)
+    assert env.sent == []
+
+
+def test_no_database_url_no_send(env, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    _gmail_turn_hit(channel="telegram")
+    assert env.sent == []
+
+
+def test_unmapped_tool_no_send(env, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    _, tok = turn_log.start_turn(channel="telegram")
+    try:
+        parse_windmill_result(OAUTH_ERR, action="x", resource_env="WINDMILL_GMAIL_RESOURCE", tool="other")
+    finally:
+        turn_log.end_turn(tok)
+    assert env.sent == []
+
+
+def test_send_failure_releases_claim_in_turn(env, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    monkeypatch.setattr("services.telegram_notify.send_telegram_message", lambda text, chat_id=None: False)
+    _gmail_turn_hit(channel="telegram")
+    assert env.db.claimed == set()
+
+
+def test_notify_oauth_never_raises_in_turn(env, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+
+    def boom(*a, **k):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db, "claim_probe_notification", boom)
+    res = _gmail_turn_hit(channel="telegram")
+    assert res.reason == "oauth"
+
+
+@pytest.mark.ephemeral_db
+def test_scn_rel_04_db_backed(monkeypatch):
+    sent = []
+    monkeypatch.setattr("services.telegram_notify.send_telegram_message",
+                        lambda text, chat_id=None: sent.append(text) or True)
+    day = probe._today()
+    db.release_probe_notification(day, "gmail")
+    try:
+        assert probe._notify(day, "gmail", "oauth", "") is True  # the probe
+        _gmail_turn_hit(channel="telegram")
+        _gmail_turn_hit(channel="telegram")
+        assert len(sent) == 1
+    finally:
+        db.release_probe_notification(day, "gmail")

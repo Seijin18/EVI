@@ -189,3 +189,11 @@ def test_tool_name_reports_outcome_to_the_turn_collector():
         ("schedule_event", False, "not_configured"),
         ("list_calendars", True, None),
     ]
+
+
+def test_tool_check_mapping():
+    assert tr._tool_check("schedule_event") == "calendar"
+    assert tr._tool_check("list_calendars") == "calendar"
+    assert tr._tool_check("list_tasks") == "tasks"
+    assert tr._tool_check("delete_emails_by_query") == "gmail"
+    assert tr._tool_check("send_whatsapp") == ""
