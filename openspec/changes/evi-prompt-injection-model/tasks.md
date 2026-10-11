@@ -28,7 +28,7 @@
   - Files: `tests/fixtures/injection/`, `agent/testing/cli.py`, `docs/testing.md`
   - Verify: `./scripts/evi-test injection && ./scripts/evi-test smoke`
 
-- [ ] 2.2 `SIM-ADV-04`, `SIM-ADV-05`; ajustar cenários de exclusão existentes (SIM-RU-06) ao fluxo de confirmação; regravar cassettes
+- [x] 2.2 `SIM-ADV-04`, `SIM-ADV-05`; ajustar cenários de exclusão existentes (SIM-RU-06) ao fluxo de confirmação; regravar cassettes
   - SCN-INJ-01, SCN-INJ-02
   - Files: `tests/sim/scenarios/adversarial/`, `tests/sim/scenarios/real-usage/`, `tests/sim/cassettes/`
   - Verify: `./scripts/evi-sim run --tag adversarial,gmail --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`

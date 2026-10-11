@@ -71,6 +71,23 @@ _VOLATILE_LINE = re.compile(r"^\s*(Today is\b|.*Current time:|- \+\d+ days\b)", 
 _UUID = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.IGNORECASE)
 
 
+# Deletion confirmation token (tools/email_tool): random per run, shown to the model in the
+# preview tool result and echoed back as ``confirm_token``. Normalized in the request key; in
+# the recorded response it becomes a placeholder re-filled from the replayed prompt's token.
+_PENDING_TOKEN = re.compile(r"\(token: ([A-Za-z0-9_-]+)\)")
+# The same pending deletion is also echoed in the system prompt as a ``pending_delete`` JSON
+# line carrying the token plus clock-derived ``expires_at`` / ``created_turn``.
+_PENDING_JSON = re.compile(r'("token": ")([A-Za-z0-9_-]+)(", "expires_at": )[\d.]+(, "created_turn": )\d+')
+
+
+def _last_token(messages: list[BaseMessage]) -> str | None:
+    for m in reversed(messages):
+        found = _PENDING_TOKEN.findall(str(m.content)) or [x[1] for x in _PENDING_JSON.findall(str(m.content))]
+        if found:
+            return found[-1]
+    return None
+
+
 class CassetteStale(RuntimeError):
     pass
 
@@ -89,6 +106,8 @@ def _iso_to_offset(text: str, base: date, fmt: str) -> str:
 def normalize_text(text: str, base: date) -> str:
     """Stable form of a prompt string (see module docstring)."""
     text = _UUID.sub("<UUID>", text)
+    text = _PENDING_TOKEN.sub("(token: <TOKEN>)", text)
+    text = _PENDING_JSON.sub(r"\1<TOKEN>\3<T>\4<T>", text)
     text = _iso_to_offset(text, base, "D{:+d}")
     out = []
     for line in text.split("\n"):
@@ -123,7 +142,10 @@ def request_payload(messages: list[BaseMessage], tools: list | None, base: date)
         item: dict[str, Any] = {"role": m.type, "content": _norm(m.content, base)}
         calls = getattr(m, "tool_calls", None)
         if calls:
-            item["tool_calls"] = [{"name": c["name"], "args": _norm(c.get("args") or {}, base)} for c in calls]
+            item["tool_calls"] = [
+                {"name": c["name"], "args": _norm({k: ("<TOKEN>" if k == "confirm_token" and v else v) for k, v in (c.get("args") or {}).items()}, base)}
+                for c in calls
+            ]
         if m.type == "tool" and getattr(m, "name", None):
             item["name"] = m.name
         msgs.append(item)
@@ -136,19 +158,33 @@ def request_key(messages: list[BaseMessage], tools: list | None, base: date) -> 
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def encode_response(msg: AIMessage, base: date) -> dict:
+def _swap_token(args: dict, value: str | None) -> dict:
+    if not value:
+        return args
+    return {k: (value if k == "confirm_token" and v else v) for k, v in args.items()}
+
+
+def encode_response(msg: AIMessage, base: date, token: str | None = None) -> dict:
     raw = {
         "content": msg.content,
-        "tool_calls": [{"name": c["name"], "args": c.get("args") or {}, "id": c.get("id")} for c in msg.tool_calls],
+        "tool_calls": [
+            {"name": c["name"], "args": _swap_token(c.get("args") or {}, "@@TOKEN@@" if token else None), "id": c.get("id")}
+            for c in msg.tool_calls
+        ],
     }
     return json.loads(_iso_to_offset(json.dumps(raw, ensure_ascii=False), base, "@@D{:+d}@@"))
 
 
-def decode_response(raw: dict, base: date) -> AIMessage:
+def decode_response(raw: dict, base: date, token: str | None = None) -> AIMessage:
     blob = _TOKEN.sub(lambda m: (base + timedelta(days=int(m[1]))).isoformat(), json.dumps(raw, ensure_ascii=False))
     data = json.loads(blob)
     calls = [
-        {"name": c["name"], "args": c.get("args") or {}, "id": c.get("id") or f"sim-{i}", "type": "tool_call"}
+        {
+            "name": c["name"],
+            "args": {k: (token if v == "@@TOKEN@@" and token else v) for k, v in (c.get("args") or {}).items()},
+            "id": c.get("id") or f"sim-{i}",
+            "type": "tool_call",
+        }
         for i, c in enumerate(data.get("tool_calls") or [])
     ]
     return AIMessage(content=data.get("content", ""), tool_calls=calls)
@@ -244,11 +280,11 @@ class SimCassetteChatModel(BaseChatModel):
         key = request_key(messages, tools, base)
         st = _state()
         if self.inner is None:
-            msg = decode_response(st.lookup(key, _preview(messages)), base)
+            msg = decode_response(st.lookup(key, _preview(messages)), base, _last_token(messages))
         else:
             model = self.inner.bind_tools(tools, **kwargs) if tools else self.inner
             msg = model.invoke(messages, stop=stop)
-            st.append(key, _preview(messages), encode_response(msg, base))
+            st.append(key, _preview(messages), encode_response(msg, base, _last_token(messages)))
         return ChatResult(generations=[ChatGeneration(message=msg)])
 
 
