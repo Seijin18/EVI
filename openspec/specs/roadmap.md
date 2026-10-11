@@ -187,9 +187,10 @@ Itens pequenos, independentes, que mudam a confiança no dia a dia.
 | Ack imediato | Tool que passa de ~5 s manda "fazendo…" antes do resultado (núcleo do antigo #38) |
 | OAuth expirado | Detectar `reason=oauth` e avisar uma vez por dia com o link de reconexão do Windmill |
 
-### Etapa 23 — Modelo de ameaça de injeção (restante) — `evi-prompt-injection-model` — **ativo**
+### Etapa 23 — Modelo de ameaça de injeção (restante) — `evi-prompt-injection-model` — **Done** (2026-10-11)
 
-Change: [`evi-prompt-injection-model`](../changes/evi-prompt-injection-model/proposal.md).
+Change: [`evi-prompt-injection-model`](../changes/archive/2026-10-11-evi-prompt-injection-model/proposal.md).
+As-built: Telegram restrito ao chat do usuário, exclusão de e-mail com prévia do código e "sim" na mensagem seguinte, guarda de escrita por origem do turno, saídas de tools delimitadas, `evi-test injection`.
 
 A parte mínima (delimitação) entra na Etapa 18. Fica aqui:
 - Confirmação obrigatória antes de tool destrutiva (`delete_emails_by_query` com

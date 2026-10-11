@@ -22,11 +22,11 @@
 | Runtime hardening (isolamento de sessão, auth, fuso, deps) | **Done** (12 Ago 2026) |
 | Contrato de tools + cobertura do caminho crítico + import vCard | **Done** (12 Ago 2026) |
 | Verificação realista (simulação + validação em uso real) | **Done** (10 Out 2026) — V1 + V2 |
-| Assistente proativo (briefing, lembretes, voz) | **Em andamento** — Etapas 18–22 Done (10 Out 2026), 23 ativa |
+| Assistente proativo (briefing, lembretes, voz) | **Done** — Etapas 18–23 (10–11 Out 2026) |
 
-**Foco atual:** #37 `evi-prompt-injection-model` (Etapa 23). Arquivados em 2026-10-10: #45
+**Foco atual:** fila de 10 Out 2026 concluída; ativação em produção pendente (ver `openspec/queue-run.md`). Arquivados em 2026-10-10: #45
 `evi-sim-harness` (V1), #46 `evi-usage-validation` (V2), #40 `evi-morning-briefing` (18),
-#41 `evi-reminders` (19), #42 `evi-reply-debts` (20), #43 `evi-voice-input` (21), #44 `evi-perceived-reliability` (22). Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
+#41 `evi-reminders` (19), #42 `evi-reply-debts` (20), #43 `evi-voice-input` (21), #44 `evi-perceived-reliability` (22), #37 `evi-prompt-injection-model` (23, em 11 Out). Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
 porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de produto de 2026-10-10** ([`docs/ux-review-2026-10.md`](docs/ux-review-2026-10.md)).
@@ -100,6 +100,7 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 | Pendências de resposta, promessas e combinados com data | `test_reply_debts.py`, `test_promises.py` · SIM-DEBT-01..06 · `messaging-whatsapp` |
 | Mensagens de voz (Telegram + controle WhatsApp) | `test_transcribe.py` · SIM-VOICE-01..05 · `agent-api` |
 | Confiabilidade percebida (watchdog, `/ajuda`, ack, OAuth no turno) | `test_watchdog.py`, `test_slow_ack.py` · SIM-REL-02..04 · `agent-api` |
+| Defesa contra injeção (Telegram restrito, exclusão em 2 passos, guarda de escrita) | `./scripts/evi-test injection` · SIM-ADV-01..05 · `agent-api` |
 | Contrato estruturado de tools (`ToolResult`) | `test_tool_result.py` · SCN-TOOL-01/02 |
 | Import de agenda vCard | `test_vcard_import.py` · `data-long-memory` |
 
@@ -148,7 +149,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **20** | **Pendências de resposta** | **Done** | `evi-reply-debts` — esperando resposta, promessas, combinados com data |
 | **21** | **Voz** | **Done** | `evi-voice-input` — Telegram + controle WhatsApp via Gemini |
 | **22** | **Confiabilidade percebida** | **Done** | `evi-perceived-reliability` — watchdog, `/ajuda`, ack, OAuth no turno |
-| 23 | Injeção (restante) | **Ativo** | `evi-prompt-injection-model` — confirmação de exclusão, allowlist por origem, chat do Telegram restrito |
+| **23** | **Injeção (restante)** | **Done** | `evi-prompt-injection-model` — confirmação de exclusão, allowlist por origem, chat do Telegram restrito |
 | 24 | Background (restante) | **—** | Condicional: só se o ack do #44 não bastar |
 
 ### Série Runtime v3 (17 Jun 2026) — Done

@@ -100,7 +100,7 @@ seguinte (ler um arquivo antes de editar — use `Read`).
 ## Verificação
 
 ```bash
-PYTHONPATH=agent python3 -m pytest tests/unit -q   # Tier 1 (~890 testes)
+PYTHONPATH=agent python3 -m pytest tests/unit -q   # Tier 1 (~950 testes)
 ./scripts/evi-test smoke                            # Tier 2 offline (15/15)
 ./scripts/evi-test runtime-v3 && ./scripts/evi-test inbox-ux
 ./scripts/evi-sim run --tag critical --llm replay   # L2 offline (equivalente ao CI)
