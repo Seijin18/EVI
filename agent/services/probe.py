@@ -170,16 +170,25 @@ def notify_oauth(check: str) -> bool:
     return _notify(_today(), check, OAUTH, "")
 
 
+def _run_check(fn, day: date) -> ToolResult:
+    try:
+        return fn(day)
+    except Exception as exc:
+        return ToolResult.failure("exceção", reason="upstream_error", detail=str(exc))
+
+
 def run_probe() -> dict:
     """Run the four read-only checks. Each is timed and soft-failed independently."""
     day = _today()
     results: dict[str, dict[str, Any]] = {}
     for check, fn in _CHECKS:
         started = time.perf_counter()
-        try:
-            out = fn(day)
-        except Exception as exc:
-            out = ToolResult.failure("exceção", reason="upstream_error", detail=str(exc))
+        out = _run_check(fn, day)
+        if not out.ok and check != "telegram":
+            # One retry: an OAuth access token can expire seconds before Windmill
+            # refreshes it (seen at 06:30 with a 401 that was gone a minute later).
+            time.sleep(float(os.getenv("EVI_PROBE_RETRY_SEC", "20")))
+            out = _run_check(fn, day)
         ms = int((time.perf_counter() - started) * 1000)
         reason = None if out.ok else (out.reason or "upstream_error")
         entry: dict[str, Any] = {"ok": bool(out.ok), "reason": reason, "ms": ms, "notified": False}

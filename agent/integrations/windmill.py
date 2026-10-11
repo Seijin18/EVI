@@ -78,7 +78,9 @@ def _windmill_post(
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=timeout)
             response.raise_for_status()
-            limit = 2000 if wait_result else 500
+            # wait_result bodies are JSON parsed by callers (briefing, probe): cutting
+            # them at 2000 chars broke parsing for a 15-message inbox.
+            limit = 200_000 if wait_result else 500
             return response.text[:limit] if response.text else "ok"
         except requests.HTTPError as e:
             last_err = e

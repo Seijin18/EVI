@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
@@ -104,6 +105,11 @@ class _SourceError(Exception):
 def _call(op: str, payload: dict[str, Any], *, action: str, env: str, timeout: int) -> dict:
     raw = get_integration().post(op, payload, timeout=timeout, wait_result=True)
     out = parse_windmill_result(raw, action=action, resource_env=env)
+    if not out.ok and out.reason in ("oauth", "upstream_error", "http_error"):
+        # One retry: the OAuth token may be refreshed by Windmill seconds later.
+        time.sleep(float(os.getenv("EVI_BRIEFING_RETRY_SEC", "10")))
+        raw = get_integration().post(op, payload, timeout=timeout, wait_result=True)
+        out = parse_windmill_result(raw, action=action, resource_env=env)
     if not out.ok:
         raise _SourceError(_reason_text(out))
     return out.data or {}
