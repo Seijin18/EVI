@@ -33,6 +33,6 @@
   - Files: `tests/sim/scenarios/adversarial/`, `tests/sim/scenarios/real-usage/`, `tests/sim/cassettes/`
   - Verify: `./scripts/evi-sim run --tag adversarial,gmail --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`
 
-- [ ] 2.3 Sincronizar specs, `BACKLOG.md`/`Progress.md`/roadmap e arquivar
+- [x] 2.3 Sincronizar specs, `BACKLOG.md`/`Progress.md`/roadmap e arquivar
   - Files: `openspec/changes/evi-prompt-injection-model/`, `openspec/BACKLOG.md`, `Progress.md`, `openspec/specs/roadmap.md`
   - Verify: `openspec validate --specs && PYTHONPATH=agent python3 -m pytest tests/unit -q && ./scripts/evi-sim run --tag critical,adversarial --repeat 3 --llm live && ./scripts/evi-sim run --tag critical --llm replay`

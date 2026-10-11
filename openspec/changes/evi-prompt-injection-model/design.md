@@ -51,3 +51,24 @@ Nenhum.
 ## Out of scope
 
 Ver `proposal.md`.
+
+## As-built (2026-10-11)
+
+- **Telegram restrito** ao `TELEGRAM_CHAT_ID` (+ `TELEGRAM_ALLOWED_CHAT_IDS`) — achado de
+  segurança da Etapa 21: qualquer chat conversava com o EVI.
+- **Exclusão**: a confirmação só vale na mensagem **imediatamente seguinte** à prévia
+  (qualquer outro turno descarta o pendente); a prévia é anexada à resposta pelo código;
+  só há prévia se a mensagem do usuário pedir exclusão; confirmação por correspondência
+  exata ("sim", "confirma", "pode apagar"…); ids sem assunto conhecido são recusados;
+  mensagem encaminhada no Telegram não confirma. A prévia usa o script somente-leitura
+  `search_emails` (Windmill antigo → recusa, nunca apaga). Reinício do processo invalida
+  pendentes.
+- **Guarda de escrita**: 17 tools (inclui organizar arquivos, notas e ingestão de RAG)
+  recusam turno de canal que não seja do usuário; um teste força a classificação de toda
+  tool nova.
+- **Saídas delimitadas**: e-mail, agenda, tarefas, mensagens e contatos do WhatsApp,
+  resumo de compromissos, grafo e aprendizado de contato. Os formatadores não ecoam mais
+  JSON cru quando um assunto contém "failed".
+- O atalho direto "apagar email <id>" foi removido (passa pelo fluxo de dois passos).
+- `evi-test injection` (13 ataques) no smoke (15/15); `SIM-ADV-04/05`; cassettes
+  normalizam o token de exclusão.
