@@ -147,7 +147,8 @@ async def lifespan(app: FastAPI):
         )
     from services.reminder_loop import start_loop
 
-    start_loop()
+    if start_loop():
+        print("EVI: reminder loop started")
     try:
         from pathlib import Path
         from services.log_retention import prune_logs
