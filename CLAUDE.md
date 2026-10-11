@@ -97,6 +97,10 @@ seguinte (ler um arquivo antes de editar — use `Read`).
 - Alvo de hardware: 16 GB RAM / GTX 1060 3 GB. Novo container precisa de
   justificativa de RAM no `design.md` do change.
 
+## Operação local
+
+`make up` (sobe tudo + watchdog), `make status` e `make down` (desliga; volumes preservados).
+
 ## Verificação
 
 ```bash
