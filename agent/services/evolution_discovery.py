@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from messaging.evolution import EvolutionClient
-from services.evolution_parser import parse_evolution_message_list
+from services.evolution_parser import _extract_message_records, parse_evolution_message_list
 
 
 def _as_list(raw: Any) -> list[Any]:
@@ -147,6 +147,76 @@ def fetch_evolution_chats(*, limit: int | None = None) -> list[dict[str, Any]]:
     return out
 
 
+# --- Display names for chats -------------------------------------------------
+# Evolution labels many chats with a bare number or JID ("5511…@s.whatsapp.net"),
+# and 'LID' chats ("…@lid") hide the phone number. Resolve a readable name:
+# address-book name (whatsapp_contacts.display_name) > WhatsApp profile name >
+# formatted phone number. Never the raw JID.
+
+_NOISE_JID_SUFFIXES = ("@newsletter", "status@broadcast")
+
+
+def pretty_phone(jid_or_number: str) -> str:
+    """'5511955550209@s.whatsapp.net' -> '+55 11 95555-0209' ('' if not a phone)."""
+    digits = re.sub(r"\D", "", (jid_or_number or "").split("@", 1)[0])
+    if len(digits) < 8:
+        return ""
+    if digits.startswith("55") and len(digits) in (12, 13):
+        ddd, rest = digits[2:4], digits[4:]
+        return f"+55 {ddd} {rest[:-4]}-{rest[-4:]}"
+    return f"+{digits}"
+
+
+def _looks_like_id(label: str) -> bool:
+    base = (label or "").split("@", 1)[0]
+    return not base.strip() or re.fullmatch(r"[\d\s+\-().]+", base.strip()) is not None
+
+
+def _alt_phone_jid(records: list[Any]) -> str:
+    """Phone JID of a LID chat, from key.remoteJidAlt of any message."""
+    for rec in records:
+        key = rec.get("key") if isinstance(rec, dict) else None
+        alt = (key or {}).get("remoteJidAlt") if isinstance(key, dict) else ""
+        if isinstance(alt, str) and alt.endswith("@s.whatsapp.net"):
+            return alt
+    return ""
+
+
+def _registry_map() -> dict[str, dict[str, Any]]:
+    try:
+        from services.contact_registry import db_contacts_map
+
+        return db_contacts_map()
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+
+        soft_fail("evolution_discovery.registry_map", exc)
+        return {}
+
+
+def resolve_chat_label(
+    jid: str,
+    raw_label: str,
+    registry: dict[str, dict[str, Any]],
+    alt_jid: str = "",
+) -> tuple[str, str]:
+    """(display label, formatted phone) for a chat; the label is never a raw JID."""
+    from services.contact_registry import effective_label
+
+    is_group = "@g.us" in jid
+    phone_jid = "" if is_group else (jid if jid.endswith("@s.whatsapp.net") else alt_jid)
+    row = registry.get(phone_jid) or registry.get(jid)
+    name = effective_label(row, "")
+    if _looks_like_id(name):
+        name = ""
+    if not name and not _looks_like_id(raw_label):
+        name = raw_label.strip()
+    phone = pretty_phone(phone_jid)
+    if not name:
+        name = phone or ("Grupo sem nome" if is_group else "Contato sem nome")
+    return name, ("" if name == phone else phone)
+
+
 def _parse_msg_ts(ts: str) -> datetime | None:
     if not ts:
         return None
@@ -184,21 +254,40 @@ def fetch_recent_whatsapp_messages(
         "yes",
     )
 
+    include_channels = os.getenv("EVI_WHATSAPP_INCLUDE_CHANNELS", "false").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    registry = _registry_map()
+
     rows: list[dict[str, Any]] = []
     for chat in fetch_evolution_chats():
         jid = chat["jid"]
         is_group = "@g.us" in jid
         if is_group and skip_groups and jid not in whitelist:
             continue
+        if not include_channels and jid.endswith(_NOISE_JID_SUFFIXES):
+            continue  # news channels / status updates are not conversations
         raw = client.find_messages(jid, limit=per_chat)
         if raw is None:
             continue
-        chat_label = chat.get("label") or jid
+        alt = _alt_phone_jid(_extract_message_records(raw)) if jid.endswith("@lid") else ""
+        chat_label, chat_phone = resolve_chat_label(jid, chat.get("label") or "", registry, alt)
         for msg in parse_evolution_message_list(raw, remote_jid=jid):
             ts_dt = _parse_msg_ts(msg.ts)
             if ts_dt and ts_dt < cutoff:
                 continue
-            who = msg.label or chat_label
+            who = chat_label
+            if is_group:
+                part = (msg.participant or "").strip()
+                prow = registry.get(part) if part.endswith("@s.whatsapp.net") else None
+                who = (
+                    (prow or {}).get("display_name")
+                    or msg.label
+                    or pretty_phone(part)
+                    or "Alguém"
+                )
             if msg.from_me:
                 preview = f"[eu] {msg.text[:300]}"
             elif msg.is_group and who:
@@ -211,6 +300,7 @@ def fetch_recent_whatsapp_messages(
                     "ts_dt": ts_dt,
                     "chat_jid": jid,
                     "chat_label": chat_label,
+                    "chat_phone": chat_phone,
                     "participant": msg.participant,
                     "sender_label": who,
                     "from_me": msg.from_me,

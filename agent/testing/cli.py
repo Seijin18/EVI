@@ -1245,7 +1245,12 @@ def run_injection() -> bool:
         try:
             out = _inj_format(vec, payload)
             errs["wrap"] = (
-                "" if vec == "telegram_forward" else _inj_check_wrapped(out, fx.get("expect") or [])
+                ""
+                if vec == "telegram_forward"
+                # WhatsApp output: conversation name block + message block
+                else _inj_check_wrapped(
+                    out, fx.get("expect") or [], blocks=2 if vec == "whatsapp_text" else 1
+                )
             )
         except Exception as e:
             errs["wrap"] = f"error: {e}"

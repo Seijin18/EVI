@@ -82,3 +82,23 @@ if __name__ == "__main__":
     test_record_group_participant_timeline()
     test_fetch_recent_with_mocks()
     print("ok")
+
+
+def test_pretty_phone_and_label_resolution_never_returns_raw_jid():
+    from services.evolution_discovery import pretty_phone, resolve_chat_label
+
+    assert pretty_phone("5511955550209@s.whatsapp.net") == "+55 11 95555-0209"
+    assert pretty_phone("123@lid") == ""
+    registry = {"5511955550444@s.whatsapp.net": {"display_name": "Carla Exemplo", "whatsapp_label": "Eli"}}
+    # address-book name wins; the phone is kept for disambiguation
+    assert resolve_chat_label("5511955550444@s.whatsapp.net", "5511955550444", registry) == (
+        "Carla Exemplo",
+        "+55 11 95555-0444",
+    )
+    # LID chat: the phone comes from remoteJidAlt
+    assert resolve_chat_label("999@lid", "999", registry, alt_jid="5511955550444@s.whatsapp.net")[0] == "Carla Exemplo"
+    # unknown contact: formatted phone, then profile name, never the JID
+    assert resolve_chat_label("5511999999999@s.whatsapp.net", "5511999999999@s.whatsapp.net", {})[0] == "+55 11 99999-9999"
+    assert resolve_chat_label("5511999999999@s.whatsapp.net", "Zeca", {})[0] == "Zeca"
+    assert resolve_chat_label("888@lid", "888", {})[0] == "Contato sem nome"
+    assert resolve_chat_label("1203@g.us", "1203@g.us", {})[0] == "Grupo sem nome"
