@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 
-from services.contact_filesystem import collect_known_contacts, memory_enabled, memory_root
+from services.contact_filesystem import (
+    collect_known_contacts,
+    list_contact_dirs,
+    memory_enabled,
+    memory_root,
+)
 
 
 def format_memory_audit(*, limit: int = 15) -> str:
@@ -68,7 +73,9 @@ def contact_memory_health() -> dict[str, object]:
         root = memory_root()
         out["path"] = str(root)
         out["ok"] = root.is_dir()
-        out["contact_count"] = len(collect_known_contacts())
+        # Cheap on purpose: /health is polled every minute by the watchdog, and
+        # collect_known_contacts() also queries Postgres and Evolution (~50 s).
+        out["contact_count"] = len(list_contact_dirs())
     except Exception as exc:
         out["ok"] = False
         out["detail"] = str(exc)[:200]
