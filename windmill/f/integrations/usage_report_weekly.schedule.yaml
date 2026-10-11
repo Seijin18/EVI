@@ -1,0 +1,7 @@
+summary: Relatório semanal de uso (segunda 00:30)
+schedule: '0 30 0 * * 1'
+timezone: America/Sao_Paulo
+script_path: f/integrations/usage_report
+is_flow: false
+args: {}
+enabled: true

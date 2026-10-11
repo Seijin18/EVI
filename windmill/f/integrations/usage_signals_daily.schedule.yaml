@@ -1,0 +1,7 @@
+summary: Sinais implícitos de uso + retenção (03:00)
+schedule: '0 0 3 * * *'
+timezone: America/Sao_Paulo
+script_path: f/integrations/usage_signals
+is_flow: false
+args: {}
+enabled: true

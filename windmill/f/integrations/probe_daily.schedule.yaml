@@ -1,0 +1,7 @@
+summary: Sonda somente-leitura das integrações (06:30)
+schedule: '0 30 6 * * *'
+timezone: America/Sao_Paulo
+script_path: f/integrations/probe
+is_flow: false
+args: {}
+enabled: true
