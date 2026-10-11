@@ -175,7 +175,7 @@ def test_briefing_job_requires_api_key(client, monkeypatch):
         assert client.post("/jobs/briefing", headers={"x-api-key": "bad"}).status_code == 401
         deliver.assert_not_called()
         deliver.return_value = {"status": "sent"}
-        ok = client.post("/jobs/briefing?kind=morning", headers={"x-api-key": "secret"})
+        ok = client.post("/jobs/briefing?kind=morning&wait=true", headers={"x-api-key": "secret"})
     assert ok.status_code == 200
 
 
@@ -205,9 +205,9 @@ def test_briefing_job_second_call_same_day_is_already_sent_and_sends_once(client
         return {"status": "sent", "kind": kind}
 
     with patch("services.briefing.deliver_briefing", side_effect=fake_deliver) as deliver:
-        first = client.post("/jobs/briefing?kind=morning").json()
-        second = client.post("/jobs/briefing?kind=morning").json()
-        forced = client.post("/jobs/briefing?kind=morning&force=true").json()
+        first = client.post("/jobs/briefing?kind=morning&wait=true").json()
+        second = client.post("/jobs/briefing?kind=morning&wait=true").json()
+        forced = client.post("/jobs/briefing?kind=morning&force=true&wait=true").json()
     assert first["status"] == "sent" and second["status"] == "already_sent"
     assert forced["status"] == "sent" and len(sent) == 2
     assert deliver.call_args_list[1].kwargs == {"kind": "morning", "force": False}
@@ -217,6 +217,107 @@ def test_briefing_job_second_call_same_day_is_already_sent_and_sends_once(client
 def test_briefing_job_failure_is_http_200_status_failed(client, monkeypatch):
     monkeypatch.setenv("EVI_BRIEFING_ENABLED", "true")
     with patch("services.briefing.deliver_briefing", side_effect=RuntimeError("boom")):
-        r = client.post("/jobs/briefing?kind=evening")
+        r = client.post("/jobs/briefing?kind=evening&wait=true")
     assert r.status_code == 200
     assert r.json()["status"] == "failed" and r.json()["kind"] == "evening"
+
+
+# --- background execution of /jobs/probe and /jobs/briefing -------------------
+# Windmill has ONE worker: these endpoints must return at once instead of holding it.
+
+
+@pytest.fixture
+def bg_clean():
+    import threading
+    import time
+
+    yield
+    deadline = time.time() + 5
+    while time.time() < deadline and any(t.name.startswith("job-") for t in threading.enumerate()):
+        time.sleep(0.01)
+
+
+def test_probe_job_returns_immediately_and_runs_in_background(client, bg_clean):
+    import threading
+
+    started, release, done = threading.Event(), threading.Event(), threading.Event()
+
+    def slow_probe():
+        started.set()
+        release.wait(5)
+        done.set()
+        return {"ok": True}
+
+    with patch("services.probe.run_probe", side_effect=slow_probe):
+        r = client.post("/jobs/probe")  # returns while the job is still blocked
+        assert r.status_code == 200
+        assert r.json()["status"] == "accepted"
+        assert started.wait(2) and not done.is_set()
+        release.set()
+        assert done.wait(2)
+
+
+def test_probe_job_overlapping_call_is_already_running(client, bg_clean):
+    import threading
+
+    started, release = threading.Event(), threading.Event()
+
+    def slow_probe():
+        started.set()
+        release.wait(5)
+        return {"ok": True}
+
+    with patch("services.probe.run_probe", side_effect=slow_probe) as probe:
+        assert client.post("/jobs/probe").json()["status"] == "accepted"
+        assert started.wait(2)
+        assert client.post("/jobs/probe").json()["status"] == "already_running"
+        assert client.post("/jobs/probe?wait=true").json()["status"] == "already_running"
+        release.set()
+    assert probe.call_count == 1
+
+
+def test_probe_job_wait_true_runs_inline(client):
+    with patch("services.probe.run_probe", return_value={"ok": True, "failed": []}) as probe:
+        r = client.post("/jobs/probe?wait=true")
+    assert r.json() == {"ok": True, "failed": []}
+    probe.assert_called_once()
+
+
+def test_probe_job_exception_in_background_is_soft_failed(client, bg_clean, caplog):
+    import threading
+    import time
+
+    with caplog.at_level("WARNING", logger="evi.softfail"):
+        with patch("services.probe.run_probe", side_effect=RuntimeError("boom")):
+            assert client.post("/jobs/probe").json()["status"] == "accepted"
+            deadline = time.time() + 3
+            while time.time() < deadline and "boom" not in caplog.text:
+                time.sleep(0.01)
+    assert "background_jobs.probe" in caplog.text and "boom" in caplog.text
+    # lock released: a new run is accepted again
+    deadline = time.time() + 3
+    while time.time() < deadline and any(t.name == "job-probe" for t in threading.enumerate()):
+        time.sleep(0.01)
+    with patch("services.probe.run_probe", return_value={"ok": True}):
+        assert client.post("/jobs/probe").json()["status"] == "accepted"
+
+
+def test_briefing_job_returns_immediately_and_runs_in_background(client, monkeypatch, bg_clean):
+    import threading
+
+    monkeypatch.setenv("EVI_BRIEFING_ENABLED", "true")
+    started, release, done = threading.Event(), threading.Event(), threading.Event()
+
+    def slow_deliver(kind="morning", force=False, now=None):
+        started.set()
+        release.wait(5)
+        done.set()
+        return {"status": "sent"}
+
+    with patch("services.briefing.deliver_briefing", side_effect=slow_deliver):
+        r = client.post("/jobs/briefing?kind=morning")
+        assert r.status_code == 200 and r.json()["status"] == "accepted"
+        assert started.wait(2) and not done.is_set()
+        assert client.post("/jobs/briefing?kind=morning").json()["status"] == "already_running"
+        release.set()
+        assert done.wait(2)

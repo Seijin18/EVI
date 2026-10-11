@@ -1,7 +1,9 @@
 """Windmill cron: trigger the EVI morning briefing via agent-api.
 
 Schedule: daily 07:00 local (kind=morning); optional 21:00 (kind=evening).
-The job collects four sources in parallel (Gmail can take up to 180 s).
+The agent runs the job in the background and answers `{"status": "accepted"}` at once
+(Windmill has a single worker; the job calls back into Windmill, so this script must not
+wait for it). `wait=true` on the endpoint runs it inline (manual tests).
 """
 
 import json

@@ -39,3 +39,13 @@ scripts/evi-watchdog --dry-run   # imprime a decisão (ok / fail N / would alert
 
 Teste induzido: `docker compose stop agent-api`, esperar ~2 min (chega o alerta, uma vez),
 `docker compose start agent-api` (chega "voltou", uma vez).
+
+## Jobs do Windmill e o worker único
+
+O Windmill roda com **um único worker**. Um job agendado que dispara um endpoint do agente e
+espera a resposta ocupa esse worker; se o endpoint chamar de volta o Windmill
+(`run_wait_result`), ele nunca consegue um worker livre e dá timeout (deadlock). Por isso
+`/jobs/probe` e `/jobs/briefing` rodam em background (`services/background_jobs.py`) e
+respondem `{"status": "accepted"}` na hora; uma segunda chamada concorrente recebe
+`already_running`. Para teste manual/CLI use `?wait=true` (executa inline e devolve o resultado).
+Regra geral: job que chama de volta o Windmill não pode segurar o worker.

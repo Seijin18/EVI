@@ -767,33 +767,52 @@ def usage_signals_job(_: None = Depends(verify_api_key)):
 
 
 @app.post("/jobs/probe")
-def probe_job(_: None = Depends(verify_api_key)):
-    """Windmill cron target (06:30): read-only integration probe, one warning/day per failing check."""
+def probe_job(wait: bool = False, _: None = Depends(verify_api_key)):
+    """Windmill cron target (06:30): read-only integration probe, one warning/day per failing check.
+
+    Runs in the background and returns `{"status": "accepted"}` at once: the probe calls back
+    into Windmill, whose single worker is busy running the calling script. `?wait=true` runs inline.
+    """
+    from services.background_jobs import run_in_background, run_inline
     from services.probe import run_probe
 
-    return run_probe()
+    if wait:
+        return run_inline("probe", run_probe)
+    return run_in_background("probe", run_probe)
 
 
-@app.post("/jobs/briefing")
-def briefing_job(kind: str = "morning", force: bool = False, _: None = Depends(verify_api_key)):
-    """Windmill cron target: deliver the morning/evening briefing to Telegram.
-
-    Idempotent per (local day, kind); `?force=true` resends. Send failures come back as
-    `{"status": "failed"}` with HTTP 200 (never a 5xx), so a Windmill retry is the caller's choice.
-    """
+def _briefing_work(kind: str, force: bool) -> Dict[str, Any]:
     from services.briefing import deliver_briefing
-    from services.heartbeat import _briefing_enabled
 
-    if kind not in {"morning", "evening"}:
-        raise HTTPException(status_code=400, detail="kind must be 'morning' or 'evening'")
-    if not _briefing_enabled():
-        return {"status": "disabled", "kind": kind}
     try:
         result = deliver_briefing(kind=kind, force=force)
     except Exception as exc:
         soft_fail("jobs.briefing", exc)
         return {"status": "failed", "kind": kind, "reason": str(exc)[:200]}
     return {"kind": kind, **result}
+
+
+@app.post("/jobs/briefing")
+def briefing_job(
+    kind: str = "morning", force: bool = False, wait: bool = False, _: None = Depends(verify_api_key)
+):
+    """Windmill cron target: deliver the morning/evening briefing to Telegram.
+
+    Idempotent per (local day, kind); `?force=true` resends. Runs in the background and returns
+    `{"status": "accepted"}` at once (the briefing calls back into Windmill, which has a single
+    worker); `?wait=true` runs inline and returns the delivery result. Inline send failures come
+    back as `{"status": "failed"}` with HTTP 200 (never a 5xx).
+    """
+    from services.background_jobs import run_in_background, run_inline
+    from services.heartbeat import _briefing_enabled
+
+    if kind not in {"morning", "evening"}:
+        raise HTTPException(status_code=400, detail="kind must be 'morning' or 'evening'")
+    if not _briefing_enabled():
+        return {"status": "disabled", "kind": kind}
+    if wait:
+        return run_inline("briefing", _briefing_work, kind=kind, force=force)
+    return run_in_background("briefing", _briefing_work, kind=kind, force=force)
 
 
 class ImportContactsRequest(BaseModel):

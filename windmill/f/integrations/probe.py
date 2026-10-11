@@ -1,4 +1,8 @@
-"""Windmill cron (06:30, before the briefing): trigger the read-only integration probe."""
+"""Windmill cron (06:30, before the briefing): trigger the read-only integration probe.
+
+The agent runs the probe in the background and answers `{"status": "accepted"}` at once, so
+this script never holds the single Windmill worker the probe needs to call back into.
+"""
 
 import json
 import os
