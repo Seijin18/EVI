@@ -167,6 +167,52 @@ def test_real_poller_fetch_updates(live_server, monkeypatch):
     assert telegram_poller.fetch_updates("sim-token", offset=uid + 1, timeout=0) == []
 
 
+def test_long_poll_does_not_stall_concurrent_requests(live_server):
+    """A held getUpdates must not block sendMessage / control calls, and must return as
+    soon as an update is enqueued (not when its 30 s deadline expires)."""
+    import json
+    import urllib.request
+
+    base = live_server
+
+    def call(path, body=None, timeout=10):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(
+            base + path, data=data, headers={"content-type": "application/json"} if data else {}
+        )
+        return json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+
+    got: dict = {}
+
+    def poll():
+        t0 = time.monotonic()
+        got["res"] = call("/botsim-token/getUpdates?offset=0&timeout=30", timeout=40)
+        got["dt"] = time.monotonic() - t0
+
+    th = threading.Thread(target=poll)
+    th.start()
+    time.sleep(0.3)  # the long poll is now parked server-side
+    t0 = time.monotonic()
+    sent = call("/botsim-token/sendMessage", {"chat_id": 1, "text": "oi"})
+    call("/_sim/state")
+    assert sent["ok"] is True
+    assert time.monotonic() - t0 < 2, "sendMessage/_sim stalled behind a held getUpdates"
+    call("/_sim/telegram/updates", {"text": "chegou"})
+    th.join(timeout=10)
+    assert not th.is_alive()
+    assert got["dt"] < 3, "long poll did not wake on enqueue"
+    assert got["res"]["result"][0]["message"]["text"] == "chegou"
+
+
+def test_sim_image_does_not_fake_the_monotonic_clock():
+    """libfaketime shifts CLOCK_MONOTONIC when /sim/clock is rewritten unless told not to;
+    a backward jump froze the fakes' asyncio timers (long polls ~60 s late)."""
+    from pathlib import Path
+
+    df = (Path(__file__).resolve().parents[2] / "agent" / "Dockerfile.sim").read_text()
+    assert "FAKETIME_DONT_FAKE_MONOTONIC=1" in df
+
+
 # ------------------------------------------------------------------ evolution
 EVO = {"apikey": "k"}
 

@@ -17,7 +17,12 @@ COPY . /app
 
 ENV LD_PRELOAD=/usr/local/lib/libfaketime.so.1 \
     FAKETIME_TIMESTAMP_FILE=/sim/clock \
-    FAKETIME_NO_CACHE=1
+    FAKETIME_NO_CACHE=1 \
+    FAKETIME_DONT_FAKE_MONOTONIC=1
+# DONT_FAKE_MONOTONIC: by default libfaketime also shifts CLOCK_MONOTONIC when the runner
+# rewrites /sim/clock. A backward jump then freezes asyncio timers / long-poll deadlines in
+# the fakes for as long as the jump (the poller's getUpdates hit its 60 s timeout and the
+# next update arrived ~60 s late). Wall-clock time stays faked; monotonic stays real.
 
 # Count every LLM call the agent makes (read by the runner for --max-llm-calls).
 CMD ["python", "-c", "import testing.sim.llm_counter, uvicorn; uvicorn.run('main:app', host='0.0.0.0', port=8000)"]
