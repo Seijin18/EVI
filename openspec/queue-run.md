@@ -2,7 +2,7 @@
 ## Estado
 - Change atual: — (fila concluída em 2026-10-11)
 - Ordem: evi-sim-harness → evi-usage-validation → evi-morning-briefing → evi-reminders → evi-reply-debts → evi-voice-input → evi-perceived-reliability → evi-prompt-injection-model
-- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e), evi-morning-briefing (arquivado 2026-10-10, commits f206ab3..681c870), evi-reminders (arquivado 2026-10-10, commits 23382d8..d788182), evi-reply-debts (arquivado 2026-10-10, commits 1030862..5468808), evi-voice-input (arquivado 2026-10-10, commits 410386c..6acd0c2), evi-perceived-reliability (arquivado 2026-10-10, commits 86ef936..c820f90), evi-prompt-injection-model (arquivado 2026-10-11, commits 7d231f4..ARCH)
+- Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e), evi-morning-briefing (arquivado 2026-10-10, commits f206ab3..681c870), evi-reminders (arquivado 2026-10-10, commits 23382d8..d788182), evi-reply-debts (arquivado 2026-10-10, commits 1030862..5468808), evi-voice-input (arquivado 2026-10-10, commits 410386c..6acd0c2), evi-perceived-reliability (arquivado 2026-10-10, commits 86ef936..c820f90), evi-prompt-injection-model (arquivado 2026-10-11, commits 7d231f4..a4c0bb8)
 - Pulados: evi-background-execution (#38) — condicional: "abrir só se o ack imediato do #44 não bastar na prática"; exige dados de uso real
 ## Decisões tomadas sem o usuário
 - 2026-10-10 fila: agentes de projeto (`.claude/agents/`) não estão registrados nesta sessão; usados via `general-purpose` com `model` equivalente (haiku/sonnet/opus) e instrução de seguir o arquivo do agente.
