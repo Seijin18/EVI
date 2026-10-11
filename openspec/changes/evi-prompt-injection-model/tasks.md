@@ -23,7 +23,7 @@
 
 ## 2. Corpus e simulação
 
-- [ ] 2.1 `tests/fixtures/injection/` + `evi-test injection` (offline) no smoke
+- [x] 2.1 `tests/fixtures/injection/` + `evi-test injection` (offline) no smoke
   - SCN-INJ-01..04
   - Files: `tests/fixtures/injection/`, `agent/testing/cli.py`, `docs/testing.md`
   - Verify: `./scripts/evi-test injection && ./scripts/evi-test smoke`

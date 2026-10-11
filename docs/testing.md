@@ -194,6 +194,7 @@ Tiers legados (ainda válidos):
 |---------|---------|-----|
 | Runtime v3 offline | `./scripts/evi-test runtime-v3` | SCN-UX-RUNTIME |
 | Briefing offline (sem LLM) | `./scripts/evi-test briefing` | SCN-BRIEF-01/01b/02 |
+| Corpus de prompt injection (offline, sem LLM) | `./scripts/evi-test injection` | SCN-SEC-01, SCN-INJ-01/02/03 |
 | Inbox UX mock | `./scripts/evi-test inbox-ux` | SCN-UX-INBOX-01/02/04 |
 | Inbox UX live harness | `./scripts/evi-inbox-ux-verify.sh` | SCN-UX-INBOX live |
 | Chat invoke (unit) | `tests/unit/test_chat_invoke.py` | SCN-UX-CHAT |

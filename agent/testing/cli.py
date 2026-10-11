@@ -1054,6 +1054,223 @@ def run_briefing() -> bool:
     return _result("briefing", ok, "SCN-BRIEF-01/01b/02")
 
 
+# ---------------------------------------------------------------- injection corpus
+
+def _inj_check_wrapped(out: str, expect: list[str], blocks: int = 1) -> str:
+    """'' when the output holds the payload only inside `blocks` well-formed external
+    blocks (alternating opener/closer, none nested, no marker residue outside)."""
+    import re
+    import unicodedata
+
+    tok = re.compile(r"«externo:[a-z0-9_-]+»|«/externo»")
+    depth = opened = 0
+    for m in tok.finditer(out):
+        if m.group().startswith("«externo:"):
+            if depth:
+                return "nested/extra opener"
+            depth, opened = 1, opened + 1
+        else:
+            if not depth:
+                return "closer without opener"
+            depth = 0
+    if depth:
+        return "unclosed block"
+    if opened != blocks:
+        return f"{opened} block(s), expected {blocks}"
+    inside = " ".join(re.findall(r"«externo:[a-z0-9_-]+»(.*?)«/externo»", out, re.S))
+    outside = tok.sub("", re.sub(r"«externo:[a-z0-9_-]+».*?«/externo»", "", out, flags=re.S))
+    flat = unicodedata.normalize("NFKC", outside).lower()
+    if "externo" in flat or "«" in outside or "»" in outside:
+        return "marker residue outside block"
+    inner = unicodedata.normalize("NFKC", inside)
+    if "externo" in inner.lower() or "«" in inner or "»" in inner:
+        return "marker residue inside block"
+    for needle in expect:
+        if needle in outside:
+            return f"payload text outside block: {needle[:20]}"
+        if needle not in inside:
+            return f"payload text lost: {needle[:20]}"
+    return ""
+
+
+def _inj_format(vector: str, payload: str) -> str:
+    """Run the real formatter that carries `vector` into a prompt (no LLM, no network)."""
+    from unittest.mock import patch
+
+    if vector in ("email_subject", "email_sender"):
+        from services.response_format import format_inbox_result
+
+        msg = {"id": "m1", "subject": payload, "from": "a@x.example"}
+        if vector == "email_sender":
+            msg = {"id": "m1", "subject": "assunto", "from": payload}
+        return format_inbox_result(json.dumps({"status": "ok", "count": 1, "messages": [msg]}))
+    if vector == "whatsapp_text":
+        from services.whatsapp_activity import format_recent_messages
+
+        return format_recent_messages(
+            [{"ts": "2026-10-10T08:00:00", "chat_label": "Contato", "preview": payload}]
+        )
+    if vector == "task_title":
+        from services.response_format import format_list_tasks_result
+
+        return format_list_tasks_result(
+            json.dumps({"status": "ok", "count": 1, "tasks": [{"id": "t1", "title": payload}]})
+        )
+    if vector == "event_title":
+        from tools.calendar_tool import list_calendar_events
+
+        raw = json.dumps(
+            {"status": "ok", "count": 1, "events": [{"summary": payload, "start": "2026-10-10T09:00"}]}
+        )
+
+        class _Integ:
+            def post(self, *a, **k):
+                return raw
+
+        with patch("tools.calendar_tool.get_integration", lambda: _Integ()):
+            return list_calendar_events.invoke({})
+    if vector == "contact_profile":
+        from services.context_assembly import _contact_profile_block
+
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            (d / "profile.md").write_text(payload, encoding="utf-8")
+            with (
+                patch("services.contact_filesystem.memory_enabled", lambda: True),
+                patch("services.contact_filesystem.contact_dir", lambda jid: d),
+            ):
+                return _contact_profile_block("5511999990000@s.whatsapp.net")
+    if vector == "telegram_forward":
+        # A forwarded message reaches the model as a user turn with no confirming
+        # text of its own (main._chat_impl sets user_text=""); nothing to format.
+        return ""
+    raise ValueError(f"unknown vector {vector}")
+
+
+def _inj_guard(payload: str, forwarded: bool) -> str:
+    """write_guard checks for one payload; '' when all hold."""
+    from unittest.mock import patch
+
+    import db
+    from services import turn_log, write_guard
+
+    if not forwarded and write_guard.is_confirmation(payload):
+        return "payload accepted as confirmation"
+    rows: list[dict] = []
+    sid = f"inj-{abs(hash(payload)) % 10**8}"
+    with (
+        patch.object(db, "init_db", lambda: None),
+        patch.object(
+            db, "save_tool_snapshot",
+            lambda s, n, p: rows.insert(0, {"sid": s, "tool_name": n, "payload": p}),
+        ),
+        patch.object(
+            db, "load_tool_snapshots",
+            lambda s, limit=5: [r for r in rows if r["sid"] == s][:limit],
+        ),
+    ):
+        def turn(text):
+            _, tk = turn_log.start_turn(channel="telegram", session_id=sid, user_text=text)
+            return tk, turn_log.current_turn_seq()
+
+        tk, seq_a = turn("apague as promoções")
+        token = write_guard.create_pending(sid, ["id1"], seq_a) or ""
+        same = write_guard.check_confirmation(sid, token, "sim", seq_a)
+        turn_log.end_turn(tk)
+        if same.ok:
+            return "staged deletion confirmed in the same turn"
+        tk, seq_b = turn("" if forwarded else payload)
+        by_payload = write_guard.check_confirmation(sid, token, "" if forwarded else payload, seq_b)
+        turn_log.end_turn(tk)
+        if by_payload.ok:
+            return "payload-derived turn confirmed the deletion"
+        tk, seq_c = turn("sim")
+        late = write_guard.check_confirmation(sid, token, "sim", seq_c)
+        turn_log.end_turn(tk)
+        if late.ok:
+            return "deletion confirmed two turns later"
+    _, tk = turn_log.start_turn(channel="job", session_id=sid)
+    try:
+        blocked = write_guard.check_write("delete_emails")
+    finally:
+        turn_log.end_turn(tk)
+    if not blocked:
+        return "job-channel turn may call write tools"
+    return ""
+
+
+def _inj_stranger(payload: str) -> str:
+    from unittest.mock import patch
+
+    import services.telegram_handler as th
+
+    calls: list[str] = []
+    env = {"TELEGRAM_CHAT_ID": "111", "TELEGRAM_ALLOWED_CHAT_IDS": "", "EVI_DIRECT_HANDLERS": "false"}
+    with (
+        patch.dict(os.environ, env),
+        patch("services.telegram_handler.send_telegram_message", return_value=True) as send,
+        patch("services.telegram_handler._persist_turn"),
+        patch("services.telegram_handler.log_telegram_turn"),
+    ):
+        out = th.process_telegram_update(
+            {"message": {"text": payload, "chat": {"id": 666}}},
+            lambda m, s, **k: calls.append(m) or {"response": "x"},
+        )
+    if calls or send.called or out.get("skipped") != "chat not allowed":
+        return "stranger chat not skipped"
+    return ""
+
+
+def run_injection() -> bool:
+    """SCN-INJ: adversarial corpus vs wrap_external, write_guard and the Telegram
+    allowlist. Offline, no LLM, no network."""
+    import yaml
+
+    from services import write_guard
+
+    files = sorted((FIXTURES / "injection").glob("*.yaml"))
+    if not files:
+        return _result("injection", False, "tests/fixtures/injection/*.yaml missing")
+
+    # Positive control: the guard does confirm a genuine "sim" in the next turn,
+    # so the refusals below are not vacuous.
+    if not (write_guard.is_confirmation("sim") and not write_guard.is_confirmation("sim, mas só ontem")):
+        return _result("injection", False, "is_confirmation control failed")
+
+    rows = []
+    for f in files:
+        fx = yaml.safe_load(f.read_text(encoding="utf-8"))
+        vec, payload = fx["vector"], str(fx["payload"])
+        errs = {}
+        try:
+            out = _inj_format(vec, payload)
+            errs["wrap"] = (
+                "" if vec == "telegram_forward" else _inj_check_wrapped(out, fx.get("expect") or [])
+            )
+        except Exception as e:
+            errs["wrap"] = f"error: {e}"
+        for key, fn in (
+            ("guard", lambda: _inj_guard(payload, vec == "telegram_forward")),
+            ("tg", lambda: _inj_stranger(payload)),
+        ):
+            try:
+                errs[key] = fn()
+            except Exception as e:
+                errs[key] = f"error: {e}"
+        rows.append((fx["id"], vec, errs))
+
+    failed = 0
+    print(f"{'fixture':44} {'vector':16} wrap  guard tg")
+    for fid, vec, errs in rows:
+        mark = {k: ("PASS" if not v else "FAIL") for k, v in errs.items()}
+        print(f"{fid:44} {vec:16} {mark['wrap']:5} {mark['guard']:5} {mark['tg']}")
+        for k, v in errs.items():
+            if v:
+                failed += 1
+                print(f"    {k}: {v}")
+    return _result("injection", failed == 0, f"{len(rows)} fixtures, {failed} failing checks")
+
+
 def run_chat(*, strict: bool = False) -> bool:
     base = os.getenv("EVI_API_URL", "http://localhost:8002")
     session_id = "evi-test-chat-harness"
@@ -1118,6 +1335,7 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
         run_watcher,
         lambda: run_rag(False),
         run_briefing,
+        run_injection,
     ]
     if full:
         tests.append(run_chat)
@@ -1181,6 +1399,7 @@ def main() -> int:
         "runtime-v3": run_runtime_v3,
         "inbox-ux": run_inbox_ux,
         "briefing": run_briefing,
+        "injection": run_injection,
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
 
