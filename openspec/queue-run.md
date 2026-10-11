@@ -5,6 +5,7 @@
 - Concluídos: evi-sim-harness (arquivado 2026-10-10, commits 346030b..a5a8da5), evi-usage-validation (arquivado 2026-10-10, commits cb43674..3f2634e), evi-morning-briefing (arquivado 2026-10-10, commits f206ab3..681c870), evi-reminders (arquivado 2026-10-10, commits 23382d8..d788182), evi-reply-debts (arquivado 2026-10-10, commits 1030862..5468808), evi-voice-input (arquivado 2026-10-10, commits 410386c..6acd0c2), evi-perceived-reliability (arquivado 2026-10-10, commits 86ef936..c820f90), evi-prompt-injection-model (arquivado 2026-10-11, commits 7d231f4..a4c0bb8)
 - Pulados: evi-background-execution (#38) — condicional: "abrir só se o ack imediato do #44 não bastar na prática"; exige dados de uso real
 ## Decisões tomadas sem o usuário
+- 2026-10-11 deploy: flags ligadas para teste (briefing, lembretes, pendências, voz, ack 5 s) e `EVI_GEMINI_THINKING_BUDGET=0` em produção (reversível no `.env`). Achados no deploy: `/health` levava ~55 s (contagem de contatos consultava o Evolution) e os jobs agendados travavam o worker único do Windmill (corrigido: execução em segundo plano).
 - 2026-10-10 fila: agentes de projeto (`.claude/agents/`) não estão registrados nesta sessão; usados via `general-purpose` com `model` equivalente (haiku/sonnet/opus) e instrução de seguir o arquivo do agente.
 - 2026-10-10 evi-sim-harness: (decisão do usuário no preflight) sem chave Gemini separada; `evi-sim` usa `EVI_SIM_GEMINI_API_KEY` se definida, senão repassa `GEMINI_API_KEY` do `.env` com aviso. Cota de produção compartilhada → `--max-llm-calls` mantido.
 - 2026-10-10 evi-sim-harness 2.2: achados do fake Windmill — (a) `delete_emails.py` engole o corpo do erro do Google ("HTTP 401") e OAuth expirado vira `upstream_error`; (b) HTTP 500 do Windmill chega ao `parse_windmill_result` como `unparseable`. Corrigir na 3.4 (cenários de falha) se o cenário exigir.
@@ -26,25 +27,27 @@
 - 2026-10-11 evi-prompt-injection-model: prévia de exclusão mostra os assuntos delimitados («externo:email») também para o usuário — preferido a exibir texto cru que voltaria ao modelo no turno seguinte.
 ## Pendências do usuário (não bloqueantes)
 - [ ] Criar projeto Gemini separado e definir `EVI_SIM_GEMINI_API_KEY` no `.env` — a simulação hoje consome a cota de produção — `.env`
-- [ ] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf`
-- [ ] Revisar o dry-run e apagar dados de teste em produção (4 compromissos "Teste digest Telegram" ids 21/36/40/41; 8 linhas de `messages` de sessões de teste) — destrutivo, decisão sua — `scripts/evi-cleanup-test-data` e depois `scripts/evi-cleanup-test-data --apply`
-- [ ] Criar schedules no Windmill: `f/integrations/usage_signals` diário (ex. 03:00), `f/integrations/usage_report` segunda 00:30, `f/integrations/probe` diário 06:30 — Windmill UI → Schedules
-- [ ] Recriar o `agent-api` para ativar V1/V2 em produção (novas tabelas, endpoints, mount `./data/payload_shapes`) — `docker compose up -d --build agent-api`
+- [x] `EVI_WORKSPACE/agenda.vcf` (não versionado, não ignorado) contém contatos reais — mover para fora do repo ou adicionar ao `.gitignore`; nunca foi staged pela fila — `EVI_WORKSPACE/agenda.vcf` — feito em 2026-10-11
+- [x] Revisar o dry-run e apagar dados de teste em produção (4 compromissos "Teste digest Telegram" ids 21/36/40/41; 8 linhas de `messages` de sessões de teste) — destrutivo, decisão sua — `scripts/evi-cleanup-test-data` e depois `scripts/evi-cleanup-test-data --apply` — feito em 2026-10-11
+- [x] Criar schedules no Windmill: `f/integrations/usage_signals` diário (ex. 03:00), `f/integrations/usage_report` segunda 00:30, `f/integrations/probe` diário 06:30 — Windmill UI → Schedules — feito em 2026-10-11
+- [x] Recriar o `agent-api` para ativar V1/V2 em produção (novas tabelas, endpoints, mount `./data/payload_shapes`) — `docker compose up -d --build agent-api` — feito em 2026-10-11
 - [ ] Avaliar em 2026-10-24 a "Validação em uso real" do evi-usage-validation: relatório entregue em 2 semanas seguidas; sonda detecta falha induzida em ≤ 24 h; ≥ 1 cenário promovido para `tests/sim/scenarios/from-usage/` — `EVI_WORKSPACE/reports/`
-- [ ] Publicar no Windmill os scripts alterados/novos (`summarize_inbox`, `list_events` ganharam campos aditivos; `usage_report`, `usage_signals`, `probe`, `briefing` novos) — `wmill sync push` na pasta `windmill/`
-- [ ] Ligar o briefing: `EVI_BRIEFING_ENABLED=true` no `.env`, recriar `agent-api`, schedule `f/integrations/briefing` `0 7 * * *` (opcional `0 21 * * *` com `kind=evening`) — ver `windmill/README.md`
+- [x] Publicar no Windmill os scripts alterados/novos (`summarize_inbox`, `list_events` ganharam campos aditivos; `usage_report`, `usage_signals`, `probe`, `briefing` novos) — `wmill sync push` na pasta `windmill/` — feito em 2026-10-11
+- [x] Ligar o briefing: `EVI_BRIEFING_ENABLED=true` no `.env`, recriar `agent-api`, schedule `f/integrations/briefing` `0 7 * * *` (opcional `0 21 * * *` com `kind=evening`) — ver `windmill/README.md` — feito em 2026-10-11
 - [ ] Avaliar em 2026-10-24 a validação do briefing (entregue ≥ 13/14 dias, resposta ≥ 50% dos dias, sucesso por turno sem queda) — relatório semanal
-- [ ] Teste instável observado (ordem): `tests/unit/test_payload_shapes.py::test_scn_use_08_written_file_has_no_original_values[find_messages.json]` falhou uma vez na suíte completa e passa isolado — investigar
-- [ ] Ligar lembretes: `EVI_REMINDERS_ENABLED=true` no `.env` e recriar `agent-api`
+- [x] Teste instável observado (ordem): `tests/unit/test_payload_shapes.py::test_scn_use_08_written_file_has_no_original_values[find_messages.json]` falhou uma vez na suíte completa e passa isolado — investigar — feito em 2026-10-11
+- [x] Ligar lembretes: `EVI_REMINDERS_ENABLED=true` no `.env` e recriar `agent-api` — feito em 2026-10-11
 - [ ] Avaliar em 2026-10-17 a validação dos lembretes (desvio < 60 s em ≥ 95%, nenhum vencido sem envio, ≥ 3 lembretes criados) — relatório semanal
-- [ ] Decidir se a produção usa `EVI_GEMINI_THINKING_BUDGET=0` (a simulação inteira passou com 0; custo cai ~50%) — `.env`
-- [ ] Ligar pendências de resposta: `EVI_REPLY_DEBTS_ENABLED=true` (para de mandar notificação avulsa de compromisso; o briefing passa a ter 3 grupos)
+- [x] Decidir se a produção usa `EVI_GEMINI_THINKING_BUDGET=0` (a simulação inteira passou com 0; custo cai ~50%) — `.env` — feito em 2026-10-11
+- [x] Ligar pendências de resposta: `EVI_REPLY_DEBTS_ENABLED=true` (para de mandar notificação avulsa de compromisso; o briefing passa a ter 3 grupos) — feito em 2026-10-11
 - [ ] Avaliar em 2026-10-24 a validação do evi-reply-debts (ação ≥ 30% em "esperando resposta"; se promessas+combinados < 30%, desligar `EVI_WHATSAPP_LLM_EXTRACT`) — relatório semanal
-- [ ] Flake da simulação: `getUpdates error: TimeoutError` no poller dentro do evi-sim (SIM-VOICE-03 1/3, VOICE-01 ~60 s). O fake usa relógio monotônico; investigar o servidor de fakes (threads) — `agent/testing/sim/fake_telegram.py`
-- [ ] Ligar voz: `EVI_VOICE_ENABLED=true` no `.env` e recriar `agent-api`
+- [x] Flake da simulação: `getUpdates error: TimeoutError` no poller dentro do evi-sim (SIM-VOICE-03 1/3, VOICE-01 ~60 s). O fake usa relógio monotônico; investigar o servidor de fakes (threads) — `agent/testing/sim/fake_telegram.py` — feito em 2026-10-11
+- [x] Ligar voz: `EVI_VOICE_ENABLED=true` no `.env` e recriar `agent-api` — feito em 2026-10-11
 - [ ] Avaliar em 2026-10-17 a validação da voz (≥ 3 turnos por voz; sucesso ≥ texto − 10 pontos; nenhuma voz sem resposta)
-- [ ] Instalar o watchdog (timer de usuário, sem sudo) — `docs/operations.md`
-- [ ] Ligar o ack de tool lenta: `EVI_SLOW_ACK_SEC=5` no `.env`
-- [ ] Publicar o novo script `search_emails` no Windmill (sem ele, apagar e-mail é recusado com segurança) — `wmill sync push`
+- [x] Instalar o watchdog (timer de usuário, sem sudo) — `docs/operations.md` — feito em 2026-10-11
+- [x] Ligar o ack de tool lenta: `EVI_SLOW_ACK_SEC=5` no `.env` — feito em 2026-10-11
+- [x] Publicar o novo script `search_emails` no Windmill (sem ele, apagar e-mail é recusado com segurança) — `wmill sync push` — feito em 2026-10-11
+- [ ] **Reconectar OAuth do Google no Windmill** (Calendar, Tasks e Gmail expirados — a sonda de 2026-10-11 confirmou `reason=oauth` nos três) — Windmill UI (http://localhost:8001) → Resources → recursos gcal/gtasks/gmail → reconectar
+- [ ] Criar projeto Gemini separado para a simulação (`EVI_SIM_GEMINI_API_KEY`) — `.env`
 ## Bloqueios
 - (resolvido 2026-10-10 — usuário ampliou o orçamento em R$ 10) evi-reminders 3.1: cota diária do Gemini esgotada (429 RESOURCE_EXHAUSTED) com a chave de produção compartilhada. SIM-REM-01..04 passaram 3/3; SIM-REM-05 falhou só por 429. Faltam, quando a cota voltar: `./scripts/evi-sim up` → `./scripts/evi-sim run --id SIM-REM-05 --repeat 3 --llm live` → `--tag critical --llm record` (cassettes estão defasados pelas tools novas; o job `sim-replay` da CI fica vermelho até regravar) → `--tag critical --llm replay` → `--tag critical,adversarial,briefing --repeat 3 --llm live` → task 3.2 (arquivar). Tentado: esperar e repetir SIM-REM-05 uma vez (0/3, 429).
