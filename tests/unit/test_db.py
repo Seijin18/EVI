@@ -6,7 +6,6 @@ without `DATABASE_URL`, and CI provides an ephemeral Postgres service.
 """
 
 import datetime as dt
-import os
 import sys
 import uuid
 from pathlib import Path
@@ -16,9 +15,8 @@ import pytest
 _agent = Path(__file__).resolve().parents[2] / "agent"
 sys.path.insert(0, str(_agent))
 
-pytestmark = pytest.mark.skipif(
-    not os.getenv("DATABASE_URL"), reason="needs DATABASE_URL (ephemeral Postgres)"
-)
+# Every test here writes rows: run only against an ephemeral Postgres (see conftest.py).
+pytestmark = pytest.mark.ephemeral_db
 
 
 @pytest.fixture(scope="module", autouse=True)

@@ -3,7 +3,9 @@
 import copy
 import json
 import re
+import shutil
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -18,12 +20,16 @@ FIXTURES = sorted(FIX.glob("*.json"))
 
 
 @pytest.fixture(autouse=True)
-def _iso(tmp_path, monkeypatch):
-    monkeypatch.setenv("EVI_PAYLOAD_SHAPES_DIR", str(tmp_path / "shapes"))
+def _iso(monkeypatch):
+    # Own mkdtemp dir (not pytest's tmp_path): concurrent pytest sessions prune each
+    # other's numbered basetemp dirs, which made capture() soft-fail to None mid-run.
+    shapes = tempfile.mkdtemp(prefix="evi-shapes-")
+    monkeypatch.setenv("EVI_PAYLOAD_SHAPES_DIR", str(Path(shapes) / "shapes"))
     monkeypatch.delenv("EVI_PAYLOAD_SHAPES", raising=False)
     ps._known.clear()
     yield
     ps._known.clear()
+    shutil.rmtree(shapes, ignore_errors=True)
 
 
 def _load(p):
