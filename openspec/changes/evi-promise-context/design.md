@@ -34,10 +34,10 @@ Resultado (prompt v3/v4; "simulados" = 30 casos, "reais" = 24; nuvem só nos sim
 | qwen3:4b + think | local | — | — | — | 50/54 timeouts (120 s) |
 | qwen3:4b, prompt v4 (sem cópia de exemplo, `done` só por mensagem do usuário) | local | 70% | 54% | 10 | 6,8 s |
 | Gemini 2.5 Flash (direto) | nuvem | 80% | — | 2 | 1 s |
-| **qwen/qwen3.8-27b** | OpenRouter ZDR | **93%** | — | 0 | 1,1 s |
+| qwen/qwen3.8-27b | OpenRouter ZDR | 93% | 88% | 1 | 1,1 s |
 | qwen/qwen3.5-35b-a3b | OpenRouter ZDR | 93% | — | 0 | 1,0 s |
 | google/gemini-3.1-flash-lite | OpenRouter ZDR | 93% | — | 1 | 1,5 s |
-| google/gemma-4-31b-it | OpenRouter ZDR | 90% | — | 0 | 1,2 s |
+| **google/gemma-4-31b-it** | OpenRouter ZDR | **90%** | **96%** | 0 | 1,2–2,5 s |
 | google/gemma-4-26b-a4b-it | OpenRouter ZDR | 87% | — | 1 | 1,0 s |
 | openai/gpt-oss-120b | OpenRouter ZDR | 73% | — | 6 | 2,0 s |
 | mistralai/mistral-small-2603 | OpenRouter ZDR | inconclusivo (429 do provedor) | | | |
@@ -93,7 +93,9 @@ run_structured(task: str, prompt: str, schema: dict) -> dict | None
   nativo e `think` não passam pelo wrapper atual.
 
 Tarefa deste change: `PROMISE`. **Default: `openrouter`,
-`qwen/qwen3.8-27b,google/gemma-4-31b-it`** (melhor e segundo melhor sem falso positivo).
+`google/gemma-4-31b-it,qwen/qwen3.8-27b`** — Gemma 4 31B teve o melhor resultado nos casos
+reais (23/24, 0 falso positivo; o único erro é o caso ambíguo "vou só confirmar e te
+aviso"); Qwen 3.8 27B como fallback de modelo.
 Estimativa: ~10 avaliações/dia × ~US$ 0,0003 ≈ US$ 0,10/mês. `ollama` continua
 suportado (para quem aceitar a qualidade medida) e o avaliador é o gate para trocar.
 
@@ -164,8 +166,8 @@ Saída: acerto, FP/FN, título, data, p50/p95. É o gate para trocar modelo ou p
 - **Privacidade**: com o default, até ~15 mensagens por promessa saem da máquina para o
   OpenRouter e um provedor com retenção zero (políticas verificadas em 2026-10-12:
   OpenRouter não guarda prompts por padrão; `zdr` filtra endpoints que não retêm;
-  `data_collection: deny` exclui quem treina). Decisão pendente do usuário
-  (proposta). O avaliador nunca manda os casos reais para a nuvem sem `--allow-cloud-real`.
+  `data_collection: deny` exclui quem treina). Aprovado pelo usuário em
+  2026-10-12 (proposta). O avaliador nunca manda os casos reais para a nuvem sem `--allow-cloud-real`.
 - **Disponibilidade/limite do provedor**: 429 visto no Mistral; fallback de modelo na
   lista + `needs_eval` cobrem.
 - **Custo**: teto diário no código; crédito pré-pago com limite mensal na conta.

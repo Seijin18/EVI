@@ -17,9 +17,9 @@ fora de escopo em `evi-reply-debts`; este change é a continuação.
   cumprido**.
 - Camada `llm_structured` com provedor por tarefa (`openrouter` | `ollama` | `gemini`),
   saída JSON nativa e teto de gasto diário. Default medido: **OpenRouter com retenção zero**
-  (`qwen/qwen3.8-27b`, 93% nos casos simulados); nenhum modelo que cabe na GPU local passou
-  de 67% (ver design). **Decisão pendente do usuário:** aceitar que trechos de conversa saiam
-  da máquina para endpoints com retenção zero (sem ela, o default volta a `ollama`).
+  (`google/gemma-4-31b-it`: 90% nos simulados, 96% nos reais); nenhum modelo que cabe na GPU local passou
+  de 67% (ver design). **Decisão do usuário (2026-10-12):** trechos de conversa podem sair da
+  máquina para endpoints com retenção zero (OpenRouter `zdr` + `data_collection: deny`).
 - Avaliador versionado (`./scripts/evi-test llm-eval promise`) como gate para trocar
   modelo/prompt.
 - Se o LLM confirmar, a promessa entra com título derivado do contexto ("Mandar a

@@ -37,8 +37,8 @@ Novo: `agent/services/contact_knowledge.py`, `tests/unit/test_contact_knowledge.
 `agent/services/reply_debts.py` (grava `fromMe` na timeline), `agent/tools/contact_tool.py`,
 `agent/services/whatsapp_llm_extract.py`, `agent/services/promise_context.py`.
 Specs: `data-long-memory`. Sem container novo. Modelo default medido: OpenRouter com
-retenção zero (`google/gemma-4-26b-a4b-it`, 8/8 nos casos simulados; locais ≤ 5/8 e
-aceitam injeção). Custo estimado: < US$ 0,50/mês, dentro do teto diário de
+retenção zero (`qwen/qwen3.8-27b`: 8/8 nos simulados e sem fatos inventados nos reais;
+locais ≤ 5/8 e aceitam injeção). Aprovado pelo usuário em 2026-10-12. Custo estimado: < US$ 0,50/mês, dentro do teto diário de
 `llm_structured`.
 
 ## Validação em uso real

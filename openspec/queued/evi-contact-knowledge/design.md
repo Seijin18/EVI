@@ -34,6 +34,12 @@ Resultado (8 casos simulados; nuvem via OpenRouter com retenção zero):
 | google/gemini-3.1-flash-lite | OpenRouter ZDR | 7/8 | **sim** (como item em aberto) | 2,1 s |
 | qwen/qwen3.5-35b-a3b | OpenRouter ZDR | 5/8 | **sim** | 1,1 s |
 
+Casos reais (6 conversas, 40 mensagens, dois lados, via OpenRouter ZDR, revisão manual):
+`qwen/qwen3.8-27b` 6/6 JSON válido, p50 1,2 s, nenhum fato inventado, itens em aberto
+corretos e específicos; `google/gemma-4-26b-a4b-it` 5/6 (uma chamada levou 215 s), um
+fato deduzido sem ter sido dito ("relação familiar" a partir de "Tia"). Custo dos testes
+reais: US$ 0,004.
+
 Locais também copiam os exemplos do prompt para contatos sem relação ("Levar a Nina ao
 veterinário") e transformam mensagens em fatos ("João disse: kkkk").
 
@@ -131,12 +137,14 @@ Não gera fatos a partir dela (as sínteses atuais não são confiáveis).
 ### 8. Modelo
 
 `EVI_LLM_TASK_CONTACT_KNOWLEDGE_PROVIDER` / `_MODEL` (camada de `evi-promise-context`).
-**Default: `openrouter`, `google/gemma-4-26b-a4b-it,qwen/qwen3.8-27b`** — os dois 8/8 e
-sem aceitar injeção; o Gemma é ~4× mais barato na saída. Estimativa: 15 contatos/dia ×
+**Default: `openrouter`, `qwen/qwen3.8-27b,google/gemma-4-26b-a4b-it`** — os dois 8/8 nos
+simulados e sem aceitar injeção; nos reais o Qwen foi mais conservador e estável.
+Timeout por chamada `EVI_LLM_TIMEOUT_SEC` (30 s): estourou → tenta o próximo modelo da
+lista. O prompt proíbe fato deduzido: só o que a mensagem diz explicitamente. Estimativa: 15 contatos/dia ×
 ~US$ 0,001 ≈ US$ 0,45/mês, dentro do teto diário compartilhado
 (`EVI_LLM_TASK_DAILY_USD`). Nenhum modelo local passou (tabela): `ollama` fica
 suportado, não default. Até 60 mensagens por contato/dia saem para um endpoint com
-retenção zero — decisão pendente do usuário.
+retenção zero — aprovado pelo usuário em 2026-10-12.
 **Defesa extra contra injeção** independentemente do modelo: fato ou item que contenha
 valor monetário, credencial ou instrução imperativa dirigida ao usuário e que **só**
 apareça em mensagem do contato é descartado pela validação (lista de padrões testada).
