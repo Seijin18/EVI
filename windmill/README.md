@@ -221,7 +221,7 @@ Verificação:
 
    No `.env`: `WINDMILL_TELEGRAM_WEBHOOK_TOKEN`, `WINDMILL_WEBHOOK_TELEGRAM` com path `/api/r/...`.
 
-5. Workspace **evi** → **Variables**: `EVI_AGENT_URL=http://agent-api:8000/webhooks/telegram`, `EVI_API_KEY` (opcional).
+5. Workspace **evi** → **Variables**: `EVI_AGENT_URL=http://agent-api:8000/webhooks/telegram`. A `EVI_API_KEY` **não** vai em variável do workspace: o `windmill-worker` recebe do `.env` e repassa aos jobs (`WHITELIST_ENVS=EVI_API_KEY` no `docker-compose.yml`). Ver [`docs/security.md`](../docs/security.md).
 6. `cd windmill && echo y | ../scripts/wmill.sh sync push --workspace evi`
 7. **Chat remoto (dev):** `./scripts/telegram-tunnel-setup.sh` — trycloudflare (URL muda a cada restart).
 8. **Chat remoto (estável, gratuito):** Cloudflare named tunnel — defina no `.env`:

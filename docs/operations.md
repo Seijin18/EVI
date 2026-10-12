@@ -49,3 +49,9 @@ espera a resposta ocupa esse worker; se o endpoint chamar de volta o Windmill
 respondem `{"status": "accepted"}` na hora; uma segunda chamada concorrente recebe
 `already_running`. Para teste manual/CLI use `?wait=true` (executa inline e devolve o resultado).
 Regra geral: job que chama de volta o Windmill não pode segurar o worker.
+
+## Chave da API
+
+O `agent-api` só escuta em `127.0.0.1:8002` e exige `X-Api-Key` (`EVI_API_KEY` do `.env`).
+O watchdog usa `/health`, que é público. Rotação da chave e pendências:
+[`security.md`](security.md).

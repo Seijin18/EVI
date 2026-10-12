@@ -50,7 +50,9 @@ Abra http://localhost:8082/manager ou escaneie `logs/evolution_qr.png` se o scri
 
 ## EVI_API_KEY
 
-Se definir `EVI_API_KEY` no `.env`, o script envia `X-Api-Key` no webhook da Evolution. Sem chave, o endpoint `/webhooks/evolution` fica aberto na rede Docker.
+`EVI_API_KEY` é obrigatório (ver [`security.md`](security.md)): o script envia `X-Api-Key` no webhook **da instância**. Ao trocar a chave, rode o script **sem** `--reset` antes de recriar o agente.
+
+O webhook **global** do compose (`WEBHOOK_GLOBAL_*`) não envia cabeçalhos, então recebe 401; só carrega eventos que o agente não usa (contatos, presença). Desligá-lo está pendente em `evi-security-review` (exige recriar o container da Evolution).
 
 ## Filtrar volume de mensagens
 

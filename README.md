@@ -83,16 +83,18 @@ flowchart TB
 
 | Serviço | Porta (host) | Função |
 |---------|--------------|--------|
-| agent-api | 8002 | Agente FastAPI |
+| agent-api | 127.0.0.1:8002 | Agente FastAPI (exige `X-Api-Key`) |
 | windmill-server | 8001 | UI + webhooks Windmill |
 | postgres | 127.0.0.1:**5433** | EVI + Windmill DB (5432 dentro do compose) |
 | qdrant | 127.0.0.1:6333 | Embeddings RAG |
 | evolution-api | 127.0.0.1:8082 | WhatsApp |
 | neo4j | 127.0.0.1:7474/7687 | Grafo (profile `graph`) |
 
-Serviços de dados ficam em `127.0.0.1` — nada de banco ou vetor exposto na LAN.
-Só `agent-api` e `windmill-server` publicam em todas as interfaces. Defina
-`QDRANT_API_KEY` para exigir autenticação no Qdrant.
+Tudo fica em `127.0.0.1`, exceto o `windmill-server` (pendente em
+`evi-security-review`). O `agent-api` exige `EVI_API_KEY` em toda rota além de `/` e
+`/health`; Windmill e Evolution falam com ele pela rede Docker. Detalhes, rotação da
+chave e pendências em [`docs/security.md`](docs/security.md). Defina `QDRANT_API_KEY`
+para exigir autenticação no Qdrant.
 
 Ollama roda **no host** (não no compose) — `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
 
