@@ -48,6 +48,9 @@ services:
       - DATABASE_URL=postgresql://${WINDMILL_DB_USER:-windmill}:${WINDMILL_DB_PASSWORD:-windmill}@postgres:5432/windmill?sslmode=disable
       - MODE=worker
       - WORKER_GROUP=default
+      # Scripts read EVI_API_KEY from os.environ to call agent-api (X-Api-Key).
+      - EVI_API_KEY=${EVI_API_KEY:-}
+      - WHITELIST_ENVS=EVI_API_KEY
     depends_on:
       windmill-server:
         condition: service_healthy
@@ -120,7 +123,9 @@ services:
   agent-api:
     restart: unless-stopped
     build: ./agent
-    ports: ["8002:8000"]
+    # Host-only: Windmill and Evolution reach the agent over the Docker network
+    # (agent-api:8000). Publishing on 0.0.0.0 exposed it to the LAN/tailnet.
+    ports: ["127.0.0.1:8002:8000"]
     env_file:
       - .env
     environment:

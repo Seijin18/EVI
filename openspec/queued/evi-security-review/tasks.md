@@ -1,9 +1,14 @@
 ## 1. Contenção
 
-- [ ] 1.1 F1: `agent-api` em `127.0.0.1:8002`, `EVI_API_KEY` gerado + `EVI_REQUIRE_API_KEY=true`, chave na variável secreta do Windmill; decidir com o usuário o acesso remoto (Tailscale + chave)
+- [x] 1.1 F1 (hotfix aplicado em 2026-10-12, ver design §1): `agent-api` em `127.0.0.1:8002`, `EVI_API_KEY` gerado + `EVI_REQUIRE_API_KEY=true`, chave na variável secreta do Windmill; decidir com o usuário o acesso remoto (Tailscale + chave)
   - SCN-AUTH-01, SCN-SEC-01
   - Files: `docker-compose.yml`, `.env.example`, `windmill/README.md`, `docs/security/findings.md`
   - Verify: `./scripts/evi-container-smoke.sh` e, de outra máquina da rede, `curl -s -o /dev/null -w '%{http_code}' http://192.168.15.32:8002/health` não responde
+
+- [ ] 1.2 Desligar o webhook global da Evolution (`WEBHOOK_GLOBAL_ENABLED=false`): sem cabeçalho de chave, ele só gera 401 (eventos de contato/presença) e duplicava `messages.upsert`; exige recriar o container da Evolution — combinar janela com o usuário (risco de pedir QR)
+  - SCN-SEC-01
+  - Files: `docker-compose.yml`, `docs/security/findings.md`
+  - Verify: `docker logs evi-agent-api-1` sem `/webhooks/evolution ... 401` por 24 h e mensagens chegando (`logs/evolution_webhook.jsonl`)
 
 ## 2. Revisão
 

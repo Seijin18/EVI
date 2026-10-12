@@ -24,7 +24,15 @@ agente pela rede Docker (`http://agent-api:8000`), não pela porta do host.
 
 ## Decisions
 
-### 1. Contenção imediata de F1 (antes do resto, pode ir como hotfix)
+### 1. Contenção imediata de F1 (aplicada como hotfix em 2026-10-12)
+
+Feito: porta em `127.0.0.1:8002`; `EVI_API_KEY` (64 hex) + `EVI_REQUIRE_API_KEY=true` no
+`.env` (agora `600`); chave repassada ao `windmill-worker` (`WHITELIST_ENVS`), verificada
+num job (`/tools` → 200); webhook da instância Evolution com `X-Api-Key`. Verificado: LAN e
+tailnet recusam a conexão; `/tools` e `/webhooks/evolution` sem chave → 401. Pendente: o
+webhook global da Evolution (sem cabeçalho) recebe 401 — task 1.2.
+
+Desenho original:
 
 `ports: ["127.0.0.1:8002:8000"]` e `EVI_API_KEY` gerado (≥ 32 bytes aleatórios) +
 `EVI_REQUIRE_API_KEY=true`; a mesma chave na variável secreta do Windmill usada pelos
