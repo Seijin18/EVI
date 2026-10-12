@@ -267,3 +267,11 @@ def test_dismiss_tool_resolves_briefing_items(monkeypatch):
     )
     out = reply_debt_tools.dismiss_reply_debt.invoke({"briefing_items": [1, 9]})
     assert acked == ["a@s.whatsapp.net"] and "item 9" in out
+
+
+def test_one_way_jids_are_not_debts(monkeypatch):
+    from services import reply_debts
+
+    assert reply_debts.is_one_way_jid("120363173003902460@newsletter")
+    assert reply_debts.is_one_way_jid("status@broadcast")
+    assert not reply_debts.is_one_way_jid("5511988887777@s.whatsapp.net")

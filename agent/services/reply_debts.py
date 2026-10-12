@@ -25,6 +25,14 @@ def _parse_ts(ts: str) -> datetime:
     return datetime.now(timezone.utc)
 
 
+# WhatsApp Channels / status broadcasts: one-way, there is nobody to answer.
+_ONE_WAY_SUFFIXES = ("@newsletter", "@broadcast")
+
+
+def is_one_way_jid(jid: str) -> bool:
+    return (jid or "").endswith(_ONE_WAY_SUFFIXES)
+
+
 def track_conversation(messages: Iterable) -> int:
     """Record inbound/outbound state for direct, non-control, non-echo messages.
 
@@ -47,7 +55,7 @@ def track_conversation(messages: Iterable) -> int:
     for msg in messages:
         try:
             jid = msg.sender
-            if msg.is_group or "@g.us" in jid or jid in control:
+            if msg.is_group or "@g.us" in jid or jid in control or is_one_way_jid(jid):
                 continue
             if is_evi_bot_message(msg.text):
                 continue
@@ -112,7 +120,7 @@ def list_debts(
     out: list[dict] = []
     for r in rows:
         preview = r.get("last_in_preview") or ""
-        if is_closing_message(preview):
+        if is_one_way_jid(r["jid"]) or is_closing_message(preview):
             continue
         since = r["last_in_at"]
         out.append(
