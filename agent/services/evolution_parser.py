@@ -142,11 +142,19 @@ def _extract_message_records(data: Any) -> List[Dict[str, Any]]:
 
 
 def parse_evolution_message_list(data: Any, *, remote_jid: str = "") -> List[IncomingMessage]:
-    """Parse Evolution findMessages / DB payloads (no webhook event envelope)."""
-    return _records_to_messages(
-        _extract_message_records(data),
-        default_remote=remote_jid,
-    )
+    """Parse Evolution findMessages / DB payloads (no webhook event envelope).
+
+    Evolution can store the same message twice (live upsert + history sync after
+    a reconnect); rows differ only in their internal id, so dedupe by message id.
+    """
+    seen: set[str] = set()
+    out: List[IncomingMessage] = []
+    for msg in _records_to_messages(_extract_message_records(data), default_remote=remote_jid):
+        if msg.id and msg.id in seen:
+            continue
+        seen.add(msg.id)
+        out.append(msg)
+    return out
 
 
 def parse_evolution_webhook(body: Dict[str, Any]) -> List[IncomingMessage]:

@@ -24,6 +24,14 @@ def test_parse_find_messages_fixture():
     assert msgs[1].from_me is True
 
 
+def test_parse_find_messages_dedupes_stored_twice():
+    raw = json.loads((FIX / "find_messages.json").read_text(encoding="utf-8"))
+    records = raw["messages"]["records"]
+    doubled = [*records, *(dict(r, id=f"dup-{i}") for i, r in enumerate(records))]
+    msgs = parse_evolution_message_list(doubled, remote_jid="5516992657231@s.whatsapp.net")
+    assert [m.id for m in msgs] == [r["key"]["id"] for r in records]
+
+
 def test_backfill_appends_timeline():
     raw = json.loads((FIX / "find_messages.json").read_text(encoding="utf-8"))
     recent_ts = int(datetime.now(timezone.utc).timestamp()) - 3600
