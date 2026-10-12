@@ -30,7 +30,7 @@ The system SHALL store per-contact long memory under `EVI_CONTACT_MEMORY_DIR/con
 - **THEN** the file has one `## Fatos` and one `## Em aberto` section, the note is byte-identical, and `read_contact_knowledge` returns the latest facts and no header line
 
 ### Requirement: Contact knowledge updates are incremental and evidence-bound
-Updating a contact's knowledge SHALL send the LLM only the current facts and open items and the conversation messages (both sides) newer than the last update, never file metadata, and SHALL apply a structured answer (facts to add with a date, facts to remove by exact text, new open items). A fact without a date inside the message window SHALL be discarded; an invalid answer SHALL leave the profile unchanged.
+Updating a contact's knowledge SHALL send the LLM only the current facts and open items and the conversation messages (both sides) newer than the last update, never file metadata, through the structured LLM task `CONTACT_KNOWLEDGE`, and SHALL apply a structured answer (facts to add with a date, current facts to remove by their id, the complete list of open items). A fact without a date inside the message window SHALL be discarded; an invalid answer SHALL leave the profile unchanged.
 
 #### Scenario: SCN-MEM-17
 - **GIVEN** a profile created at 05:00 and no message mentioning a meeting
@@ -57,3 +57,11 @@ A one-off migration SHALL move every `## Síntese (…)` section from `profile.m
 - **GIVEN** a profile with a `## Síntese (2026-06-17, últimos 7 dias)` section
 - **WHEN** the migration runs with `--apply`
 - **THEN** the section is in `history.md` and no longer in `profile.md`
+
+### Requirement: One contact identity across LID and phone JIDs
+When Evolution reports a phone JID for a `…@lid` chat (`remoteJidAlt`), the pair SHALL be stored and the phone JID SHALL be the canonical identity for the contact's timeline, knowledge, reply debts and WhatsApp summaries.
+
+#### Scenario: SCN-MEM-21
+- **GIVEN** messages from the same person arrive as `…@lid` and as `…@s.whatsapp.net`
+- **WHEN** the WhatsApp summary is built and the contact knowledge is updated
+- **THEN** the summary shows one conversation and one contact directory holds both timelines

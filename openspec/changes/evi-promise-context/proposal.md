@@ -11,12 +11,21 @@ fora de escopo em `evi-reply-debts`; este change é a continuação.
 
 ## What Changes
 
-- O padrão de promessa continua sendo o **gatilho** (barato, sem LLM). Casou: o EVI lê
-  as últimas mensagens da conversa (os dois lados, até 24 h, máx. 10) e pergunta ao LLM
-  se há compromisso do usuário e **o quê/para quando**.
+- O padrão de promessa continua sendo o **gatilho** (barato, sem LLM). Casou: 30 min
+  depois, o EVI lê a conversa (antes e depois, os dois lados) e pergunta ao LLM se há
+  compromisso do usuário, **o quê**, **o prazo** (resolvido no código) e se **já foi
+  cumprido**.
+- Camada `llm_structured` com provedor por tarefa (`openrouter` | `ollama` | `gemini`),
+  saída JSON nativa e teto de gasto diário. Default medido: **OpenRouter com retenção zero**
+  (`qwen/qwen3.8-27b`, 93% nos casos simulados); nenhum modelo que cabe na GPU local passou
+  de 67% (ver design). **Decisão pendente do usuário:** aceitar que trechos de conversa saiam
+  da máquina para endpoints com retenção zero (sem ela, o default volta a `ollama`).
+- Avaliador versionado (`./scripts/evi-test llm-eval promise`) como gate para trocar
+  modelo/prompt.
 - Se o LLM confirmar, a promessa entra com título derivado do contexto ("Mandar a
   modelagem para a Eliana") e data resolvida; se não, nada é guardado.
-- Se o LLM falhar (timeout, parse), a promessa entra como hoje (sem regressão).
+- Se o LLM falhar, a promessa fica oculta (`needs_eval`) e é reavaliada; após 48 h sem
+  avaliação, entra como hoje.
 - A avaliação roda em segundo plano: o webhook não espera o LLM.
 - Reavaliação única das promessas `pending` existentes, pelo mesmo caminho.
 - Canais do WhatsApp (`@newsletter`, `@broadcast`) nunca são conversas diretas (já
@@ -26,8 +35,11 @@ fora de escopo em `evi-reply-debts`; este change é a continuação.
 
 Novo: `agent/services/promise_context.py`, `tests/unit/test_promise_context.py`,
 `tests/sim/scenarios/reply-debts/SIM-DEBT-07…`, `SIM-DEBT-08…`.
-Alterado: `agent/services/promises.py`, `agent/main.py` (webhook), `.env.example`,
-`docs/testing.md`. Specs: `messaging-whatsapp`. Sem container novo.
+Novo também: `agent/services/llm_structured.py`, `agent/testing/llm_eval/`,
+`tests/eval/promise_cases.yaml`. Alterado: `agent/services/promises.py`, `agent/main.py`,
+`agent/services/whatsapp_processor.py` (datas), `agent/db.py`, `.env.example`,
+`docs/testing.md`. Specs: `messaging-whatsapp`, `providers`, `testing`. Sem container novo.
+Custo estimado: < US$ 0,20/mês.
 
 ## Validação em uso real
 

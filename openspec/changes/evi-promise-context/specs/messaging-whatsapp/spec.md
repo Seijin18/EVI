@@ -13,7 +13,7 @@ For every direct WhatsApp conversation (not a group, not a control chat, not a o
 - **THEN** that channel is not listed
 
 ### Requirement: The user's own promises are captured by pattern
-When `EVI_REPLY_DEBTS_ENABLED=true`, a `fromMe` message in a direct conversation matching a versioned list of promise patterns SHALL trigger a promise evaluation. When `EVI_PROMISE_CONTEXT_ENABLED=true` (default), the evaluation SHALL run outside the webhook request, read up to 10 messages of that conversation from the previous 24 hours (both sides; third-party text wrapped as external data) and ask the LLM whether the user committed to something; it SHALL store a `pending_commitments` row with `type='promise'` and `source='whatsapp_from_me'` only when the LLM confirms, with a title naming what was promised and to whom and the resolved date when there is one. When the LLM fails or the flag is off, the row SHALL be stored from the pattern alone, with the message as title and a resolved date when the message has one.
+When `EVI_REPLY_DEBTS_ENABLED=true`, a `fromMe` message in a direct conversation matching a versioned list of promise patterns SHALL be stored at once as a `pending_commitments` row with `type='promise'`, `source='whatsapp_from_me'` and `status='needs_eval'`, which is never listed, briefed or notified. When `EVI_PROMISE_CONTEXT_ENABLED=true` (default), the row SHALL be evaluated outside the webhook request no earlier than `EVI_PROMISE_EVAL_DELAY_MIN` (default 30) minutes after the message, with up to 10 messages of the previous 24 hours and the messages that followed (both sides; third-party text wrapped as external data). The evaluation SHALL use the structured LLM task `PROMISE`; the LLM SHALL return the deadline as the expression used in the conversation and the code SHALL resolve it to a date. A confirmed, unfulfilled promise SHALL become `pending` with a title naming what was promised; a rejected one SHALL become `dismissed`; a fulfilled one SHALL become `done`. When the evaluation fails it SHALL be retried, and a row still `needs_eval` after 48 hours SHALL become `pending` with the message as title. When the flag is off, the row SHALL be stored as `pending` from the pattern alone, with a resolved date when the message has one.
 
 #### Scenario: SCN-DEBT-04
 - **WHEN** the user sends "te mando a proposta amanhã" to a contact
@@ -21,20 +21,38 @@ When `EVI_REPLY_DEBTS_ENABLED=true`, a `fromMe` message in a direct conversation
 
 #### Scenario: SCN-DEBT-10
 - **GIVEN** the contact Ana wrote "consegue me mandar o orçamento até sexta?"
-- **WHEN** the user replies "Pode deixar"
-- **THEN** a pending promise is stored whose title mentions the budget and Ana, due on Friday
+- **WHEN** the user replies "Pode deixar" and the evaluation runs
+- **THEN** a pending promise is stored whose title mentions the budget, due on Friday
 
 #### Scenario: SCN-DEBT-11
 - **GIVEN** the contact wrote "valeu pela ajuda ontem!"
-- **WHEN** the user replies "Pode deixar, qualquer coisa te aviso"
-- **THEN** no pending promise is stored
+- **WHEN** the user replies "Pode deixar, qualquer coisa te aviso" and the evaluation runs
+- **THEN** no pending promise is listed
 
 #### Scenario: SCN-DEBT-12
-- **GIVEN** the LLM times out
+- **GIVEN** the LLM times out on every attempt
 - **WHEN** the user sends "te mando a proposta amanhã"
-- **THEN** a pending promise is stored from the pattern alone, with tomorrow's date
+- **THEN** the promise is not listed while it waits for evaluation and is listed, with tomorrow's date, 48 hours later
+
+#### Scenario: SCN-DEBT-14
+- **GIVEN** today is Monday 2026-10-12
+- **WHEN** a confirmed promise says "te entrego até dia 20"
+- **THEN** its due date is 2026-10-20
+
+#### Scenario: SCN-DEBT-15
+- **GIVEN** the contact asked "me passa o contato do eletricista?"
+- **WHEN** the user replies "Já te passo" and sends the phone number 2 minutes later
+- **THEN** no pending promise is listed
 
 ## ADDED Requirements
+
+### Requirement: Fulfilled promises are closed daily
+Once a day, before the morning briefing, each `pending` promise whose conversation has new messages from the user SHALL be re-evaluated for fulfilment only, and SHALL become `done` when the LLM finds it fulfilled.
+
+#### Scenario: SCN-DEBT-16
+- **GIVEN** a pending promise "Mandar o link do drive" from yesterday and a drive link the user sent to that contact last night
+- **WHEN** the daily sweep runs
+- **THEN** the promise is `done` and not in the briefing
 
 ### Requirement: Existing promises can be re-evaluated with context
 A one-off re-evaluation SHALL apply the contextual evaluation to every `type='promise'` row in `status='pending'`, using the conversation around the row's creation: a rejected promise SHALL become `dismissed`, a confirmed one SHALL get the contextual title and date, and a failed evaluation SHALL leave the row unchanged.
