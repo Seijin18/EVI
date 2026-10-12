@@ -28,6 +28,17 @@ via `findMessages`, dentro de 24 h antes da mensagem, em ordem cronológica, cad
 `Você: …` / `<nome>: …`. Falhou a Evolution → `read_timeline_tail(jid, 6)`. Todo texto de
 terceiros passa por `wrap_external` (modelo de prompt injection, `2026-10-11`).
 
+O nome do contato vem do registro Postgres (`effective_label`), para o título dizer
+"para a Eliana" e não um número.
+
+**Perfil do contato fica de fora, por enquanto.** O `profile.md` atual não serve como
+contexto: `read_profile_excerpt` lê os primeiros N caracteres (cabeçalho + a síntese mais
+antiga), 41 de 42 perfis estão vazios e a única síntese existente trata a data de criação
+do perfil como uma "reunião". Colocá-lo no prompt piora a decisão. O change seguinte,
+`evi-contact-knowledge`, cria `read_contact_knowledge(jid)` (fatos com evidência +
+assuntos em aberto) e tem uma task para ligá-lo aqui. `conversation_context` já recebe
+um parâmetro `knowledge: str = ""` para que essa ligação seja de uma linha.
+
 ### 3. Prompt e saída
 
 Entrada: data de referência, nome do contato, contexto e a mensagem do usuário. Saída JSON:
@@ -69,4 +80,6 @@ permite voltar ao comportamento só-heurística sem deploy.
 
 ## Out of scope
 
-- Detecção de promessas sem padrão, promessas em grupos, gravar `fromMe` na timeline.
+- Detecção de promessas sem padrão; promessas em grupos.
+- Gravar `fromMe` na timeline e usar o perfil do contato no prompt: vêm em
+  `evi-contact-knowledge` (próximo da fila).

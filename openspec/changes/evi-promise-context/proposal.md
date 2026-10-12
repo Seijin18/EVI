@@ -38,6 +38,7 @@ Janela de 7 dias, pelo relatório semanal (`/jobs/usage-report`, tipo `promise`)
 ## Out of scope
 
 - Mudar a detecção de "esperando sua resposta" (continua determinística).
-- Gravar as mensagens `fromMe` na timeline do contato.
+- Gravar as mensagens `fromMe` na timeline do contato e usar o perfil do contato no
+  prompt — ambos em `evi-contact-knowledge` (fila).
 - Promessas em grupos.
 - Usar o LLM para detectar promessas sem padrão (gatilho continua sendo a lista).

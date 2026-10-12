@@ -24,6 +24,8 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 44 | `evi-perceived-reliability` | 22 | **Done** (2026-10-10) | Watchdog externo, `/ajuda`, ack imediato em tool lenta, aviso de OAuth expirado |
 | 37 | `evi-prompt-injection-model` | 23 | **Done** (2026-10-11) | Confirmação de tool destrutiva, allowlist por origem do turno, corpus adversarial |
 | 38 | `evi-background-execution` | 24 | Condicional (pulado em 2026-10-11) | Tarefas longas desacopladas; abrir só se o ack do #44 não bastar |
+| 47 | `evi-promise-context` | 25 | **Ativo** | Promessas avaliadas com o contexto da conversa (padrão = gatilho, LLM = juiz); canais fora das dívidas; dedupe de mensagens da Evolution |
+| 48 | `evi-contact-knowledge` | 26 | Na fila ([`queued/`](queued/)) | Perfil de contato estruturado (Fatos/Em aberto/Notas) atualizado por incremento com evidência; timeline com os dois lados; agendamento diário |
 
 **Deferido / cortado:** ver [`specs/roadmap.md`](specs/roadmap.md).
 

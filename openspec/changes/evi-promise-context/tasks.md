@@ -12,7 +12,7 @@
 
 ## 2. Avaliação com contexto
 
-- [ ] 2.1 `promise_context.conversation_context(jid, before_ts)`: até 10 mensagens / 24 h via `findMessages` (dois lados, `wrap_external`), fallback `read_timeline_tail`
+- [ ] 2.1 `promise_context.conversation_context(jid, before_ts, knowledge="")`: até 10 mensagens / 24 h via `findMessages` (dois lados, `wrap_external`, nome do registro), fallback `read_timeline_tail`; `knowledge` vazio nesta versão
   - SCN-DEBT-10
   - Files: `agent/services/promise_context.py`, `tests/unit/test_promise_context.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_promise_context.py -q`

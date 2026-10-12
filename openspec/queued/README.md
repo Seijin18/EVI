@@ -19,3 +19,4 @@ Ordem: [`BACKLOG.md`](../BACKLOG.md) → "Fila atual".
 
 | Change | Por que está aqui |
 |---|---|
+| `evi-contact-knowledge` | Depende de `evi-promise-context` (task 2.3 liga o conhecimento do contato ao prompt de promessas) |
