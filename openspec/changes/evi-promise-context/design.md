@@ -32,6 +32,7 @@ Resultado (prompt v3/v4; "simulados" = 30 casos, "reais" = 24; nuvem só nos sim
 | qwen3:1.7b + think | local | 63% | 29% | 5 | 15 s (4 timeouts) |
 | qwen3:4b | local | 67% | 42% | 11 | 7 s |
 | qwen3:4b + think | local | — | — | — | 50/54 timeouts (120 s) |
+| qwen3:4b, prompt v4 (sem cópia de exemplo, `done` só por mensagem do usuário) | local | 70% | 54% | 10 | 6,8 s |
 | Gemini 2.5 Flash (direto) | nuvem | 80% | — | 2 | 1 s |
 | **qwen/qwen3.8-27b** | OpenRouter ZDR | **93%** | — | 0 | 1,1 s |
 | qwen/qwen3.5-35b-a3b | OpenRouter ZDR | 93% | — | 0 | 1,0 s |
