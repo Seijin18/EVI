@@ -45,14 +45,6 @@ def test_detect_promise_positive(text):
 
 @pytest.mark.parametrize(
     "text",
-    ["Pode deixar", "Ahh ss, pode deixar", "Aí eu te aviso", "Pera q já te mando", "Ahh okk, pode deixar"],
-)
-def test_detect_promise_ignores_bare_acknowledgements(text):
-    assert not promises.detect_promise(text)
-
-
-@pytest.mark.parametrize(
-    "text",
     [
         "você me manda o endereço?",
         "te mandei ontem o arquivo",

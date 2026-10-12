@@ -35,19 +35,6 @@ _PROMISE_RE = re.compile("|".join(PROMISE_PATTERNS))
 _NEGATION_RE = re.compile(r"\b(?:nao|nunca|jamais)\s+(?:\w+\s+){0,2}$")
 _SOURCE = "whatsapp_from_me"
 
-# Bare acknowledgements ("pode deixar", "aí eu te aviso") carry no object: nothing
-# to track. A promise needs at least one word left after removing these.
-_FILLER = frozenset(
-    "a ai ahh ahn ah ok okk okay blz ss sim eu e ja ta to q que pra pro de da do no na um uma "
-    "pera calma ele ela quando assim aqui la ent entao tb tbm tambem "
-    "pode deixar deixa comigo te mando envio passo aviso falo".split()
-)
-_WORD_RE = re.compile(r"[a-z0-9]+")
-
-
-def _has_substance(norm: str) -> bool:
-    return any(w not in _FILLER for w in _WORD_RE.findall(norm))
-
 
 def _normalize(text: str) -> str:
     decomposed = unicodedata.normalize("NFKD", text or "")
@@ -61,7 +48,7 @@ def detect_promise(text: str) -> bool:
         return False
     for m in _PROMISE_RE.finditer(norm):
         if not _NEGATION_RE.search(norm[: m.start()]):
-            return _has_substance(norm)
+            return True
     return False
 
 
