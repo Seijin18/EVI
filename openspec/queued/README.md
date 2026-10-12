@@ -19,4 +19,6 @@ Ordem: [`BACKLOG.md`](../BACKLOG.md) → "Fila atual".
 
 | Change | Por que está aqui |
 |---|---|
-| `evi-contact-knowledge` | Depende de `evi-promise-context` (task 2.3 liga o conhecimento do contato ao prompt de promessas) |
+| `evi-security-review` | Próximo depois de `evi-promise-context`; a contenção do F1 (task 1.1) pode ir antes como hotfix |
+| `evi-contact-knowledge` | Depende de `evi-promise-context` (`llm_structured`, avaliador; task 2.3 liga o conhecimento ao prompt de promessas) |
+| `evi-contact-names` | Depende de `evi-contact-knowledge` (identidade canônica `@lid`↔telefone) |

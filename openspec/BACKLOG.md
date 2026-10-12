@@ -24,8 +24,10 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 44 | `evi-perceived-reliability` | 22 | **Done** (2026-10-10) | Watchdog externo, `/ajuda`, ack imediato em tool lenta, aviso de OAuth expirado |
 | 37 | `evi-prompt-injection-model` | 23 | **Done** (2026-10-11) | Confirmação de tool destrutiva, allowlist por origem do turno, corpus adversarial |
 | 38 | `evi-background-execution` | 24 | Condicional (pulado em 2026-10-11) | Tarefas longas desacopladas; abrir só se o ack do #44 não bastar |
-| 47 | `evi-promise-context` | 25 | **Ativo** | Promessas avaliadas com o contexto da conversa (padrão = gatilho, LLM = juiz); canais fora das dívidas; dedupe de mensagens da Evolution |
-| 48 | `evi-contact-knowledge` | 26 | Na fila ([`queued/`](queued/)) | Perfil de contato estruturado (Fatos/Em aberto/Notas) atualizado por incremento com evidência; timeline com os dois lados; agendamento diário |
+| 47 | `evi-promise-context` | 25 | **Ativo** | Promessas avaliadas com contexto e atraso (padrão = gatilho, LLM OpenRouter ZDR = juiz, 96% nos casos reais); `llm_structured`; avaliador de LLM; canais fora das dívidas; dedupe da Evolution |
+| 49 | `evi-security-review` | 27 | Na fila ([`queued/`](queued/)) — **próximo** | Modelo de ameaças, checklist ASVS/LLM, registro de achados; F1 já achado: `agent-api` aberto na LAN/tailnet sem chave; guardas de regressão na CI |
+| 48 | `evi-contact-knowledge` | 26 | Na fila ([`queued/`](queued/)) | Perfil de contato estruturado (Fatos/Em aberto/Notas) por incremento com evidência; timeline com os dois lados; identidade `@lid`↔telefone; LLM OpenRouter ZDR |
+| 50 | `evi-contact-names` | 28 | Na fila ([`queued/`](queued/)) | Agenda Google (People API, só leitura) sincronizada diariamente; nome do usuário nunca sobrescrito; pergunta semanal das conversas ativas sem nome |
 
 **Deferido / cortado:** ver [`specs/roadmap.md`](specs/roadmap.md).
 
