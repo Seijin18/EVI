@@ -221,6 +221,11 @@ As-built: `profile.md` com `## Fatos`/`## Em aberto` (substituídos, com data de
 Change: [`evi-security-review`](../changes/archive/2026-10-13-evi-security-review/proposal.md).
 As-built: modelo de ameaças e registro de 28 achados (`docs/security/`); `agent-api`/Windmill só em `127.0.0.1`; webhook global da Evolution desligado; segredos rotacionados por `evi-rotate-secrets`; autenticação obrigatória por padrão (`/metrics` incluído); grupo de controle do WhatsApp só aceita `from_me`; CVEs corrigidos; job `security` na CI (`evi-security-scan --ci`). Abertos para o usuário: Ollama (F5), plano Gemini (F6), SSH/ufw, WhatBot, OAuth, login do Windmill.
 
+### Etapa 28 — Nomes de contato — `evi-contact-names` — **Done** (2026-10-13)
+
+Change: [`evi-contact-names`](../changes/archive/2026-10-13-evi-contact-names/proposal.md).
+As-built: script Windmill `list_contacts` (People API, só nome+telefones); `name_source` (`user`/`agenda`/`vcard`) e `apply_entries` genérico (nome do usuário nunca sobrescrito, ambíguos e números estrangeiros ignorados); `/jobs/contact-names-sync` (dry-run por padrão) e wrapper Windmill com schedule 03:15 desligado até o OAuth `gcontacts`; `@lid` herda nome do telefone; pergunta semanal no briefing de segunda com respostas determinísticas "nomeia N <nome>"/"ignora N" e sugestão de nome com evidência literal (`CONTACT_NAME_HINT`).
+
 ---
 
 ## Deferido (sem data)

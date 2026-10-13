@@ -26,7 +26,7 @@
 
 **Foco atual:** fila de 10 Out 2026 concluída; ativação em produção pendente (ver `openspec/queue-run.md`). Arquivados em 2026-10-10: #45
 `evi-sim-harness` (V1), #46 `evi-usage-validation` (V2), #40 `evi-morning-briefing` (18),
-#41 `evi-reminders` (19), #42 `evi-reply-debts` (20), #43 `evi-voice-input` (21), #44 `evi-perceived-reliability` (22), #37 `evi-prompt-injection-model` (23, em 11 Out), #47 `evi-promise-context` (25), #49 `evi-security-review` (27), #48 `evi-contact-knowledge` (26) — todos em 13 Out. Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
+#41 `evi-reminders` (19), #42 `evi-reply-debts` (20), #43 `evi-voice-input` (21), #44 `evi-perceived-reliability` (22), #37 `evi-prompt-injection-model` (23, em 11 Out), #47 `evi-promise-context` (25), #49 `evi-security-review` (27), #48 `evi-contact-knowledge` (26), #50 `evi-contact-names` (28) — todos em 13 Out. Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
 porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de produto de 2026-10-10** ([`docs/ux-review-2026-10.md`](docs/ux-review-2026-10.md)).
@@ -150,6 +150,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **21** | **Voz** | **Done** | `evi-voice-input` — Telegram + controle WhatsApp via Gemini |
 | **22** | **Confiabilidade percebida** | **Done** | `evi-perceived-reliability` — watchdog, `/ajuda`, ack, OAuth no turno |
 | **23** | **Injeção (restante)** | **Done** | `evi-prompt-injection-model` — confirmação de exclusão, allowlist por origem, chat do Telegram restrito |
+| **28** | **Nomes de contato** | **Done** | `evi-contact-names` — agenda Google (People API, só leitura) → nomes, `name_source` (nome do usuário nunca sobrescrito), `@lid` herda o nome do telefone, pergunta semanal "nomeia N"/"ignora N" |
 | **26** | **Conhecimento de contato** | **Done** | `evi-contact-knowledge` — perfil estruturado (Fatos/Em aberto/Notas) por atualização incremental com evidência, timeline com os dois lados, identidade `@lid`↔telefone, lote diário 03:30 |
 | **25** | **Promessas com contexto** | **Done** | `evi-promise-context` — gatilho por padrão + juiz LLM com contexto (ZDR), fila `needs_eval`, varredura de cumprimento, `llm_structured`, avaliador |
 | **27** | **Revisão de segurança** | **Done** | `evi-security-review` — modelo de ameaças, 28 achados, Windmill/agent-api em loopback, segredos rotacionados, auth por padrão, gates de CI |

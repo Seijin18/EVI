@@ -46,7 +46,7 @@
   - Files: `tests/sim/scenarios/contact-names/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag contact-names --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --repeat 3 --llm live`
 
-- [ ] 4.2 Reconexão OAuth `gcontacts` (usuário), dry-run real revisado, primeira sincronização, agendamento 03:15; gates; BACKLOG + Progress
+- [x] 4.2 (OAuth `gcontacts`, publicação no Windmill, dry-run real e 1ª sincronização ficam para o usuário; schedule 03:15 vem `enabled: false`) Reconexão OAuth `gcontacts` (usuário), dry-run real revisado, primeira sincronização, agendamento 03:15; gates; BACKLOG + Progress
   - SCN-NAME-01
   - Files: `windmill/f/integrations/list_contacts.schedule.yaml`, `openspec/BACKLOG.md`, `Progress.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`, `./scripts/evi-test smoke`, `openspec validate --specs`, `ruff check agent/ --select E,W,F --ignore E501`
