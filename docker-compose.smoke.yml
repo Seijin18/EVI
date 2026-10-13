@@ -33,6 +33,10 @@ services:
     # 25 `HTTP Error 409: Conflict` in the dev agent-api log.
     # The smoke supplies its own environment; it must never read `.env`.
     env_file: !reset []
+    environment:
+      # The base file requires EVOLUTION_API_KEY for evolution-api; the smoke
+      # exports a throwaway so it interpolates. Keep it out of agent-api.
+      EVOLUTION_API_KEY: ""
     ports: !override
       - "127.0.0.1::8000"
     volumes: !override

@@ -19,7 +19,7 @@ if [ -f .env ]; then
 fi
 
 BASE="${EVOLUTION_SERVER_URL:-http://localhost:8082}"
-KEY="${EVOLUTION_API_KEY:-evi-dev-key}"
+KEY="${EVOLUTION_API_KEY:?set EVOLUTION_API_KEY in .env (scripts/evi-rotate-secrets)}"
 INSTANCE="${EVOLUTION_INSTANCE_NAME:-evi}"
 WEBHOOK_URL="${EVOLUTION_WEBHOOK_URL:-http://agent-api:8000/webhooks/evolution}"
 EVI_KEY="${EVI_API_KEY:-}"

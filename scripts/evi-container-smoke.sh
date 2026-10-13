@@ -41,6 +41,10 @@ trap cleanup EXIT
 # An isolated env: no .env secrets, no host volumes worth clobbering, and the
 # published ports shifted so a running dev stack keeps its own.
 export POSTGRES_DB=evidb POSTGRES_USER=evi POSTGRES_PASSWORD=smoke
+# docker-compose.yml requires these (`:?`) so no insecure default can sneak in;
+# the smoke only satisfies the interpolation. Throwaway values, never a real key,
+# and docker-compose.smoke.yml blanks EVOLUTION_API_KEY in agent-api's env.
+export WINDMILL_DB_PASSWORD=smoke-unused EVOLUTION_API_KEY=smoke-unused
 export EVI_LLM_PROVIDER=ollama EVI_EMBED_PROVIDER=ollama
 export QDRANT_URL=http://qdrant:6333
 export OLLAMA_BASE_URL=http://127.0.0.1:1
@@ -49,7 +53,7 @@ export EVI_CONTACT_MEMORY_DIR=/data/contact_memory
 # Explicitly empty: even if the env isolation regresses, the smoke must never
 # start a Telegram poller against the real bot (that is what caused the 409s).
 export TELEGRAM_MODE= TELEGRAM_BOT_TOKEN= TELEGRAM_CHAT_ID=
-export EVI_WHATSAPP_CONTROL_JIDS= EVOLUTION_API_KEY= GEMINI_API_KEY=
+export EVI_WHATSAPP_CONTROL_JIDS= GEMINI_API_KEY=
 
 # Guard, learned the hard way on 2026-08-12: a bind mount ignores the compose
 # project name, so `-p evi-smoke` alone does NOT isolate anything. Running this

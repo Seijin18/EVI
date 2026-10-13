@@ -145,7 +145,8 @@ def check_default_secrets(env_path: Path, compose_path: Optional[Path]) -> List[
         env = parse_env(env_path)
         bad = []
         for var, weak in WEAK_DEFAULTS.items():
-            if env.get(var, "") in weak:
+            val = env.get(var, "")
+            if val in weak or val.startswith("CHANGE_ME"):
                 bad.append(f"{var} (default/empty)")
         key = env.get("EVI_API_KEY", "")
         if len(key) < 32:
@@ -349,6 +350,8 @@ def check_dependencies(root: Path) -> List[Finding]:
 
 # ---------------------------------------------------------------- 7. images
 def _image_unpinned(image: str) -> bool:
+    if "@sha256:" in image:     # a digest pins the exact build whatever the tag says
+        return False
     ref = image.split("@")[0]
     last = ref.rsplit("/", 1)[-1]
     if ":" not in last:

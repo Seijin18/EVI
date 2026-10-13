@@ -1,7 +1,7 @@
 services:
   qdrant:
     restart: unless-stopped
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.18.0
     ports: ["127.0.0.1:6333:6333"]
     environment:
       # Bare form on purpose: `- VAR=${VAR:-}` would set an EMPTY string, which
@@ -24,10 +24,11 @@ services:
       start_period: 15s
 
   windmill-server:
-    image: ghcr.io/windmill-labs/windmill:main
+    # Pinned by digest = the build running on 2026-10-13 (CE v1.714.1; no version label on :main).
+    image: ghcr.io/windmill-labs/windmill:main@sha256:9276cf1f71c0b337661989882fc879171f22efc1148ac7450dc1394b79a94695
     ports: ["127.0.0.1:8001:8000"]
     environment:
-      - DATABASE_URL=postgresql://${WINDMILL_DB_USER:-windmill}:${WINDMILL_DB_PASSWORD:-windmill}@postgres:5432/windmill?sslmode=disable
+      - DATABASE_URL=postgresql://${WINDMILL_DB_USER:-windmill}:${WINDMILL_DB_PASSWORD:?set WINDMILL_DB_PASSWORD in .env (scripts/evi-rotate-secrets)}@postgres:5432/windmill?sslmode=disable
       - MODE=server
       - BASE_URL=http://localhost:8001
     depends_on:
@@ -43,9 +44,10 @@ services:
       start_period: 30s
 
   windmill-worker:
-    image: ghcr.io/windmill-labs/windmill:main
+    # Pinned by digest = the build running on 2026-10-13 (CE v1.714.1; no version label on :main).
+    image: ghcr.io/windmill-labs/windmill:main@sha256:9276cf1f71c0b337661989882fc879171f22efc1148ac7450dc1394b79a94695
     environment:
-      - DATABASE_URL=postgresql://${WINDMILL_DB_USER:-windmill}:${WINDMILL_DB_PASSWORD:-windmill}@postgres:5432/windmill?sslmode=disable
+      - DATABASE_URL=postgresql://${WINDMILL_DB_USER:-windmill}:${WINDMILL_DB_PASSWORD:?set WINDMILL_DB_PASSWORD in .env (scripts/evi-rotate-secrets)}@postgres:5432/windmill?sslmode=disable
       - MODE=worker
       - WORKER_GROUP=default
       # Scripts read EVI_API_KEY from os.environ to call agent-api (X-Api-Key).
@@ -65,10 +67,10 @@ services:
     ports: ["127.0.0.1:8082:8080"]
     environment:
       - SERVER_URL=${EVOLUTION_SERVER_URL:-http://localhost:8082}
-      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-evi-dev-key}
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:?set EVOLUTION_API_KEY in .env (scripts/evi-rotate-secrets)}
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (scripts/evi-rotate-secrets)}@postgres:5432/${POSTGRES_DB}
       - DATABASE_CONNECTION_CLIENT_NAME=evolution_evi
       - DATABASE_SAVE_DATA_INSTANCE=true
       - DATABASE_SAVE_DATA_NEW_MESSAGE=true
@@ -106,7 +108,10 @@ services:
     profiles: ["graph"]
     ports: ["127.0.0.1:7474:7474", "127.0.0.1:7687:7687"]
     environment:
-      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-changeme}
+      # No `:?` here: Compose interpolates the whole file even for services in an
+      # inactive profile, so a required var would break every non-graph setup.
+      # An empty password makes Neo4j refuse to start (fails closed).
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-}
       - NEO4J_server_memory_heap_max__size=512m
       - NEO4J_server_memory_pagecache_size=256m
     volumes:
@@ -142,7 +147,7 @@ services:
       - QDRANT_API_KEY=${QDRANT__SERVICE__API_KEY:-}
       # Code resolves dates via ZoneInfo(EVI_TIMEZONE); TZ is defence in depth.
       - TZ=${EVI_TIMEZONE:-America/Sao_Paulo}
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (scripts/evi-rotate-secrets)}@postgres:5432/${POSTGRES_DB}
       - WINDMILL_WEBHOOK_CALENDAR=${WINDMILL_WEBHOOK_CALENDAR}
       - WINDMILL_WEBHOOK_TASKS=${WINDMILL_WEBHOOK_TASKS}
       - WINDMILL_WEBHOOK_LIST_TASKS=${WINDMILL_WEBHOOK_LIST_TASKS:-http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/list_tasks}
@@ -232,7 +237,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (scripts/evi-rotate-secrets)}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
       - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
