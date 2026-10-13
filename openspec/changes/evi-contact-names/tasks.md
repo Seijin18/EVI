@@ -41,7 +41,7 @@
 
 ## 4. Fechamento
 
-- [ ] 4.1 Cenários `SIM-NAME-*` (agenda nomeia número; nome do usuário não é sobrescrito; pergunta semanal → "nomeia 1 X" → resumo mostra X); `docs/testing.md`
+- [x] 4.1 Cenários `SIM-NAME-*` (agenda nomeia número; nome do usuário não é sobrescrito; pergunta semanal → "nomeia 1 X" → resumo mostra X); `docs/testing.md`
   - SCN-NAME-03, SCN-NAME-05
   - Files: `tests/sim/scenarios/contact-names/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag contact-names --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --repeat 3 --llm live`

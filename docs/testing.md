@@ -76,6 +76,14 @@ mensagens novas; a chamada estruturada `CONTACT_KNOWLEDGE` usa o OpenRouter ZDR 
 aplica regex (sem diferenciar maiúsculas) ao arquivo ou a uma seção (`Fatos`, `Em aberto`). SCN-MEM-18 (JSON inválido não
 altera o perfil) fica só nos testes unitários: o harness não injeta falha no LLM. Migração das sínteses antigas:
 `./scripts/evi-test contact-knowledge-migrate [--apply]` (dry-run por padrão; só contagens).
+Nomes de contato: `./scripts/evi-sim run --tag contact-names --repeat 3 --llm live` (SIM-NAME-01/02/03). O fake Google
+serve a People API (`people/me/connections`, paginada) a partir de `seed.contacts: [{name, phones, email?}]` e o script
+Windmill real `list_contacts` roda contra ele (o e-mail do seed existe só para provar que o script o descarta). O passo
+`job: contact-names-sync` chama `POST /jobs/contact-names-sync?apply=true&wait=true`; `expect.job_response_matches: <regex>`
+(só em passos `job`) confere o JSON devolvido (ex.: `"protected_user": 1`). `push_name: ""` em `whatsapp_contact` omite o
+pushName (número "pelado"). Relógio de segunda-feira: `M0 07:00` é a última segunda-feira até hoje, `M1` a seguinte
+(`D<n>` continua contando dias); o briefing semanal "Conversas sem nome" só roda nesse dia. A sugestão `CONTACT_NAME_HINT`
+é uma chamada estruturada (OpenRouter em `live`/`record`, cassete em `replay`); o prompt só depende do texto das mensagens.
 Lembretes: `./scripts/evi-sim run --tag reminders --repeat 3 --llm live` (o loop roda dentro do
 `agent-api` com `EVI_REMINDERS_TICK_SEC=5` e lê o relógio libfaketime). Um passo `clock` aceita
 `expect: {reply_within_s, reply_matches, no_reply}`: captura as mensagens enviadas ao Telegram

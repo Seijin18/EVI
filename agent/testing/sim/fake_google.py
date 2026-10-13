@@ -14,7 +14,8 @@ Seed format (all keys optional)::
     {"calendar": [{"summary", "start", "end", "description"?, "id"?}],
      "tasks":    [{"title", "due"?, "status"?, "notes"?, "id"?}],
      "gmail":    [{"id"?, "from", "subject", "snippet", "labels": [...], "date"?}],
-     "calendars": [{"id", "summary"}]}   # default: one primary calendar
+     "calendars": [{"id", "summary"}],   # default: one primary calendar
+     "contacts": [{"name", "phones": [...], "email"?}]}   # People API address book
 
 ``start``/``end`` are ISO strings (naive ones are read in EVI_TIMEZONE, default
 America/Sao_Paulo); a date-only string makes an all-day event.
@@ -47,7 +48,8 @@ DEFAULT_TZ = "America/Sao_Paulo"
 CAL_HOST = "www.googleapis.com"
 TASKS_HOST = "tasks.googleapis.com"
 GMAIL_HOST = "gmail.googleapis.com"
-KNOWN_HOSTS = {CAL_HOST, TASKS_HOST, GMAIL_HOST}
+PEOPLE_HOST = "people.googleapis.com"
+KNOWN_HOSTS = {CAL_HOST, TASKS_HOST, GMAIL_HOST, PEOPLE_HOST}
 
 # method + path pattern of everything implemented (for docs / task 2.2).
 ENDPOINTS = [
@@ -59,6 +61,7 @@ ENDPOINTS = [
     ("GET", "/gmail/v1/users/me/messages"),
     ("GET", "/gmail/v1/users/me/messages/{id}"),
     ("POST", "/gmail/v1/users/me/messages/{id}/trash"),
+    ("GET", "/v1/people/me/connections"),
 ]
 
 
@@ -98,6 +101,7 @@ class FakeGoogle:
         self._events: list[dict] = []
         self._tasks: list[dict] = []
         self._mail: list[dict] = []
+        self._contacts: list[dict] = []
         self._created: dict[str, list[dict]] = {"calendar": [], "tasks": []}
         self._trashed: list[str] = []
         self._seq = {"evt": 0, "task": 0, "msg": 0}
@@ -118,6 +122,8 @@ class FakeGoogle:
             self._tasks.append(self._make_task(t))
         for m in data.get("gmail") or []:
             self._mail.append(self._make_mail(m, tz))
+        for i, c in enumerate(data.get("contacts") or [], 1):
+            self._contacts.append(self._make_person(c, i))
 
     def state(self) -> dict:
         tz = _tz()
@@ -128,6 +134,7 @@ class FakeGoogle:
                 "tasks": self._tasks,
                 "gmail": [m for m in self._mail if "TRASH" not in m["labelIds"]],
                 "trash": [m for m in self._mail if "TRASH" in m["labelIds"]],
+                "contacts": self._contacts,
                 "created": self._created,
                 "trashed": self._trashed,
                 "deleted": list(self._trashed),
@@ -154,6 +161,18 @@ class FakeGoogle:
         if e.get("description"):
             ev["description"] = e["description"]
         return ev
+
+    @staticmethod
+    def _make_person(c: dict, n: int) -> dict:
+        """People API ``Person`` with ``names``/``phoneNumbers`` (+ an e-mail the script must drop)."""
+        person: dict = {
+            "resourceName": f"people/c{n}",
+            "names": [{"displayName": str(c["name"])}],
+            "phoneNumbers": [{"value": str(p)} for p in c.get("phones") or []],
+        }
+        if c.get("email"):
+            person["emailAddresses"] = [{"value": str(c["email"])}]
+        return person
 
     def _event_view(self, e: dict) -> dict:
         # flat form for scenario assertions + the raw API shape under "raw"
@@ -250,6 +269,8 @@ class FakeGoogle:
             if method == "POST":
                 return self._tasks_insert(body)
             return None
+        if p == "/v1/people/me/connections" and method == "GET":
+            return self._connections_list(q)
         if p == "/gmail/v1/users/me/messages" and method == "GET":
             return self._mail_list(q)
         m = re.fullmatch(r"/gmail/v1/users/me/messages/([^/]+)", p)
@@ -259,6 +280,18 @@ class FakeGoogle:
         if m and method == "POST":
             return self._mail_trash(unquote(m.group(1)))
         return None
+
+    # --------------------------------------------------------------- people
+    def _connections_list(self, q: dict) -> Response:
+        if "personFields" not in q:
+            return _gerr(400, "personFields mask is required")
+        size = max(1, min(int((q.get("pageSize") or ["100"])[0]), 1000))
+        start = int((q.get("pageToken") or ["0"])[0])
+        page = self._contacts[start:start + size]
+        out: dict = {"connections": copy.deepcopy(page), "totalPeople": len(self._contacts)}
+        if start + size < len(self._contacts):
+            out["nextPageToken"] = str(start + size)
+        return _json(200, out)
 
     # ------------------------------------------------------------ calendar
     def _resolve_calendar(self, cid: str) -> dict | None:

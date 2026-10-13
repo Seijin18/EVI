@@ -1,0 +1,27 @@
+id: SIM-NAME-02
+title: Contact names - a name given in chat is not overwritten by the address book (SCN-NAME-02)
+tags: [contact-names]
+source: synthetic
+clock: D0 09:00
+seed:
+  contacts:
+    - {name: "Pedro H", phones: ["(11) 95555-0601"]}
+steps:
+  - whatsapp_contact: {text: "oi, tudo bem? vi seu recado", jid: "5511955550601@s.whatsapp.net", push_name: ""}
+    expect:
+      postgres:
+        - {table: whatsapp_contacts, where: {jid: "5511955550601@s.whatsapp.net"}, count: 1, within_s: 10}
+  - telegram: "salve o contato com final 0601 como Hollmann"
+    expect:
+      reply_within_s: 90
+      tools_called_any: [set_whatsapp_contact_name]
+      postgres:
+        - {table: whatsapp_contacts, where: {jid: "5511955550601@s.whatsapp.net", display_name: "Hollmann", name_source: user}, count: 1}
+      outbound_to_third_parties: 0
+  - job: contact-names-sync
+    expect:
+      job_response_matches: '"status": "ok".*"protected_user": 1'
+      postgres:
+        - {table: whatsapp_contacts, where: {jid: "5511955550601@s.whatsapp.net", display_name: "Hollmann", name_source: user}, count: 1}
+        - {table: whatsapp_contacts, where: {display_name: "Pedro H"}, count: 0}
+      outbound_to_third_parties: 0

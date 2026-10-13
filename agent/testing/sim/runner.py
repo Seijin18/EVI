@@ -323,7 +323,10 @@ def build_webhook_payload(
         msg["message"] = {"audioMessage": {"mimetype": "audio/ogg; codecs=opus", "seconds": int(audio_seconds), "ptt": True}}
     else:
         msg["message"] = {"conversation": text}
-    msg["pushName"] = push_name
+    if push_name:
+        msg["pushName"] = push_name
+    else:  # a contact with no WhatsApp profile name (shown as a bare number)
+        msg.pop("pushName", None)
     return payload
 
 
@@ -406,7 +409,9 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
     elif step.type == "job":
         base = len(_telegram_replies(ctx))
         # briefing runs in the background unless ?wait=true: without it the delivered text is read too early
-        ctx.agent("POST", f"/jobs/{step.value}" + ("?wait=true" if step.value in ("briefing", "contact-learn") else ""), {})
+        query = {"briefing": "?wait=true", "contact-learn": "?wait=true", "contact-names-sync": "?apply=true&wait=true"}.get(step.value, "")
+        job_resp = ctx.agent("POST", f"/jobs/{step.value}{query}", {})
+        step_obs["job_response"] = json.dumps(job_resp, ensure_ascii=False)
         sr.latency_s = time.monotonic() - t0
         # a job's observable output is what it sent to the user's Telegram chat
         # (so reply_matches/reply_within_s can assert the delivered text)
@@ -422,7 +427,7 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
         if "telegram" in step.value:
             ctx.fakes("POST", "/_sim/telegram/faults", step.value["telegram"])
     if exp:
-        step_obs = {"reply": sr.reply, "latency_s": sr.latency_s}
+        step_obs.update({"reply": sr.reply, "latency_s": sr.latency_s})
         sr.failures = schema.eval_expect(exp, observe(ctx, step_obs, exp))
     return sr
 

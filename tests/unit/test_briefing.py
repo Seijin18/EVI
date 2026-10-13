@@ -479,8 +479,8 @@ def test_pinned_briefing_snapshot_survives_other_tools(monkeypatch):
 # ---- resolve_briefing_items --------------------------------------------------
 
 
-def _snap(refs, created="2026-10-10 06:00:00-03:00"):
-    return [{"tool_name": "morning_briefing", "payload": {"kind": "morning", "day": "2026-10-10", "refs": refs}, "created_at": created}]
+def _snap(refs, created="2026-10-10 06:00:00-03:00", day="2026-10-10"):
+    return [{"tool_name": "morning_briefing", "payload": {"kind": "morning", "day": day, "refs": refs}, "created_at": created}]
 
 
 def _resolve(monkeypatch, rows, numbers, **kw):
@@ -506,10 +506,16 @@ def test_resolve_briefing_items_missing_number(monkeypatch):
 
 
 def test_resolve_briefing_items_no_snapshot_today(monkeypatch):
-    old = _snap({"1": "commitment:1"}, created="2026-10-09 06:00:00-03:00")
+    old = _snap({"1": "commitment:1"}, created="2026-10-09 06:00:00-03:00", day="2026-10-09")
     ids, errs = _resolve(monkeypatch, old, [1])
     assert ids == [] and errs
     assert _resolve(monkeypatch, [], [1])[1]
+
+
+def test_resolve_briefing_items_uses_the_briefing_day_not_the_db_clock(monkeypatch):
+    # created_at is the DB clock (real time); the payload day is the app's local day (sim/faked clock too)
+    rows = _snap({"1": "commitment:7"}, created="2026-01-01 06:00:00-03:00", day="2026-10-10")
+    assert _resolve(monkeypatch, rows, [1]) == ([7], [])
 
 
 # ---- reply-debts groups (SCN-DEBT-06) ---------------------------------------

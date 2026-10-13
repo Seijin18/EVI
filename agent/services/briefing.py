@@ -439,10 +439,15 @@ def resolve_briefing_items(
             for row in db.load_tool_snapshots(session_id, limit=50):
                 if row.get("tool_name") != "morning_briefing":
                     continue
-                created = datetime.fromisoformat(str(row.get("created_at")))
-                if created.tzinfo is not None and tz is not None:
-                    created = created.astimezone(tz)
-                if created.date() == today:
+                payload_day = str((row.get("payload") or {}).get("day") or "")
+                if payload_day:  # the briefing's own local day (created_at is the DB clock)
+                    same_day = payload_day == today.isoformat()
+                else:
+                    created = datetime.fromisoformat(str(row.get("created_at")))
+                    if created.tzinfo is not None and tz is not None:
+                        created = created.astimezone(tz)
+                    same_day = created.date() == today
+                if same_day:
                     refs = (row.get("payload") or {}).get("refs") or {}
                 break
         except Exception as exc:

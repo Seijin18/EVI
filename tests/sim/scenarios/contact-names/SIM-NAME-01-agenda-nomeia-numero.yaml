@@ -1,0 +1,29 @@
+id: SIM-NAME-01
+title: Contact names - a number that appears bare gets its name from the address book (SCN-NAME-01/03)
+tags: [contact-names]
+source: synthetic
+clock: D0 09:00
+seed:
+  contacts:
+    - {name: "Marina Costa", phones: ["(11) 95555-0501"], email: "marina.costa@example.test"}
+    - {name: "Outra Pessoa", phones: ["+55 21 98888-0502"]}
+steps:
+  - whatsapp_contact: {text: "oi, tudo bem? queria saber como foi a reunião de ontem", jid: "5511955550501@s.whatsapp.net", push_name: ""}
+    expect:
+      postgres:
+        - {table: whatsapp_contacts, where: {jid: "5511955550501@s.whatsapp.net"}, count: 1, within_s: 10}
+        - {table: whatsapp_contacts, where: {display_name: "Marina Costa"}, count: 0}
+      outbound_to_third_parties: 0
+  - job: contact-names-sync
+    expect:
+      job_response_matches: '"status": "ok".*"matched": 1.*"new_names": 1'
+      postgres:
+        - {table: whatsapp_contacts, where: {jid: "5511955550501@s.whatsapp.net", display_name: "Marina Costa", name_source: agenda}, count: 1}
+      outbound_to_third_parties: 0
+  - clock: D0 16:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)esperando sua resposta.*Marina Costa"
+      reply_not_matches: "5511955550501|\\+55 ?11 ?9?5555"
+      outbound_to_third_parties: 0

@@ -30,7 +30,7 @@ STEP_TYPES = (
 )
 VOICE_STEPS = ("telegram_voice", "whatsapp_control_voice", "whatsapp_contact_voice")
 AUDIO_FIXTURE_RE = re.compile(r"^[A-Za-z0-9_.-]+$")  # name inside tests/fixtures/audio/
-JOBS = ("heartbeat", "daily-summary", "briefing", "contact-learn")
+JOBS = ("heartbeat", "daily-summary", "briefing", "contact-learn", "contact-names-sync")
 # agent tables a scenario may inspect via expect.postgres (never free-form SQL)
 PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log", "reminders", "reminder_fires", "wa_conversation_state")
 
@@ -54,15 +54,16 @@ EXPECT_KEYS = {
     "messages_min",
     "telegram_sent_count_matching",
     "contact_profile",
+    "job_response_matches",
     "judge",
 }
 DEFAULT_NO_REPLY_WINDOW_S = 15
 CALENDAR_KEYS = {"created", "count"}
 TASKS_KEYS = {"created", "count"}
 GMAIL_KEYS = {"deleted_count", "deleted_ids_include", "not_deleted"}
-SEED_KEYS = {"calendar", "tasks", "gmail", "calendars", "evolution"}
+SEED_KEYS = {"calendar", "tasks", "gmail", "calendars", "evolution", "contacts"}
 
-_REL_RE = re.compile(r"^\s*D(-?\d+)(?:\s+(\d{1,2}):(\d{2}))?\s*$")
+_REL_RE = re.compile(r"^\s*([DM])(-?\d+)(?:\s+(\d{1,2}):(\d{2}))?\s*$")
 _DELTA_RE = re.compile(r"^\s*\+(\d+)\s*([smhd])\s*$")
 
 
@@ -78,6 +79,9 @@ def is_relative(value: Any) -> bool:
 def parse_relative(value: str, base: date, tz: str | ZoneInfo = DEFAULT_TZ) -> datetime:
     """``"D1 10:00"`` / ``"D-1"`` -> aware datetime in ``tz``.
 
+    ``M<n>`` counts Mondays instead of days: ``M0`` is the latest Monday on or before ``base``,
+    ``M1`` the next one (for weekly flows such as the Monday briefing).
+
     Day arithmetic is done on the calendar date and the wall-clock time is attached
     afterwards, so DST transitions never shift the wall time. ``"Dn"`` alone is 00:00.
     """
@@ -85,8 +89,11 @@ def parse_relative(value: str, base: date, tz: str | ZoneInfo = DEFAULT_TZ) -> d
     if not m:
         raise ValueError(f"invalid relative date {value!r} (expected 'D<n> HH:MM' or 'D<n>')")
     zone = tz if isinstance(tz, ZoneInfo) else ZoneInfo(tz)
-    day = base + timedelta(days=int(m.group(1)))
-    hh, mm = int(m.group(2) or 0), int(m.group(3) or 0)
+    if m.group(1) == "M":
+        day = base - timedelta(days=base.weekday()) + timedelta(weeks=int(m.group(2)))
+    else:
+        day = base + timedelta(days=int(m.group(2)))
+    hh, mm = int(m.group(3) or 0), int(m.group(4) or 0)
     if hh > 23 or mm > 59:
         raise ValueError(f"invalid time in {value!r}")
     return datetime(day.year, day.month, day.day, hh, mm, tzinfo=zone)
@@ -201,6 +208,13 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
     for key in ("tools_called_any", "tools_not_called"):
         if key in exp and not isinstance(exp[key], list):
             raise _err(path, f"{where}.{key}", "must be a list")
+    if "job_response_matches" in exp:
+        if step_type != "job":
+            raise _err(path, f"{where}.job_response_matches", "only valid on job steps")
+        try:
+            re.compile(exp["job_response_matches"])
+        except (re.error, TypeError) as exc:
+            raise _err(path, f"{where}.job_response_matches", f"invalid regex: {exc}") from exc
     if "reply_matches" in exp:
         try:
             re.compile(exp["reply_matches"])
@@ -507,6 +521,10 @@ def eval_expect(exp: dict, obs: dict) -> list[str]:
             fails.append(f"telegram_sent_count_matching: /{tm['regex']}/ expected {tm['count']} user-bound messages got {n}")
     if "contact_profile" in exp:
         fails += eval_contact_profile(exp["contact_profile"], obs.get("contact_profile"))
+    if "job_response_matches" in exp:
+        resp = obs.get("job_response")
+        if resp is None or not re.search(exp["job_response_matches"], resp, re.S | re.I):
+            fails.append(f"job_response_matches: /{exp['job_response_matches']}/ did not match job response {str(resp)[:160]!r}")
     for row, got in zip(exp.get("postgres") or [], obs.get("postgres") or []):
         if got != row["count"]:
             fails.append(f"postgres {row['table']} {row.get('where') or ''}: expected count {row['count']} got {got}")

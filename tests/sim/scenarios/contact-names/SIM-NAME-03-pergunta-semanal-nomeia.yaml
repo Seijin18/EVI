@@ -1,0 +1,50 @@
+id: SIM-NAME-03
+title: Contact names - Monday "Conversas sem nome" -> "nomeia 1 X" / "ignora 2" (SCN-NAME-05)
+tags: [contact-names]
+source: synthetic
+clock: M0 07:00
+steps:
+  # contact A: 6 messages (most active); contact B: 4 messages and introduces himself
+  - whatsapp_contact: {text: "oi, tudo bem?", jid: "5511955550701@s.whatsapp.net", push_name: ""}
+  - whatsapp_contact: {text: "tudo sim e você?", from_me: true, jid: "5511955550701@s.whatsapp.net", push_name: ""}
+  - whatsapp_contact: {text: "quando você volta de viagem?", jid: "5511955550701@s.whatsapp.net", push_name: ""}
+  - whatsapp_contact: {text: "semana que vem", from_me: true, jid: "5511955550701@s.whatsapp.net", push_name: ""}
+  - whatsapp_contact: {text: "show, me avisa então", jid: "5511955550701@s.whatsapp.net", push_name: ""}
+  - whatsapp_contact: {text: "combinado", from_me: true, jid: "5511955550701@s.whatsapp.net", push_name: ""}
+  - whatsapp_contact: {text: "aqui é o Rafael, passando pra avisar do almoço", jid: "5511955550702@s.whatsapp.net", push_name: ""}
+  - whatsapp_contact: {text: "beleza", from_me: true, jid: "5511955550702@s.whatsapp.net", push_name: ""}
+  - whatsapp_contact: {text: "valeu pela força. Abs, Rafael", jid: "5511955550702@s.whatsapp.net", push_name: ""}
+  - whatsapp_contact: {text: "de nada", from_me: true, jid: "5511955550702@s.whatsapp.net", push_name: ""}
+    expect:
+      postgres:
+        - {table: whatsapp_contacts, where: {name_source: null}, count: 2, within_s: 10}
+      outbound_to_third_parties: 0
+  - clock: M0 08:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)Conversas sem nome.*1\\. .*show, me avisa.*2\\. .*Abs, Rafael.*talvez: Rafael"
+      outbound_to_third_parties: 0
+  - telegram: "nomeia 1 Hollmann"
+    expect:
+      reply_within_s: 30
+      reply_matches: "Hollmann"
+      tools_not_called: [set_whatsapp_contact_name]
+      postgres:
+        - {table: whatsapp_contacts, where: {jid: "5511955550701@s.whatsapp.net", display_name: "Hollmann", name_source: user}, count: 1}
+      outbound_to_third_parties: 0
+  - telegram: "ignora 2"
+    expect:
+      reply_within_s: 30
+      reply_matches: "não pergunto"
+      outbound_to_third_parties: 0
+  # next Monday: Hollmann writes and waits for an answer; Rafael is not asked about again
+  - clock: M1 06:00
+  - whatsapp_contact: {text: "consegue me mandar a proposta?", jid: "5511955550701@s.whatsapp.net", push_name: ""}
+  - clock: M1 11:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)esperando sua resposta.*Hollmann"
+      reply_not_matches: "sem nome|Rafael|5511955550702"
+      outbound_to_third_parties: 0
