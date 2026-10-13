@@ -1,8 +1,8 @@
 # Execução da fila — iniciada 2026-10-12 (2ª rodada)
 ## Estado
-- Change atual: evi-contact-names (fase: implementar) — task 1.1
+- Change atual: evi-ux-review (fase: implementar) — task 1.1
 - Ordem: evi-promise-context → evi-security-review → evi-contact-knowledge → evi-contact-names → evi-ux-review
-- Concluídos: evi-promise-context (arquivado 2026-10-13, commits 8d6472f..8c5b4c8 + archive), evi-security-review (arquivado 2026-10-13, commits e58da95..4ab5471 + archive), evi-contact-knowledge (arquivado 2026-10-13, commits 5b2ef99..4de7e01 + archive)
+- Concluídos: evi-promise-context (arquivado 2026-10-13, commits 8d6472f..8c5b4c8 + archive), evi-security-review (arquivado 2026-10-13, commits e58da95..4ab5471 + archive), evi-contact-knowledge (arquivado 2026-10-13, commits 5b2ef99..4de7e01 + archive), evi-contact-names (arquivado 2026-10-13, commits c762ca4..e300e74 + archive)
 - Pulados: evi-background-execution (#38) — condicional (inalterado)
 ## Decisões do usuário no preflight (2026-10-12)
 - Windmill só em `127.0.0.1:8001` (acesso remoto por túnel SSH / `tailscale serve`).
@@ -31,6 +31,9 @@
 - [ ] Contact-knowledge: primeira execução do lote com você (`curl -X POST -H "X-Api-Key: $EVI_API_KEY" "localhost:8002/jobs/contact-learn?wait=true"`; envia até 60 mensagens × 15 contatos para o OpenRouter ZDR, aprovado em 2026-10-12) e auditoria de 5 perfis (nenhum fato sem evidência, nenhum fato de metadado)
 - [ ] Avaliar em 2026-10-20 a validação do conhecimento de contato: ≥ 80% dos contatos ativos com Fatos/Em aberto atualizados na semana; auditoria de 10 perfis; títulos de promessa com objeto+pessoa ≥ 70%
 - [ ] Teste instável observado uma vez (suíte completa 1 falha, 3 reexecuções verdes) após os últimos commits — identificar na próxima falha com `pytest tests/unit -q -x`
+- [ ] Contact-names (ativar a sincronização da agenda): (1) Google Cloud → habilitar a People API e o escopo `contacts.readonly` na tela de consentimento; (2) Windmill (via túnel, `docs/remote-access.md`) → criar o resource OAuth `gcontacts` (mesmo Client ID/Secret do `gcal`); (3) `WINDMILL_GCONTACTS_RESOURCE` no `.env`; (4) `cd windmill && wmill sync push`; (5) `./scripts/evi-test contact-names-sync` (dry-run, revisar contagens) e `--apply`; (6) ligar o schedule `contact_names_sync_daily` (03:15) na UI — passos em `windmill/README.md` § Google Contacts
+- [ ] Avaliar em 2026-10-20 a validação dos nomes de contato: ≥ 90% das conversas diretas ativas (30 dias) com nome de agenda ou do usuário; 0 nomes do usuário sobrescritos
+- [ ] Nota de produto (BACKLOG): combinados antigos (`pending_commitments.source_label`) continuam mostrando o número depois da sincronização
 ## Bloqueios
 - (resolvido 2026-10-13 — usuário ajustou o teto do Gemini; SIM-DEBT-06 regravado, critical live 27/27) evi-contact-knowledge 4.1: o Gemini devolve `429 RESOURCE_EXHAUSTED: Your project has exceeded its monthly spending cap`. Impacto: (a) o chat de produção também usa essa chave — os logs do agent-api mostram 16 ocorrências de 429 nas últimas 12 h; (b) não dá para regravar o cassette de SIM-DEBT-06 (replay do tag `reply-debts` fica vermelho nesse cenário) nem rodar `critical --repeat 3 --llm live`. Tentado: 2 gravações (429 nas duas); espera não resolve (teto mensal). Precisa do usuário: aumentar/zerar o teto do projeto Gemini (https://aistudio.google.com/ → Spend / Billing). Depois: `./scripts/evi-sim run --id SIM-DEBT-06 --llm record`, `--id SIM-DEBT-06 --repeat 3 --llm live`, `./scripts/evi-sim run --tag reply-debts --llm replay`, `./scripts/evi-sim run --tag critical --repeat 3 --llm live`, e então a task 4.2. A fila retoma de 4.2 (migração `--apply` com você, primeira execução do lote, auditoria de 5 perfis).
 
