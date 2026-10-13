@@ -124,3 +124,38 @@ if __name__ == "__main__":
     test_format_contact_names()
     test_set_whatsapp_contact_name_tool()
     print("ok")
+
+
+def test_assign_contact_name_records_user_source():
+    """SCN-NAME-02: names set through chat are marked as the user's."""
+    with patch("db.init_db"), patch("db.upsert_whatsapp_contact") as up, patch(
+        "db.get_whatsapp_contact", return_value={"jid": "j", "display_name": "X"}
+    ), patch("services.contact_registry.update_contact_label"):
+        from services.contact_registry import assign_contact_name
+
+        assign_contact_name("j@s.whatsapp.net", display_name="X")
+    assert up.call_args.kwargs["name_source"] == "user"
+
+
+def test_paired_lid_inherits_the_phone_name():
+    """SCN-NAME-04."""
+    from services.contact_registry import effective_label
+
+    lid = {"jid": "123@lid", "display_name": None, "whatsapp_label": "~"}
+    phone = {"jid": "5511948260209@s.whatsapp.net", "display_name": "Hollmann"}
+    with patch("services.contact_identity.canonical_jid", return_value=phone["jid"]), patch(
+        "db.get_whatsapp_contact", return_value=phone
+    ):
+        assert effective_label(lid, "x") == "Hollmann"
+
+
+def test_lid_own_display_name_wins_and_failures_fall_back():
+    from services.contact_registry import effective_label
+
+    own = {"jid": "123@lid", "display_name": "Meu", "whatsapp_label": "~"}
+    assert effective_label(own) == "Meu"
+    unpaired = {"jid": "123@lid", "display_name": None, "whatsapp_label": "Push"}
+    with patch("services.contact_identity.canonical_jid", side_effect=RuntimeError("db")):
+        assert effective_label(unpaired) == "Push"
+    with patch("services.contact_identity.canonical_jid", return_value="123@lid"):
+        assert effective_label(unpaired) == "Push"

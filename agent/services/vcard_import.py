@@ -172,6 +172,106 @@ def build_registry_index(rows: Iterable[dict]) -> dict[str, list[dict]]:
     return index
 
 
+def apply_entries(
+    entries: Iterable[dict],
+    *,
+    source: str,
+    dry_run: bool = True,
+    limit: int = 5000,
+) -> dict:
+    """Apply `{"name", "phones"}` entries to the WhatsApp registry.
+
+    Producer-agnostic core shared by the vCard import (`source="vcard"`) and the
+    Google address-book sync (`source="agenda"`). Rules:
+
+    - match by `match_key`; a phone claimed by two DIFFERENT names, or one entry
+      hitting several WhatsApp rows, is skipped and counted `ambiguous`;
+    - writes only where `name_source` is empty/`agenda`/`vcard`; a row named by the
+      user (`user`) is never overwritten (`protected_user`);
+    - the previous label becomes an alias; contacts absent from the entries keep
+      their name; nothing is written when `dry_run`.
+    """
+    from db import list_whatsapp_contacts_db, upsert_whatsapp_contact
+
+    items = [
+        (str(e.get("name") or "").strip(), [str(p) for p in (e.get("phones") or [])])
+        for e in entries
+    ]
+    rep = {
+        "parsed": len(items),
+        "matched": 0,
+        "new_names": 0,
+        "changed": 0,
+        "unchanged": 0,
+        "ambiguous": 0,
+        "no_whatsapp": 0,
+        "protected_user": 0,
+        "skipped_no_phone": 0,
+        "dry_run": dry_run,
+        "examples": [],
+    }
+
+    # Names claimed per phone key across the whole batch.
+    names_by_key: dict[str, set[str]] = {}
+    for name, phones in items:
+        if not name:
+            continue
+        for phone in phones:
+            key = match_key(phone)
+            if key:
+                names_by_key.setdefault(key, set()).add(name.casefold())
+
+    index = build_registry_index(list_whatsapp_contacts_db(limit=limit))
+
+    for name, phones in items:
+        if not phones or not name:
+            rep["skipped_no_phone"] += 1
+            continue
+
+        keys = [k for k in (match_key(p) for p in phones) if k]
+        if any(len(names_by_key.get(k, ())) > 1 for k in keys):
+            rep["ambiguous"] += 1
+            rep["examples"].append(f"ambíguo: «{name}» divide telefone com outro nome")
+            continue
+
+        hits: list[dict] = []
+        for key in keys:
+            for row in index.get(key, []):
+                if row not in hits:
+                    hits.append(row)
+
+        if not hits:
+            rep["no_whatsapp"] += 1
+            continue
+        if len(hits) > 1:
+            # Better to leave it than to label the wrong person.
+            rep["ambiguous"] += 1
+            rep["examples"].append(f"ambíguo: «{name}» casa {len(hits)} contatos")
+            continue
+
+        row = hits[0]
+        rep["matched"] += 1
+        current = (row.get("display_name") or "").strip()
+        if current == name:
+            rep["unchanged"] += 1
+            continue
+        if (row.get("name_source") or "") == "user":
+            rep["protected_user"] += 1
+            continue
+
+        previous = (current or row.get("whatsapp_label") or "").strip()
+        aliases = [previous] if previous and previous != name else []
+        rep["changed" if current else "new_names"] += 1
+        if len(rep["examples"]) < 10:
+            rep["examples"].append(f"{previous or row['jid']} → {name}")
+        if not dry_run:
+            upsert_whatsapp_contact(
+                row["jid"], display_name=name, aliases=aliases, name_source=source
+            )
+
+    return rep
+
+
 def import_vcard(
     path: str | Path,
     *,
@@ -179,8 +279,6 @@ def import_vcard(
     limit: int = 5000,
 ) -> ImportReport:
     """Parse a .vcf and set `display_name` on matching WhatsApp contacts."""
-    from db import list_whatsapp_contacts_db, upsert_whatsapp_contact
-
     report = ImportReport(dry_run=dry_run)
     p = Path(path)
     if not p.is_file():
@@ -188,48 +286,18 @@ def import_vcard(
         return report
 
     entries = parse_vcards(p.read_text(encoding="utf-8", errors="replace"))
-    report.parsed = len(entries)
-    index = build_registry_index(list_whatsapp_contacts_db(limit=limit))
-
-    for entry in entries:
-        if not entry.phones or not entry.name:
-            report.skipped_no_phone += 1
-            continue
-
-        hits: list[dict] = []
-        for phone in entry.phones:
-            key = match_key(phone)
-            if not key:
-                continue
-            for row in index.get(key, []):
-                if row not in hits:
-                    hits.append(row)
-
-        if not hits:
-            report.unmatched += 1
-            continue
-        if len(hits) > 1:
-            # Better to leave it than to label the wrong person.
-            report.ambiguous += 1
-            report.examples.append(
-                f"ambíguo: «{entry.name}» casa {len(hits)} contatos"
-            )
-            continue
-
-        row = hits[0]
-        report.matched += 1
-        if (row.get("display_name") or "") == entry.name:
-            report.unchanged += 1
-            continue
-
-        previous = (row.get("display_name") or row.get("whatsapp_label") or "").strip()
-        aliases = [previous] if previous and previous != entry.name else []
-        report.updated += 1
-        if len(report.examples) < 10:
-            report.examples.append(f"{previous or row['jid']} → {entry.name}")
-        if not dry_run:
-            upsert_whatsapp_contact(
-                row["jid"], display_name=entry.name, aliases=aliases
-            )
-
+    r = apply_entries(
+        [{"name": e.name, "phones": e.phones} for e in entries],
+        source="vcard",
+        dry_run=dry_run,
+        limit=limit,
+    )
+    report.parsed = r["parsed"]
+    report.matched = r["matched"]
+    report.updated = r["new_names"] + r["changed"]
+    report.unchanged = r["unchanged"]
+    report.unmatched = r["no_whatsapp"]
+    report.ambiguous = r["ambiguous"]
+    report.skipped_no_phone = r["skipped_no_phone"]
+    report.examples = list(r["examples"])
     return report

@@ -26,7 +26,28 @@ def init_db() -> None:
         if _db_initialized:
             return
         _run_migrations()
+        backfill_name_source()
         _db_initialized = True
+
+
+def backfill_name_source() -> int:
+    """Mark names that predate ``name_source`` (idempotent; returns rows touched).
+
+    The two historical writers (``set_whatsapp_contact_name`` and the vCard import)
+    left the same trace: ``display_name`` plus the old pushName as an alias, so they
+    are NOT distinguishable in stored data. Conservative choice: every existing
+    ``display_name`` becomes ``user`` and is never overwritten by the address-book
+    sync. From now on the vCard import / sync write ``vcard`` / ``agenda`` explicitly.
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE whatsapp_contacts SET name_source = 'user' "
+                "WHERE name_source IS NULL AND COALESCE(TRIM(display_name), '') <> ''"
+            )
+            n = cur.rowcount
+        conn.commit()
+    return n
 
 
 def _run_migrations() -> None:
@@ -98,6 +119,8 @@ def _run_migrations() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_whatsapp_contacts_display
                     ON whatsapp_contacts(display_name);
+                ALTER TABLE whatsapp_contacts
+                    ADD COLUMN IF NOT EXISTS name_source text;
                 CREATE TABLE IF NOT EXISTS turn_log (
                     id BIGSERIAL PRIMARY KEY,
                     ts TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -627,8 +650,13 @@ def upsert_whatsapp_contact(
     aliases: List[str] | None = None,
     phone: str | None = None,
     notes: str | None = None,
+    name_source: str | None = None,
 ) -> None:
-    """Insert or update a WhatsApp contact row."""
+    """Insert or update a WhatsApp contact row.
+
+    ``name_source`` (user | agenda | vcard) records who set ``display_name``; a
+    display_name written without one counts as the user's.
+    """
     if not jid:
         return
     import json
@@ -644,13 +672,18 @@ def upsert_whatsapp_contact(
                 (jid,),
             )
             cur.execute(
-                "SELECT whatsapp_label, display_name, aliases, phone, notes FROM whatsapp_contacts "
-                "WHERE jid = %s FOR UPDATE",
+                "SELECT whatsapp_label, display_name, aliases, phone, notes, name_source "
+                "FROM whatsapp_contacts WHERE jid = %s FOR UPDATE",
                 (jid,),
             )
             row = cur.fetchone()
             if row:
-                wl, dn, existing_aliases, ph, nt = row
+                wl, dn, existing_aliases, ph, nt, ns = row
+                merged_ns = ns
+                if display_name is not None:
+                    merged_ns = name_source or "user"
+                elif name_source is not None:
+                    merged_ns = name_source
                 merged_wl = whatsapp_label if whatsapp_label is not None else wl
                 merged_dn = display_name if display_name is not None else dn
                 merged_ph = phone if phone is not None else ph
@@ -671,6 +704,7 @@ def upsert_whatsapp_contact(
                         aliases = %s::jsonb,
                         phone = %s,
                         notes = %s,
+                        name_source = %s,
                         updated_at = NOW()
                     WHERE jid = %s
                     """,
@@ -680,6 +714,7 @@ def upsert_whatsapp_contact(
                         json.dumps(alias_list),
                         merged_ph,
                         merged_nt,
+                        merged_ns,
                         jid,
                     ),
                 )
@@ -688,8 +723,9 @@ def upsert_whatsapp_contact(
                 cur.execute(
                     """
                     INSERT INTO whatsapp_contacts (
-                        jid, whatsapp_label, display_name, aliases, phone, notes
-                    ) VALUES (%s, %s, %s, %s::jsonb, %s, %s)
+                        jid, whatsapp_label, display_name, aliases, phone, notes,
+                        name_source
+                    ) VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s)
                     """,
                     (
                         jid,
@@ -698,6 +734,7 @@ def upsert_whatsapp_contact(
                         json.dumps(alias_list),
                         phone,
                         notes,
+                        (name_source or "user") if display_name is not None else name_source,
                     ),
                 )
         conn.commit()
@@ -709,7 +746,7 @@ def get_whatsapp_contact(jid: str) -> Dict[str, Any] | None:
             cur.execute(
                 """
                 SELECT jid, whatsapp_label, display_name, aliases, phone, notes,
-                       created_at, updated_at
+                       name_source, created_at, updated_at
                 FROM whatsapp_contacts
                 WHERE jid = %s
                 """,
@@ -725,7 +762,7 @@ def list_whatsapp_contacts_db(limit: int = 500) -> List[Dict[str, Any]]:
             cur.execute(
                 """
                 SELECT jid, whatsapp_label, display_name, aliases, phone, notes,
-                       created_at, updated_at
+                       name_source, created_at, updated_at
                 FROM whatsapp_contacts
                 ORDER BY COALESCE(display_name, whatsapp_label, jid)
                 LIMIT %s

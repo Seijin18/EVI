@@ -20,12 +20,42 @@ def _normalize_aliases(raw: Any) -> list[str]:
     return []
 
 
+def _paired_phone_label(jid: str) -> str:
+    """Label of the phone JID paired with a ``@lid`` (empty when none/unavailable)."""
+    if not jid.endswith("@lid"):
+        return ""
+    try:
+        # Lazy imports: contact_identity pulls db, which imports back into services.
+        from services.contact_identity import canonical_jid
+
+        phone = canonical_jid(jid)
+        if not phone or phone == jid:
+            return ""
+        from db import get_whatsapp_contact
+
+        row = get_whatsapp_contact(phone)
+        if not row:
+            return ""
+        return (row.get("display_name") or "").strip() or (
+            row.get("whatsapp_label") or ""
+        ).strip()
+    except Exception as exc:  # noqa: BLE001
+        from services.soft_fail import soft_fail
+
+        soft_fail("contact_registry.paired_phone_label", exc)
+        return ""
+
+
 def effective_label(row: dict[str, Any] | None, fallback: str = "") -> str:
     if not row:
         return fallback
     display = (row.get("display_name") or "").strip()
     if display:
         return display
+    # A paired @lid inherits the phone's name (SCN-NAME-04).
+    paired = _paired_phone_label(str(row.get("jid") or ""))
+    if paired:
+        return paired
     whatsapp = (row.get("whatsapp_label") or "").strip()
     if whatsapp:
         return whatsapp
@@ -101,6 +131,7 @@ def assign_contact_name(
     display_name: str,
     aliases: list[str] | None = None,
     whatsapp_label: str = "",
+    name_source: str = "user",
 ) -> dict[str, Any]:
     """Set preferred display name and optional aliases for a JID."""
     from db import get_whatsapp_contact, init_db, upsert_whatsapp_contact
@@ -117,6 +148,7 @@ def assign_contact_name(
         display_name=display_name,
         aliases=clean_aliases or None,
         whatsapp_label=wa_label or None,
+        name_source=name_source,
     )
     try:
         update_contact_label(jid, display_name)

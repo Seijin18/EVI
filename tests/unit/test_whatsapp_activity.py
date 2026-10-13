@@ -96,3 +96,14 @@ def test_summary_is_wrapped_and_context_cut_on_whole_lines():
     assert ctx.count("«externo:") == ctx.count("«/externo»")
     assert ctx.rstrip().endswith("«/externo»")
     assert "«externo:whatsapp_resumo»" in out and INJECTION not in _outside_blocks(out)
+
+
+def test_scn_name_04_summary_shows_phone_name_for_paired_lid():
+    """The @lid chat resolves through canonical_jid to the phone's agenda name."""
+    from services.evolution_discovery import resolve_chat_label
+
+    phone = "5511948260209@s.whatsapp.net"
+    registry = {phone: {"jid": phone, "display_name": "Hollmann", "name_source": "agenda"}}
+    with patch("services.contact_identity.canonical_jid", return_value=phone):
+        label, _ = resolve_chat_label("123456@lid", "~", registry, alt_jid="")
+    assert label == "Hollmann"

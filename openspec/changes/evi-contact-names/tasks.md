@@ -7,22 +7,22 @@
 
 ## 2. Aplicação
 
-- [ ] 2.1 `name_source` em `whatsapp_contacts` (migração: nomes atuais com alias de vCard → `vcard`; os gravados por `set_whatsapp_contact_name` → `user`)
+- [x] 2.1 `name_source` em `whatsapp_contacts` (migração: nomes atuais com alias de vCard → `vcard`; os gravados por `set_whatsapp_contact_name` → `user`)
   - SCN-NAME-02
   - Files: `agent/db.py`, `agent/services/contact_registry.py`, `agent/tools/contact_tool.py`, `tests/unit/test_db.py`, `tests/unit/test_contact_registry.py`
   - Verify: `DATABASE_URL=<PG efêmero> EVI_TEST_EPHEMERAL_DB=1 PYTHONPATH=agent python3 -m pytest tests/unit/test_db.py tests/unit/test_contact_registry.py -q`
 
-- [ ] 2.2 `apply_entries()` genérico (vCard vira produtor); ambíguos reportados; `user` nunca sobrescrito
+- [x] 2.2 `apply_entries()` genérico (vCard vira produtor); ambíguos reportados; `user` nunca sobrescrito
   - SCN-NAME-02, SCN-NAME-03, SCN-MEM-12
   - Files: `agent/services/vcard_import.py`, `tests/unit/test_vcard_import.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_vcard_import.py -q` e `./scripts/evi-test vcard`
 
-- [ ] 2.3 `contact_names.sync()` + `POST /jobs/contact-names-sync` + `./scripts/evi-test contact-names-sync` (dry-run padrão)
+- [x] 2.3 `contact_names.sync()` + `POST /jobs/contact-names-sync` + `./scripts/evi-test contact-names-sync` (dry-run padrão)
   - SCN-NAME-01, SCN-NAME-03
   - Files: `agent/services/contact_names.py`, `agent/main.py`, `agent/testing/cli.py`, `tests/unit/test_contact_names.py`, `.env.example`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_names.py -q` e `./scripts/evi-test smoke`
 
-- [ ] 2.4 Nome via `canonical_jid()`: `@lid` pareado herda nome; resumo do WhatsApp e dívidas usam
+- [x] 2.4 Nome via `canonical_jid()`: `@lid` pareado herda nome; resumo do WhatsApp e dívidas usam
   - SCN-NAME-04
   - Files: `agent/services/contact_registry.py`, `agent/services/evolution_discovery.py`, `tests/unit/test_contact_registry.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_registry.py tests/unit/test_whatsapp_activity.py -q`

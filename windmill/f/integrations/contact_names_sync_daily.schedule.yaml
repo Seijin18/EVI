@@ -1,0 +1,8 @@
+summary: Sincroniza a agenda Google com os nomes do WhatsApp (03:15)
+schedule: '0 15 3 * * *'
+timezone: America/Sao_Paulo
+script_path: f/integrations/contact_names_sync
+is_flow: false
+args:
+  apply: true
+enabled: false

@@ -208,6 +208,11 @@ def resolve_chat_label(
 
     is_group = "@g.us" in jid
     phone_jid = "" if is_group else (jid if jid.endswith("@s.whatsapp.net") else alt_jid)
+    if not phone_jid and jid.endswith("@lid"):
+        from services.contact_identity import canonical_jid
+
+        paired = canonical_jid(jid)
+        phone_jid = paired if paired.endswith("@s.whatsapp.net") else ""
     row = registry.get(phone_jid) or registry.get(jid)
     name = effective_label(row, "")
     if _looks_like_id(name):

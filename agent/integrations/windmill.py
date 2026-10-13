@@ -43,6 +43,10 @@ _OPERATION_MAP: dict[str, tuple[str, str]] = {
         "WINDMILL_WEBHOOK_EMAIL_SEARCH",
         "http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/search_emails",
     ),
+    "list_contacts": (
+        "WINDMILL_WEBHOOK_LIST_CONTACTS",
+        "http://windmill-server:8000/api/w/evi/jobs/run_wait_result/p/f/integrations/list_contacts",
+    ),
     "list_calendars": (
         "WINDMILL_WEBHOOK_LIST_CALENDARS",
         "http://windmill-server:8000/api/w/evi/jobs/run/p/f/integrations/list_calendars",

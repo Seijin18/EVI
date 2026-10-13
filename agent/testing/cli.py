@@ -1417,6 +1417,19 @@ def run_contact_knowledge_migrate(extra: list[str]) -> bool:
     return True
 
 
+def run_contact_names_sync(extra: list[str]) -> bool:
+    """``contact-names-sync [--apply]`` — Google address book -> WhatsApp names.
+
+    Dry-run by default; one Windmill call, no LLM; prints counts only (run inside agent-api).
+    """
+    from services import contact_names
+
+    apply = "--apply" in extra
+    report = contact_names.sync(dry_run=not apply)
+    print(contact_names.format_sync(report))
+    return report.get("status") in ("ok", "disabled")
+
+
 def run_promise_sweep() -> bool:
     """``promise-sweep`` — run the daily fulfilment sweep once (agent-api container)."""
     from services import promise_context
@@ -1484,10 +1497,11 @@ def main() -> int:
         "promise-sweep": run_promise_sweep,
         "contact-identity-migrate": lambda: run_contact_identity_migrate(extra),
         "contact-knowledge-migrate": lambda: run_contact_knowledge_migrate(extra),
+        "contact-names-sync": lambda: run_contact_names_sync(extra),
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
 
-    if extra and feature not in ("llm-eval", "llm-eval-collect", "promise-reeval", "contact-identity-migrate", "contact-knowledge-migrate"):
+    if extra and feature not in ("llm-eval", "llm-eval-collect", "promise-reeval", "contact-identity-migrate", "contact-knowledge-migrate", "contact-names-sync"):
         parser.error(f"unrecognized arguments: {' '.join(extra)}")
 
     if feature not in runners:

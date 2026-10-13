@@ -1,0 +1,12 @@
+summary: ''
+description: ''
+lock: '!inline f/integrations/contact_names_sync.script.lock'
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    apply:
+      type: boolean
+      default: true
+  required: []

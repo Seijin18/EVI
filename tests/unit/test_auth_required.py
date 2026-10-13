@@ -33,6 +33,7 @@ PROTECTED = [
     ("post", "/jobs/daily-summary", {}),
     ("post", "/jobs/heartbeat", {}),
     ("post", "/jobs/contact-learn", {}),
+    ("post", "/jobs/contact-names-sync", {}),
     ("post", "/webhooks/telegram", {"message": {}}),
     ("post", "/webhooks/evolution", {}),
     ("get", "/metrics", None),

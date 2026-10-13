@@ -10,6 +10,7 @@ _agent = Path(__file__).resolve().parents[2] / "agent"
 sys.path.insert(0, str(_agent))
 
 from services.vcard_import import (  # noqa: E402
+    apply_entries,
     build_registry_index,
     import_vcard,
     match_key,
@@ -227,3 +228,82 @@ def test_missing_file_is_reported_not_raised(tmp_path):
     assert report.parsed == 0
     up.assert_not_called()
     assert "não encontrado" in report.summary()
+
+
+# --- apply_entries (SCN-NAME-02/03) --------------------------------------------
+
+
+def _apply(entries, registry, *, source="agenda", dry_run=False):
+    with patch("db.list_whatsapp_contacts_db", return_value=registry), patch(
+        "db.upsert_whatsapp_contact"
+    ) as up:
+        return apply_entries(entries, source=source, dry_run=dry_run), up
+
+
+def test_agenda_names_a_bare_number_and_keeps_the_label_as_alias():
+    """SCN-NAME-03."""
+    registry = [{"jid": "5511948260209@s.whatsapp.net", "display_name": None, "whatsapp_label": "+55 11 94826-0209"}]
+    rep, up = _apply([{"name": "Hollmann", "phones": ["(11) 4826-0209"]}], registry)
+    assert rep["matched"] == 1 and rep["new_names"] == 1 and rep["changed"] == 0
+    kw = up.call_args.kwargs
+    assert kw["display_name"] == "Hollmann" and kw["name_source"] == "agenda"
+    assert kw["aliases"] == ["+55 11 94826-0209"]
+
+
+def test_user_named_contact_is_never_overwritten():
+    """SCN-NAME-02."""
+    registry = [{"jid": "5511948260209@s.whatsapp.net", "display_name": "Hollmann", "name_source": "user"}]
+    rep, up = _apply([{"name": "Pedro H", "phones": ["11948260209"]}], registry)
+    assert rep["protected_user"] == 1 and rep["changed"] == 0
+    up.assert_not_called()
+
+
+def test_agenda_and_vcard_names_can_be_updated():
+    registry = [
+        {"jid": "5511987654321@s.whatsapp.net", "display_name": "Velho", "name_source": "agenda"},
+        {"jid": "5511912345678@s.whatsapp.net", "display_name": "Antigo", "name_source": "vcard"},
+    ]
+    rep, up = _apply(
+        [{"name": "Novo", "phones": ["11987654321"]}, {"name": "Outro", "phones": ["11912345678"]}],
+        registry,
+    )
+    assert rep["changed"] == 2 and up.call_count == 2
+    assert up.call_args_list[0].kwargs["aliases"] == ["Velho"]
+
+
+def test_phone_with_two_different_names_is_ambiguous():
+    registry = [{"jid": "5511987654321@s.whatsapp.net", "display_name": None}]
+    rep, up = _apply(
+        [{"name": "A", "phones": ["11987654321"]}, {"name": "B", "phones": ["(11) 98765-4321"]}],
+        registry,
+    )
+    assert rep["ambiguous"] == 2 and rep["matched"] == 0
+    up.assert_not_called()
+
+
+def test_same_name_twice_is_not_ambiguous():
+    registry = [{"jid": "5511987654321@s.whatsapp.net", "display_name": None}]
+    rep, up = _apply(
+        [{"name": "A", "phones": ["11987654321"]}, {"name": "a", "phones": ["11987654321"]}],
+        registry,
+    )
+    assert rep["ambiguous"] == 0 and rep["matched"] == 2
+
+
+def test_missing_from_entries_keeps_name_and_no_whatsapp_is_counted():
+    registry = [{"jid": "5511987654321@s.whatsapp.net", "display_name": "Fica", "name_source": "agenda"}]
+    rep, up = _apply([{"name": "Sem Zap", "phones": ["21900000000"]}], registry)
+    assert rep["no_whatsapp"] == 1
+    up.assert_not_called()
+
+
+def test_apply_entries_dry_run_never_writes():
+    registry = [{"jid": "5511987654321@s.whatsapp.net", "display_name": None}]
+    rep, up = _apply([{"name": "A", "phones": ["11987654321"]}], registry, dry_run=True)
+    assert rep["new_names"] == 1
+    up.assert_not_called()
+
+
+def test_import_vcard_writes_source_vcard(vcf):
+    _, up = _run(vcf, dry_run=False)
+    assert up.call_args.kwargs["name_source"] == "vcard"

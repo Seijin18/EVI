@@ -849,6 +849,26 @@ def import_contacts_job(
     return {"ok": True, "summary": report.summary(), **report.__dict__}
 
 
+@app.post("/jobs/contact-names-sync")
+def contact_names_sync_job(
+    apply: bool = False, wait: bool = True, _: None = Depends(verify_api_key)
+):
+    """Sync the Google address book into WhatsApp contact names. Dry-run unless `apply=true`.
+
+    One Windmill call (120 s guard), no LLM, so it runs inline by default and returns counts.
+    A Windmill-scheduled caller must pass `wait=false` (single worker: the script would wait
+    on a job that calls back into Windmill); that runs in the background.
+    """
+    from services.background_jobs import run_in_background, run_inline
+    from services.contact_names import sync, sync_enabled
+
+    if not sync_enabled():
+        return {"status": "disabled"}
+    if wait:
+        return run_inline("contact-names-sync", sync, dry_run=not apply)
+    return run_in_background("contact-names-sync", sync, dry_run=not apply)
+
+
 @app.post("/jobs/contact-learn")
 def contact_learn_job(wait: bool = False, _: None = Depends(verify_api_key)):
     """Windmill cron target: update the knowledge of contacts with new messages (no backfill).

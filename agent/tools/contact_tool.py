@@ -248,6 +248,7 @@ def set_whatsapp_contact_name(
         display_name=display,
         aliases=aliases,
         whatsapp_label=whatsapp_label or current_label,
+        name_source="user",
     )
     if is_direct_jid(jid):
         ensure_contact(jid, label=display)

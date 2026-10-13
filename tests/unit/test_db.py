@@ -370,6 +370,36 @@ def test_upsert_merges_aliases_without_duplicating():
     assert "pedrão" in lowered
 
 
+def test_name_source_is_recorded_and_defaults_to_user():
+    """SCN-NAME-02: who set a name is stored; an unlabeled display_name is the user's."""
+    import db
+
+    jid = f"{_uid()}@s.whatsapp.net"
+    db.upsert_whatsapp_contact(jid, whatsapp_label="PN")
+    assert db.get_whatsapp_contact(jid)["name_source"] is None
+    db.upsert_whatsapp_contact(jid, display_name="Ana", name_source="agenda")
+    assert db.get_whatsapp_contact(jid)["name_source"] == "agenda"
+    db.upsert_whatsapp_contact(jid, aliases=["x"])
+    assert db.get_whatsapp_contact(jid)["name_source"] == "agenda", "unrelated writes keep it"
+    db.upsert_whatsapp_contact(jid, display_name="Ana Maria")
+    assert db.get_whatsapp_contact(jid)["name_source"] == "user"
+
+
+def test_backfill_marks_existing_names_as_user_and_is_idempotent():
+    import db
+
+    named, bare = f"{_uid()}@s.whatsapp.net", f"{_uid()}@s.whatsapp.net"
+    db.upsert_whatsapp_contact(named, display_name="Antigo")
+    db.upsert_whatsapp_contact(bare, whatsapp_label="PN")
+    with db._conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE whatsapp_contacts SET name_source = NULL WHERE jid = %s", (named,))
+        conn.commit()
+    assert db.backfill_name_source() >= 1
+    assert db.get_whatsapp_contact(named)["name_source"] == "user"
+    assert db.get_whatsapp_contact(bare)["name_source"] is None
+    assert db.backfill_name_source() == 0
+
+
 def test_upsert_ignores_an_empty_jid():
     import db
 
