@@ -543,8 +543,14 @@ def _window_rows(jid: str, since: datetime | None) -> list[tuple[datetime, str, 
     days = 30 if since is None else max(1, min(90, (now - since).days + 2))
     rows = read_timeline_since(jid, days=days, limit=1_000_000)
     tz = _tz()
+    # A commitment row ("<title>: <raw text>") duplicates the message that produced it (same
+    # source_id) with a later, sub-second ts: keeping it would repeat the message, mislabel it
+    # and make the prompt depend on how that ts sorts against the next message.
+    msg_ids = {str(r.get("source_id")) for r in rows if r.get("commitment_id") is None and r.get("source_id")}
     out = []
     for row in rows:
+        if row.get("commitment_id") is not None and str(row.get("source_id")) in msg_ids:
+            continue
         try:
             ts = datetime.fromisoformat(str(row.get("ts") or "").replace("Z", "+00:00"))
         except ValueError:

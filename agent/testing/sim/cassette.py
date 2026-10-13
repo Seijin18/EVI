@@ -306,6 +306,11 @@ def structured_call(mode: str, task: str, prompt: str, schema: dict, call) -> di
     """Record (``call()`` is the real provider call) or replay one structured answer."""
     key = structured_key(task, prompt, schema, _today())
     st = _state()
+    if os.getenv("EVI_SIM_DUMP_STRUCTURED", "").strip() == "1":  # debug: full prompt per call, to diff stale keys
+        try:
+            (CASSETTE_DIR / f"dump-{key[11:23]}-{mode}.txt").write_text(prompt, encoding="utf-8")
+        except OSError:
+            pass
     if mode == "replay":
         return st.lookup(key, prompt[-200:])
     out = call()

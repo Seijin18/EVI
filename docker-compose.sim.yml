@@ -17,6 +17,8 @@ services:
       # gemini (live) | sim-record | sim-replay; chosen by `scripts/evi-sim --llm`.
       EVI_LLM_PROVIDER: ${EVI_SIM_LLM_PROVIDER:-gemini}
       EVI_BACKGROUND_LLM_PROVIDER: ${EVI_SIM_LLM_PROVIDER:-gemini}
+      # debug: dump each structured prompt to /tmp/evi-sim-cassettes/dump-*.txt (set EVI_SIM_DUMP_STRUCTURED=1)
+      EVI_SIM_DUMP_STRUCTURED: ${EVI_SIM_DUMP_STRUCTURED:-}
     ports: ["127.0.0.1:18000:8000"]
     volumes:
       - sim-clock:/sim

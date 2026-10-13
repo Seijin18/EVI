@@ -608,3 +608,30 @@ def test_migrate_does_not_duplicate_block_already_in_history(mem):
     ck.migrate_syntheses(apply=True)
     assert hist.read_text(encoding="utf-8").count("Conversaram sobre o projeto X.") == 1
     assert "## Síntese" not in p.read_text(encoding="utf-8")
+
+
+def test_commitment_row_duplicating_a_message_is_not_in_the_window(mem):
+    """The commitment timeline row (same source_id, sub-second later ts) must not change the window
+    whichever side of the next message it sorts on (sim flake: SIM-MEM-01)."""
+    now = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=1)
+    cf.ensure_contact(JID, label="Fê")
+    windows = []
+    for me_ts in (now, now + timedelta(seconds=2)):  # same second as the contact's message, or later
+        cf.contact_dir(JID).joinpath("timeline.jsonl").write_text("", encoding="utf-8")
+        _tl("m1", "consegue mandar a planilha?", now)
+        cf.append_timeline(JID, source_id="m1", text_preview="Mandar a planilha: consegue mandar a planilha?",
+                           commitment_id=1, ts=(now + timedelta(milliseconds=70)).isoformat())
+        _tl("m2", "mando sim", me_ts, me=True)
+        windows.append([(me, t) for _, _, me, t in ck._window_rows(JID, None)])
+    assert windows[0] == windows[1] == [(False, "consegue mandar a planilha?"), (True, "mando sim")]
+
+
+def test_commitment_row_without_its_message_is_kept(mem, fake_llm):
+    state, calls = fake_llm
+    now = datetime.now(timezone.utc) - timedelta(hours=1)
+    cf.ensure_contact(JID, label="Fê")
+    cf.append_timeline(JID, source_id="orphan", text_preview="Entregar o relatório: até sexta",
+                       commitment_id=2, ts=now.isoformat())
+    state["answer"] = {"add": [], "remove": [], "open": []}
+    ck.update_contact_knowledge(JID)
+    assert "Entregar o relatório" in calls[0]["prompt"]
