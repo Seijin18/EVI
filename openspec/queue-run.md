@@ -1,4 +1,22 @@
-# Execução da fila — iniciada 2026-10-10
+# Execução da fila — iniciada 2026-10-12 (2ª rodada)
+## Estado
+- Change atual: evi-promise-context (fase: implementar) — task 2.0
+- Ordem: evi-promise-context → evi-security-review → evi-contact-knowledge → evi-contact-names → evi-ux-review
+- Concluídos: —
+- Pulados: evi-background-execution (#38) — condicional (inalterado)
+## Decisões do usuário no preflight (2026-10-12)
+- Windmill só em `127.0.0.1:8001` (acesso remoto por túnel SSH / `tailscale serve`).
+- Operações ao vivo (rotação de senhas padrão, chave do Qdrant, webhook global da Evolution) **executadas durante a fila**; se a Evolution pedir QR, parar e chamar o usuário.
+- Ferramentas autorizadas: `pip-audit` (pinado) e `trivy` (imagem Docker oficial, versão fixa).
+- Revisões com o usuário (threat model, achados, `promise-reeval --apply`, avaliação de briefings) são assíncronas: dry-run/rascunho na fila, revisão em "Pendências".
+## Decisões tomadas sem o usuário
+- 2026-10-12 base: `test_daily_summary` falhava entre 21h e 24h (timeline em UTC × dia local) → `8d6472f`. Gates rodam com `.venv/bin` no PATH (o `python3` do sistema não tem pytest/psycopg2).
+## Pendências do usuário (não bloqueantes)
+## Bloqueios
+
+---
+
+# Execução anterior — iniciada 2026-10-10
 ## Estado
 - Change atual: — (fila concluída em 2026-10-11)
 - Ordem: evi-sim-harness → evi-usage-validation → evi-morning-briefing → evi-reminders → evi-reply-debts → evi-voice-input → evi-perceived-reliability → evi-prompt-injection-model
