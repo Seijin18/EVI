@@ -74,7 +74,7 @@ services:
       - DATABASE_SAVE_DATA_NEW_MESSAGE=true
       - CACHE_REDIS_ENABLED=true
       - CACHE_REDIS_URI=redis://redis:6379/0
-      - WEBHOOK_GLOBAL_ENABLED=true
+      - WEBHOOK_GLOBAL_ENABLED=false
       - WEBHOOK_GLOBAL_URL=${EVOLUTION_WEBHOOK_URL:-http://agent-api:8000/webhooks/evolution}
       - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
       - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
