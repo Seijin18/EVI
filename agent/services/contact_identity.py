@@ -21,6 +21,7 @@ from services.soft_fail import soft_fail
 _LID = "@lid"
 _PHONE = "@s.whatsapp.net"
 _TTL_S = 60.0
+_FAIL_TTL_S = 30.0  # unreachable DB: do not retry on every @lid message
 _cache: dict[str, tuple[float, str]] = {}
 _MERGED_MARK = ".merged-"
 
@@ -45,6 +46,7 @@ def canonical_jid(jid: str) -> str:
         phone = db.get_jid_alias(j) or j
     except Exception as exc:  # noqa: BLE001
         soft_fail("contact_identity.canonical_jid", exc)
+        _cache[j] = (now + _FAIL_TTL_S, j)
         return j
     _cache[j] = (now + _TTL_S, phone)
     return phone
@@ -64,6 +66,8 @@ def record_alias(lid: str, phone_jid: str) -> bool:
 
         db.init_db()
         db.upsert_jid_alias(lid, phone_jid)
+        # State recorded under the lid before the alias was known joins the phone's.
+        db.merge_conversation_state(lid, phone_jid)
     except Exception as exc:  # noqa: BLE001
         soft_fail("contact_identity.record_alias", exc)
         return False
@@ -153,9 +157,14 @@ def _merge_dir(lid_dir: Path, phone_dir: Path, phone_jid: str, stamp: str) -> di
     merged, added = merge_timelines(
         _read_jsonl(phone_dir / "timeline.jsonl"), _read_jsonl(lid_dir / "timeline.jsonl")
     )
-    (phone_dir / "timeline.jsonl").write_text(
+    tl = phone_dir / "timeline.jsonl"
+    if tl.is_file() and tl.stat().st_size:
+        shutil.copy2(tl, phone_dir / f"timeline.jsonl.pre-merge-{stamp}")
+    tmp = phone_dir / f"timeline.jsonl.tmp-{os.getpid()}"
+    tmp.write_text(
         "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in merged), encoding="utf-8"
     )
+    os.replace(tmp, tl)
 
     # summaries/ and history.md: copied only when absent
     copied = 0
@@ -182,16 +191,21 @@ def _merge_dir(lid_dir: Path, phone_dir: Path, phone_jid: str, stamp: str) -> di
         body = lid_profile.read_text(encoding="utf-8").strip()
         if body:
             hist = phone_dir / "history.md"
-            prev = hist.read_text(encoding="utf-8").rstrip() + "\n\n" if hist.exists() else ""
-            hist.write_text(prev + "## Perfil anterior (@lid)\n\n" + body + "\n", encoding="utf-8")
-            profile_moved = 1
+            block = "## Perfil anterior (@lid)\n\n" + body + "\n"
+            cur = hist.read_text(encoding="utf-8") if hist.exists() else ""
+            if block not in cur:
+                prev = cur.rstrip() + "\n\n" if cur.strip() else ""
+                hist.write_text(prev + block, encoding="utf-8")
+                profile_moved = 1
     return {"timeline_added": added, "files_copied": copied, "profiles_to_history": profile_moved}
 
 
 def migrate_lid_dirs(*, apply: bool = False) -> dict[str, int]:
     """Merge every ``@lid`` contact dir whose alias is known into the phone's dir.
 
-    Dry-run by default. The lid dir is renamed ``<dir>.merged-<ts>``, never deleted;
+    Dry-run by default; run ``--apply`` when idle (no live ingestion). The phone
+    timeline is backed up to ``timeline.jsonl.pre-merge-<ts>`` and replaced atomically.
+    The lid dir is renamed ``<dir>.merged-<ts>``, never deleted;
     ``wa_conversation_state`` rows are folded lid -> phone. Returns counts only.
     """
     from services.contact_filesystem import (

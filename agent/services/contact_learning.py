@@ -17,7 +17,8 @@ def learn_contact(
     """Backfill WhatsApp history (optional) then update the contact's structured knowledge.
 
     ``days`` bounds the backfill only; the knowledge update reads the timeline messages
-    newer than the profile's last update (see ``update_contact_knowledge``).
+    newer than the profile's last update (see ``update_contact_knowledge``; the first run
+    uses the last 30 days stored).
     """
     days = max(1, min(int(days), 90))
     resolved, err = resolve_contact_for_query(name_or_phone)
@@ -57,7 +58,7 @@ def learn_contact(
     body = (
         f"Conhecimento sobre **{wrap_external(label, 'perfil_contato', 120)}** atualizado: "
         f"+{result['added']} fato(s), -{result['removed']} removido(s), "
-        f"{result['open']} em aberto.\n\n"
+        f"{result['open']} em aberto (aprende só as mensagens novas desde a última atualização).\n\n"
         f"{wrap_external(read_contact_knowledge(jid), 'perfil_contato', 4000)}"
     )
     if backfill_note:

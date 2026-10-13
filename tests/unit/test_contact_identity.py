@@ -28,6 +28,7 @@ def aliases(monkeypatch, tmp_path):
     monkeypatch.setattr(db, "init_db", lambda: None)
     monkeypatch.setattr(db, "get_jid_alias", lambda lid: store.get(lid))
     monkeypatch.setattr(db, "upsert_jid_alias", lambda lid, p: store.__setitem__(lid, p))
+    monkeypatch.setattr(db, "merge_conversation_state", lambda src, dst: False)
     monkeypatch.setattr(
         db, "list_jid_aliases", lambda: [{"lid": k, "phone_jid": v} for k, v in store.items()]
     )
@@ -239,3 +240,107 @@ def test_db_alias_roundtrip_and_state_merge():
     st = db.get_state(PHONE)
     assert st["last_in_preview"] == "novo" and st["last_in_at"] == t0 + timedelta(hours=2)
     assert st["last_out_at"] == t0 + timedelta(hours=1)
+
+
+# --- stale @lid state (inbound before the alias was known) -------------------
+
+
+@pytest.fixture
+def real_db(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", db.DATABASE_URL)
+    db.reset_db_init_for_tests()
+    db.init_db()
+    contact_identity.reset_cache_for_tests()
+    yield
+    contact_identity.reset_cache_for_tests()
+
+
+def _debt_jids(now):
+    from services import reply_debts
+
+    return [d["jid"] for d in reply_debts.list_debts(now=now, min_hours=1)]
+
+
+@pytest.mark.ephemeral_db
+def test_stale_lid_inbound_then_reply_under_phone_leaves_no_debt(real_db):
+    t0 = datetime(2026, 10, 1, 10, tzinfo=timezone.utc)
+    now = t0 + timedelta(hours=6)
+    db.record_inbound(LID, t0, "oi", "m1")  # alias unknown at the time
+    assert _debt_jids(now) == [LID]
+    assert contact_identity.record_alias(LID, PHONE)  # folds the stale row
+    assert db.get_state(LID) is None
+    assert _debt_jids(now) == [PHONE]  # counted once, under the phone jid
+    db.record_outbound(PHONE, t0 + timedelta(hours=1))  # user answers under the phone jid
+    assert _debt_jids(now) == []
+
+
+@pytest.mark.ephemeral_db
+def test_acknowledge_phone_clears_debt_created_by_lid_inbound(real_db, monkeypatch):
+    t0 = datetime(2026, 10, 1, 10, tzinfo=timezone.utc)
+    now = t0 + timedelta(hours=6)
+    db.record_inbound(LID, t0, "oi", "m1")
+    db.upsert_jid_alias(LID, PHONE)  # alias written elsewhere; no fold yet
+    contact_identity.reset_cache_for_tests()
+    assert _debt_jids(now) == [PHONE]  # list_debts folds lazily
+    db.acknowledge(PHONE, t0 + timedelta(hours=2))
+    assert _debt_jids(now) == []
+
+
+@pytest.mark.ephemeral_db
+def test_merge_state_keeps_concurrent_newer_values():
+    db.reset_db_init_for_tests()
+    db.init_db()
+    t0 = datetime(2026, 10, 1, 10, tzinfo=timezone.utc)
+    db.record_inbound(PHONE, t0 + timedelta(hours=3), "novo", "m9")
+    db.record_inbound(LID, t0, "velho", "m1")
+    assert db.merge_conversation_state(LID, PHONE)
+    st = db.get_state(PHONE)
+    assert st["last_in_preview"] == "novo" and st["last_in_id"] == "m9"
+    assert not db.merge_conversation_state(LID, PHONE)
+
+
+@pytest.mark.ephemeral_db
+def test_alias_remap_is_logged_with_last_four_digits_only(real_db, monkeypatch):
+    import services.soft_fail as sf
+
+    seen = []
+    monkeypatch.setattr(sf, "soft_fail", lambda where, exc: seen.append(str(exc)))
+    db.upsert_jid_alias(LID, PHONE)
+    assert seen == []
+    db.upsert_jid_alias(LID, "5511999990000@s.whatsapp.net")
+    assert len(seen) == 1 and "0000" in seen[0] and "5511999990000" not in seen[0]
+    assert db.get_jid_alias(LID) == "5511999990000@s.whatsapp.net"
+
+
+def test_discovery_alt_requires_matching_remote_jid():
+    from services.evolution_discovery import _alt_phone_jid
+
+    recs = [
+        {"key": {"remoteJid": "other@lid", "remoteJidAlt": "5511111111111@s.whatsapp.net"}},
+        {"key": {"remoteJid": LID, "remoteJidAlt": PHONE}},
+    ]
+    assert _alt_phone_jid(recs, LID) == PHONE
+    assert _alt_phone_jid(recs[:1], LID) == ""
+
+
+def test_failed_alias_lookup_is_cached(aliases, monkeypatch):
+    calls = []
+
+    def boom(_):
+        calls.append(1)
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(db, "get_jid_alias", boom)
+    for _ in range(3):
+        assert contact_identity.canonical_jid(LID) == LID
+    assert len(calls) == 1
+
+
+def test_migration_is_idempotent_for_history_and_backs_up_timeline(aliases, tmp_path, two_dirs, monkeypatch):
+    monkeypatch.setattr(db, "merge_conversation_state", lambda a, b: False)
+    lid, phone = two_dirs
+    contact_identity._merge_dir(lid, phone, PHONE, "T1")
+    contact_identity._merge_dir(lid, phone, PHONE, "T2")
+    assert (phone / "history.md").read_text().count("## Perfil anterior (@lid)") == 1
+    assert (phone / "timeline.jsonl.pre-merge-T1").is_file()
+    assert not list(phone.glob("timeline.jsonl.tmp-*"))

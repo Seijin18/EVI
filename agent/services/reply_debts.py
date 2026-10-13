@@ -123,6 +123,17 @@ def list_debts(
         now = now.replace(tzinfo=timezone.utc)
     hours = _min_hours() if min_hours is None else min_hours
     db.init_db()
+    # State keyed by an @lid before its alias was known folds into the phone row,
+    # so the debt predicate sees both sides' timestamps.
+    try:
+        from services.contact_identity import canonical_jid
+
+        for st in db.list_states():
+            lid = st["jid"]
+            if lid.endswith("@lid") and canonical_jid(lid) != lid:
+                db.merge_conversation_state(lid, canonical_jid(lid))
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("reply_debts.fold_aliases", exc)
     rows = db.list_debt_candidates(now, timedelta(hours=hours), timedelta(days=max_days))
     # Rows keyed by an @lid that predates the migration collapse onto the phone jid.
     from services.contact_identity import canonical_jid

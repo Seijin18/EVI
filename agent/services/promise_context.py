@@ -113,9 +113,12 @@ def _contact_name(jid: str) -> str:
         from db import get_whatsapp_contact
         from services.contact_registry import effective_label
 
-        return effective_label(get_whatsapp_contact(jid), fallback=fallback) or fallback
+        label = effective_label(get_whatsapp_contact(jid), fallback=fallback) or fallback
     except Exception:  # noqa: BLE001
-        return fallback
+        label = fallback
+    from services.contact_knowledge import sanitize_contact_name
+
+    return sanitize_contact_name(label)  # the label can be the contact's own pushName
 
 
 def _fetch_messages(jid: str) -> list[Any] | None:

@@ -40,7 +40,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
     },
     "CONTACT_KNOWLEDGE": {
         "provider": "openrouter",
-        "model": "qwen/qwen3.8-27b,google/gemma-4-26b-a4b-it",
+        "model": "google/gemma-4-26b-a4b-it,qwen/qwen3.8-27b",
     },
 }
 

@@ -180,9 +180,10 @@ def learn_whatsapp_contact(
     fetch_messages: bool = True,
 ) -> str:
     """
-    Read WhatsApp chat history for a contact (Evolution API) and synthesize learning.
-    Use when the user asks to learn/study a contact over N days by NAME or phone
-    (e.g. "aprenda sobre Leozao nos últimos 30 dias"). fetch_messages: pull chat from Evolution first.
+    Update what the EVI knows about a contact (facts and open items) by NAME or phone.
+    It learns only the messages newer than the last update (the first time: the last 30 days
+    stored); `days` only bounds how much history is fetched from Evolution when fetch_messages
+    is true (e.g. "aprenda sobre Leozao").
     """
     return learn_contact(name_or_phone, days=days, fetch_messages=fetch_messages)
 

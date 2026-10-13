@@ -201,7 +201,7 @@ def reset_db_init_for_tests() -> None:
 
 @contextmanager
 def _conn():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
     try:
         yield conn
     finally:
@@ -1550,43 +1550,40 @@ def list_states() -> List[Dict[str, Any]]:
 def merge_conversation_state(src_jid: str, dst_jid: str) -> bool:
     """Fold the ``src_jid`` row into ``dst_jid`` (later timestamps win) and drop src.
 
-    The preview/id follow whichever side has the later ``last_in_at``. Returns False
-    when there was no src row.
+    One transaction: src is locked (FOR UPDATE), the upsert into dst takes dst's row
+    lock and computes GREATEST in SQL, so a concurrent record_inbound/outbound is
+    never overwritten. Preview/id follow the later ``last_in_at``. Returns False when
+    there was no src row.
     """
+    if src_jid == dst_jid:
+        return False
     with _conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM wa_conversation_state WHERE jid = %s", (src_jid,))
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT last_in_at, last_in_preview, last_in_id, last_out_at, acknowledged_at "
+                "FROM wa_conversation_state WHERE jid = %s FOR UPDATE",
+                (src_jid,),
+            )
             src = cur.fetchone()
             if not src:
                 return False
-            cur.execute("SELECT * FROM wa_conversation_state WHERE jid = %s", (dst_jid,))
-            dst = cur.fetchone() or {}
-
-            def later(a, b):
-                return a if b is None or (a is not None and a >= b) else b
-
-            if src.get("last_in_at") and (
-                not dst.get("last_in_at") or src["last_in_at"] > dst["last_in_at"]
-            ):
-                last_in = (src["last_in_at"], src["last_in_preview"], src["last_in_id"])
-            else:
-                last_in = (
-                    dst.get("last_in_at"), dst.get("last_in_preview"), dst.get("last_in_id")
-                )
+            t = "wa_conversation_state"
             cur.execute(
-                "INSERT INTO wa_conversation_state "
+                f"INSERT INTO {t} "
                 "(jid, last_in_at, last_in_preview, last_in_id, last_out_at, acknowledged_at) "
                 "VALUES (%s, %s, %s, %s, %s, %s) "
-                "ON CONFLICT (jid) DO UPDATE SET last_in_at = EXCLUDED.last_in_at, "
-                "last_in_preview = EXCLUDED.last_in_preview, last_in_id = EXCLUDED.last_in_id, "
-                "last_out_at = EXCLUDED.last_out_at, "
-                "acknowledged_at = EXCLUDED.acknowledged_at, updated_at = now()",
-                (
-                    dst_jid,
-                    *last_in,
-                    later(src.get("last_out_at"), dst.get("last_out_at")),
-                    later(src.get("acknowledged_at"), dst.get("acknowledged_at")),
-                ),
+                "ON CONFLICT (jid) DO UPDATE SET "
+                f"last_in_preview = CASE WHEN EXCLUDED.last_in_at IS NOT NULL AND "
+                f"({t}.last_in_at IS NULL OR EXCLUDED.last_in_at > {t}.last_in_at) "
+                f"THEN EXCLUDED.last_in_preview ELSE {t}.last_in_preview END, "
+                f"last_in_id = CASE WHEN EXCLUDED.last_in_at IS NOT NULL AND "
+                f"({t}.last_in_at IS NULL OR EXCLUDED.last_in_at > {t}.last_in_at) "
+                f"THEN EXCLUDED.last_in_id ELSE {t}.last_in_id END, "
+                f"last_in_at = GREATEST({t}.last_in_at, EXCLUDED.last_in_at), "
+                f"last_out_at = GREATEST({t}.last_out_at, EXCLUDED.last_out_at), "
+                f"acknowledged_at = GREATEST({t}.acknowledged_at, EXCLUDED.acknowledged_at), "
+                "updated_at = now()",
+                (dst_jid, *src),
             )
             cur.execute("DELETE FROM wa_conversation_state WHERE jid = %s", (src_jid,))
         conn.commit()
@@ -1662,14 +1659,25 @@ def action_rates_by_type(since, until, debt_hours: float) -> Dict[str, Dict[str,
 
 
 def upsert_jid_alias(lid: str, phone_jid: str) -> None:
+    """Last writer wins (Evolution is authoritative); a changed phone is logged."""
     with _conn() as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT phone_jid FROM wa_jid_alias WHERE lid = %s", (lid,))
+            prev = cur.fetchone()
             cur.execute(
                 "INSERT INTO wa_jid_alias (lid, phone_jid) VALUES (%s, %s) "
                 "ON CONFLICT (lid) DO UPDATE SET phone_jid = EXCLUDED.phone_jid, seen_at = now()",
                 (lid, phone_jid),
             )
         conn.commit()
+    if prev and prev[0] != phone_jid:
+        from services.soft_fail import soft_fail
+
+        tail = lambda j: "…" + j.split("@", 1)[0][-4:]  # noqa: E731 (no PII beyond 4 digits)
+        soft_fail(
+            "db.upsert_jid_alias",
+            RuntimeError(f"alias {tail(lid)} remapped {tail(prev[0])} -> {tail(phone_jid)}"),
+        )
 
 
 def get_jid_alias(lid: str) -> str | None:

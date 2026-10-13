@@ -272,7 +272,7 @@ def test_contact_knowledge_default_and_env_override(monkeypatch):
         monkeypatch.delenv(f"EVI_LLM_TASK_CONTACT_KNOWLEDGE_{k}", raising=False)
     assert ls._resolve("CONTACT_KNOWLEDGE") == (
         "openrouter",
-        ["qwen/qwen3.8-27b", "google/gemma-4-26b-a4b-it"],
+        ["google/gemma-4-26b-a4b-it", "qwen/qwen3.8-27b"],
     )
     monkeypatch.setenv("EVI_LLM_TASK_CONTACT_KNOWLEDGE_PROVIDER", "ollama")
     monkeypatch.setenv("EVI_LLM_TASK_CONTACT_KNOWLEDGE_MODEL", "x:1b")

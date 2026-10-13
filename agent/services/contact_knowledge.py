@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import os
 import re
+import difflib
 import tempfile
+import threading
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -317,10 +319,31 @@ MENSAGENS NOVAS ("Você" = usuário):
 {messages}
 
 Atualize a memória:
-- add: fatos ESTÁVEIS sobre {contact} ditos EXPLICITAMENTE nas mensagens novas (trabalho, cidade, relação com o usuário, preferências, nomes de família/pets). Nunca deduza nem suponha: só o que uma mensagem afirma. Cada um com a data (AAAA-MM-DD) da mensagem que o comprova, nunca a data de hoje ({today}). Nada de assuntos passageiros, piadas, opiniões do momento ou fatos sobre outras pessoas atribuídos a {contact}. Não repita fatos atuais.
+- add: fatos ESTÁVEIS sobre {contact} ditos EXPLICITAMENTE nas mensagens novas (trabalho, cidade, relação com o usuário, preferências, nomes de família/pets). Nunca deduza nem suponha: só o que uma mensagem afirma. Cada um com a data (AAAA-MM-DD) da mensagem que o comprova, nunca a data de hoje ({today}). Os fatos são sobre {contact}, nunca sobre o usuário. Nada de assuntos passageiros, piadas, opiniões do momento ou fatos sobre outras pessoas atribuídos a {contact}. Não repita fatos atuais.
 - remove: ids (ex.: "F2") dos fatos atuais que as mensagens novas desmentem ou tornam desatualizados (ex.: mudou de emprego, de cidade).
-- open: a lista COMPLETA de itens em aberto depois destas mensagens. Item em aberto = uma TAREFA que o usuário ou {contact} disse que vai fazer, ou um pedido ainda não atendido (ex.: "Usuário vai mandar o orçamento", "Levar a Nina ao veterinário na quinta"). Mandar meme, conversar, agradecer não são itens. Mantenha os atuais (A1, A2...) que continuam pendentes, tire os resolvidos. Cada um com a data em que surgiu.
+- open: a lista COMPLETA de itens em aberto depois destas mensagens. Item em aberto = uma TAREFA que o usuário ou {contact} disse que vai fazer, ou um pedido ainda não atendido (ex.: "Usuário vai mandar o orçamento", "Levar a Nina ao veterinário na quinta"). Mandar meme, conversar, agradecer não são itens. Mantenha os atuais (A1, A2...) que continuam pendentes escrevendo só o id no campo item (ex.: {{"item": "A2", "date": "..."}}) ou o texto idêntico; tire os resolvidos. Cada novo com a data em que surgiu.
 Se não houver nada, use listas vazias. Responda só com JSON."""
+
+_NAME_DEFAULT = "o contato"
+_NAME_MAX = 40
+_NAME_STRIP = re.compile(r"[\x00-\x1f\x7f«»`<>]")
+_NAME_INSTRUCTION = re.compile(
+    r"ignor|adicione|system|prompt|instruc|regra|desconsidere|esquec|assistant|\bia\b", re.I)
+
+
+def sanitize_contact_name(name: str | None) -> str:
+    """A contact label that is safe to interpolate unwrapped into a prompt.
+
+    First line only, control chars and «»/backticks/angle brackets removed, whitespace
+    collapsed, max 40 chars; instruction-looking names fall back to a neutral label.
+    """
+    first = str(name or "").strip().split("\n", 1)[0]
+    clean = " ".join(_NAME_STRIP.sub(" ", first).split())
+    folded = _norm(clean)
+    if not clean or _NAME_INSTRUCTION.search(folded):
+        return _NAME_DEFAULT
+    return clean[:_NAME_MAX].strip() or _NAME_DEFAULT
+
 
 def _fmt_list(entries, prefix: str) -> str:
     return "\n".join(f"{prefix}{i}: {t} ({d})" for i, (t, d) in enumerate(entries, 1)) or "(nenhum)"
@@ -330,6 +353,7 @@ def build_knowledge_prompt(contact: str, facts, items, messages, today: str) -> 
     """Pure prompt builder. facts/items: (text, date) pairs; messages: (date, from_me, text)."""
     from services.untrusted import wrap_external
 
+    contact = sanitize_contact_name(contact)
     lines = []
     for day, from_me, text in messages:
         text = text or "<mídia>"
@@ -355,16 +379,24 @@ def _norm(s: str) -> str:
 
 # Injection defense: an entry matching any of these AND whose matched value never appears in a
 # message of the user (only the contact said it) is discarded. Group "v" is the risky value.
+_NUM_WORDS = (
+    r"um|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|quinze|vinte|trinta|quarenta|"
+    r"cinquenta|sessenta|setenta|oitenta|noventa|cem|cento|duzentos|trezentos|quinhentos|mil"
+)
 INJECTION_PATTERNS: tuple[tuple[str, re.Pattern], ...] = (
     ("money-symbol", re.compile(r"(?:r\$|us\$|\$)\s*(?P<v>\d[\d.,]*)")),
     ("money-word", re.compile(
-        r"(?P<v>\d[\d.,]*)\s*(?:mil\s+)?(?:reais|real|dolares|dolar|euros?|usd|brl|pix)\b")),
+        rf"\b(?P<v>\d[\d.,]*|{_NUM_WORDS})\s*(?:mil\s+)?(?:reais|real|dolares|dolar|euros?|usd|brl)\b")),
     ("credential", re.compile(
-        r"\b(?:senha|password|token|chave|codigo)\b[^.\n]{0,30}?(?P<v>[\w@#$%!-]*\d[\w@#$%!-]{3,})")),
+        r"\b(?:senha|password|token|chave|clave|contrasena|codigo)\b[^.\n]{0,30}?"
+        r"(?P<v>[\w@#$%!-]*\d[\w@#$%!-]{3,})")),
+    ("pix", re.compile(
+        r"\b(?P<v>chave pix|pix (?:para|pra|pro)\b|(?:faca|fazer|mande|manda|envie|enviar) (?:um )?pix)")),
     ("long-hex", re.compile(r"\b(?P<v>[0-9a-f]{24,})\b")),
-    ("long-base64", re.compile(r"(?<![\w+/=-])(?P<v>[A-Za-z0-9+/_-]{32,}={0,2})(?![\w+/=-])")),
+    ("long-base64", re.compile(r"(?<![A-Za-z0-9+/_=])(?P<v>[A-Za-z0-9+/_]{32,}={0,2})(?![A-Za-z0-9+/_=])")),
     ("imperative", re.compile(
-        r"\b(?P<v>voce deve|o usuario deve|usuario deve|transfira|pague|envie|deposite)\b")),
+        r"\b(?P<v>voce deve|o usuario deve|usuario deve|transfira|transferir|pague|pagar|deposite|"
+        r"lembre o usuario|lembrar o usuario)\b")),
 )
 
 
@@ -380,7 +412,11 @@ def suspicious_values(text: str) -> list[str]:
         raw = text if name == "long-base64" else folded
         for m in pat.finditer(raw):
             v = m.group("v")
-            found.append(_digits(v) if name.startswith("money") else v.lower())
+            if name in ("long-base64", "long-hex") and not (
+                re.search(r"[A-Za-z]", v) and re.search(r"\d", v)
+            ):
+                continue
+            found.append(_digits(v) if name.startswith("money") and v[0].isdigit() else v.lower())
     return [v for v in found if v]
 
 
@@ -394,6 +430,33 @@ def is_injection(text: str, user_texts) -> bool:
     """True when ``text`` carries a risky value that no user message of the window contains."""
     users = list(user_texts or [])
     return any(not _user_supports(v, users) for v in suspicious_values(text))
+
+
+_ITEM_PREFIX = re.compile(r"^\s*[-*]?\s*(?:a(\d{1,2})(?=$|[\s:.)\-]))?\s*[:.)\-]?\s*", re.I)
+_ITEM_FUZZY = 0.88
+
+
+def _item_key(text: str) -> str:
+    folded = _norm(text)
+    folded = _ITEM_PREFIX.sub("", folded, count=1)
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", folded).split())
+
+
+def _match_item(text: str, existing: list[Item]) -> Item | None:
+    """Existing open item the LLM refers to: by id prefix, normalised equality or ~same text."""
+    m = _ITEM_PREFIX.match(_norm(text))
+    if m and m.group(1) and 1 <= int(m.group(1)) <= len(existing):
+        return existing[int(m.group(1)) - 1]
+    key = _item_key(text)
+    if not key:
+        return None
+    best, best_ratio = None, 0.0
+    for it in existing:
+        k = _item_key(it.text)
+        ratio = 1.0 if k == key else difflib.SequenceMatcher(None, key, k).ratio()
+        if ratio >= _ITEM_FUZZY and ratio > best_ratio:
+            best, best_ratio = it, ratio
+    return best
 
 
 def _valid_date(raw) -> str | None:
@@ -434,23 +497,27 @@ def apply_update(
         seen.add(_norm(text))
         added += 1
 
-    existing = {_norm(i.text): i for i in profile.open_items}
     items: list[Item] = []
     seen_items: set[str] = set()
     for o in answer.get("open") or []:
         if not isinstance(o, dict):
             continue
         text = " ".join(str(o.get("item") or "").split())
-        key = _norm(text)
-        if not text or key in seen_items:
+        if not text:
             continue
-        if key in existing:
-            items.append(Item(existing[key].text, existing[key].date))
+        kept = _match_item(text, profile.open_items)
+        if kept is not None:
+            key, entry = _item_key(kept.text), Item(kept.text, kept.date)
         else:
+            text = _ITEM_PREFIX.sub("", text, count=1).strip() or text
+            key = _item_key(text)
             date = _valid_date(o.get("date"))
-            if date not in window or is_injection(text, user_texts):
+            if not key or date not in window or is_injection(text, user_texts):
                 continue
-            items.append(Item(text, date))
+            entry = Item(text, date)
+        if key in seen_items:
+            continue
+        items.append(entry)
         seen_items.add(key)
     items = _cap(items, MAX_OPEN_ITEMS)
     return facts, items, {"added": added, "removed": len(removed), "open": len(items)}
@@ -465,13 +532,16 @@ def _tz():
         return ZoneInfo("America/Sao_Paulo")
 
 
-def _window_messages(jid: str, since: datetime | None) -> list[tuple[str, bool, str]]:
-    """Timeline entries newer than ``since`` (max 60): (local date, from_me, text)."""
+def _window_rows(jid: str, since: datetime | None) -> list[tuple[datetime, str, bool, str]]:
+    """Oldest-first (max 60) timeline entries newer than ``since``: (ts, local date, from_me, text).
+
+    Sorted by timestamp, not file position (backfill appends older messages after newer ones).
+    """
     from services.contact_filesystem import read_timeline_since
 
     now = datetime.now(timezone.utc)
     days = 30 if since is None else max(1, min(90, (now - since).days + 2))
-    rows = read_timeline_since(jid, days=days, limit=500)
+    rows = read_timeline_since(jid, days=days, limit=1_000_000)
     tz = _tz()
     out = []
     for row in rows:
@@ -486,25 +556,44 @@ def _window_messages(jid: str, since: datetime | None) -> list[tuple[str, bool, 
         preview = str(row.get("text_preview") or "").strip()
         from_me = preview.startswith("[eu]")
         text = preview[4:].strip() if from_me else re.sub(r"^\[[^\]]*\]\s*", "", preview)
-        out.append((ts.astimezone(tz).strftime("%Y-%m-%d"), from_me, text))
-    return out[-MAX_WINDOW_MESSAGES:]
+        out.append((ts, ts.astimezone(tz).strftime("%Y-%m-%d"), from_me, text))
+    out.sort(key=lambda r: r[0])
+    return out[:MAX_WINDOW_MESSAGES]
+
+
+_locks: dict[str, threading.Lock] = {}
+_locks_guard = threading.Lock()
+
+
+def _jid_lock(jid: str) -> threading.Lock:
+    with _locks_guard:
+        return _locks.setdefault(jid, threading.Lock())
 
 
 def update_contact_knowledge(jid: str) -> dict:
     """Incrementally update ``jid``'s facts/open items from timeline messages since the last update.
 
-    Returns ``{"status": ...}``: "ok" (+ added/removed/open counts), "no-messages",
-    "no-answer" (LLM failed/timed out) or "invalid"/"disabled"; only "ok" writes.
+    Reads the oldest (max 60) messages newer than ``knowledge_updated`` and stamps
+    ``knowledge_updated`` with the newest one actually sent, so later or surplus messages are
+    picked up by the next run. Serialised per jid. Returns ``{"status": ...}``: "ok" (+
+    added/removed/open counts), "no-messages", "no-answer" (LLM failed/timed out) or
+    "invalid"/"disabled"; only "ok" writes.
     """
+    if _profile_path(jid) is None:
+        return {"status": "disabled"}
+    with _jid_lock(jid):
+        return _update_locked(jid)
+
+
+def _update_locked(jid: str) -> dict:
     from services import llm_structured
     from services.promise_context import _contact_name
 
-    if _profile_path(jid) is None:
-        return {"status": "disabled"}
-    profile = read_knowledge(jid) or Profile()
-    messages = _window_messages(jid, profile.knowledge_updated)
-    if not messages:
+    profile = read_knowledge(jid) or Profile()  # re-read under the lock
+    rows = _window_rows(jid, profile.knowledge_updated)
+    if not rows:
         return {"status": "no-messages"}
+    messages = [(d, me, t) for _, d, me, t in rows]
     today = datetime.now(_tz()).strftime("%Y-%m-%d")
     facts, items = numbered(profile)
     prompt = build_knowledge_prompt(
@@ -526,7 +615,7 @@ def update_contact_knowledge(jid: str) -> dict:
         today,
         [t for _, me, t in messages if me],
     )
-    path = write_knowledge(jid, new_facts, new_items, updated_at=datetime.now(timezone.utc))
+    path = write_knowledge(jid, new_facts, new_items, updated_at=rows[-1][0])
     if path is None:
         return {"status": "disabled"}
     return {**counts, "status": "ok"}

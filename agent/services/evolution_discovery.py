@@ -172,10 +172,13 @@ def _looks_like_id(label: str) -> bool:
     return not base.strip() or re.fullmatch(r"[\d\s+\-().]+", base.strip()) is not None
 
 
-def _alt_phone_jid(records: list[Any]) -> str:
-    """Phone JID of a LID chat, from key.remoteJidAlt of any message."""
+def _alt_phone_jid(records: list[Any], jid: str = "") -> str:
+    """Phone JID of a LID chat, from key.remoteJidAlt of a message of that chat
+    (when ``jid`` is given, the record's key.remoteJid must match it)."""
     for rec in records:
         key = rec.get("key") if isinstance(rec, dict) else None
+        if jid and isinstance(key, dict) and key.get("remoteJid") not in (None, "", jid):
+            continue
         alt = (key or {}).get("remoteJidAlt") if isinstance(key, dict) else ""
         if isinstance(alt, str) and alt.endswith("@s.whatsapp.net"):
             return alt
@@ -272,11 +275,7 @@ def fetch_recent_whatsapp_messages(
         raw = client.find_messages(jid, limit=per_chat)
         if raw is None:
             continue
-        alt = _alt_phone_jid(_extract_message_records(raw)) if jid.endswith("@lid") else ""
-        if alt:
-            from services.contact_identity import record_alias
-
-            record_alias(jid, alt)  # backfill wa_jid_alias from discovery
+        alt = _alt_phone_jid(_extract_message_records(raw), jid) if jid.endswith("@lid") else ""
         chat_label, chat_phone = resolve_chat_label(jid, chat.get("label") or "", registry, alt)
         for msg in parse_evolution_message_list(raw, remote_jid=jid):
             ts_dt = _parse_msg_ts(msg.ts)

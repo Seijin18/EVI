@@ -137,7 +137,7 @@ Não gera fatos a partir dela (as sínteses atuais não são confiáveis).
 ### 8. Modelo
 
 `EVI_LLM_TASK_CONTACT_KNOWLEDGE_PROVIDER` / `_MODEL` (camada de `evi-promise-context`).
-**Default: `openrouter`, `qwen/qwen3.8-27b,google/gemma-4-26b-a4b-it`** — os dois 8/8 nos
+**Default: `openrouter`, `google/gemma-4-26b-a4b-it,qwen/qwen3.8-27b`** (ordem invertida na implementação: no avaliador do repo o Gemma deu 8/8 com p50 2 s e US$ 0,0006, enquanto o Qwen deu 7/8 com p95 de até 300 s) — os dois 8/8 nos
 simulados e sem aceitar injeção; nos reais o Qwen foi mais conservador e estável.
 Timeout por chamada `EVI_LLM_TIMEOUT_SEC` (30 s): estourou → tenta o próximo modelo da
 lista. O prompt proíbe fato deduzido: só o que a mensagem diz explicitamente. Estimativa: 15 contatos/dia ×
