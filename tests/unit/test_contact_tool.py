@@ -116,3 +116,18 @@ if __name__ == "__main__":
     test_collect_merges_postgres()
     test_learn_contact_with_mock_llm()
     print("ok")
+
+
+def test_get_contact_info_shows_knowledge_not_header():
+    from services import contact_knowledge as ck
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["EVI_CONTACT_MEMORY_DIR"] = tmp
+        jid = "5516992657232@s.whatsapp.net"
+        ingest_commitment(
+            jid=jid, source_id="k1", title="Call", raw_text="teste", commitment_id=3, label="Kika"
+        )
+        ck.write_knowledge(jid, [("Trabalha na Acme", "2026-10-01")], [("Enviar o orçamento", None)])
+        detail = get_whatsapp_contact_info.invoke({"name_or_phone": "Kika"})
+        assert "Trabalha na Acme" in detail and "Enviar o orçamento" in detail
+        assert "**jid**" not in detail and "created" not in detail

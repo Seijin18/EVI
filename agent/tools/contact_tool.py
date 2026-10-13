@@ -10,11 +10,11 @@ from services.contact_filesystem import (
     ensure_contact,
     is_direct_jid,
     memory_enabled,
-    read_profile_excerpt,
     read_timeline_tail,
     resolve_contact_for_query,
     search_contacts,
 )
+from services.contact_knowledge import read_contact_knowledge
 from services.contact_learning import learn_contact
 from services.untrusted import wrap_external
 from services.contact_registry import assign_contact_name, format_contact_names, sync_evolution_contacts
@@ -54,7 +54,7 @@ def _format_contact_block(contact: dict) -> list[str]:
     if phone:
         lines.append(f"Telefone: {phone}")
 
-    profile = read_profile_excerpt(jid, max_chars=1200)
+    profile = read_contact_knowledge(jid, max_chars=1200)
     if profile:
         lines.append("")
         lines.append("Perfil:")

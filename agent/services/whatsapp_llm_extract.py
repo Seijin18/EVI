@@ -142,13 +142,14 @@ def _default_invoke(prompt: str) -> str:
 
 def _contact_context(msg: IncomingMessage) -> str:
     try:
-        from services.contact_filesystem import read_profile_excerpt, read_timeline_tail
+        from services.contact_filesystem import read_timeline_tail
+        from services.contact_knowledge import read_contact_knowledge
 
         jid = msg.sender or ""
         parts: list[str] = []
-        profile = read_profile_excerpt(jid)
+        profile = read_contact_knowledge(jid, max_chars=600)
         if profile:
-            parts.append(f"Profile:\n{wrap_external(profile, 'perfil_contato', max_chars=2000)}")
+            parts.append(f"Profile:\n{wrap_external(profile, 'perfil_contato', max_chars=700)}")
         timeline = read_timeline_tail(jid, limit=3)
         if timeline:
             previews = [e.get("text_preview", "") for e in timeline if e.get("text_preview")]

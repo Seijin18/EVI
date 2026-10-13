@@ -32,14 +32,14 @@
   - Files: `agent/services/contact_knowledge.py`, `agent/services/contact_learning.py`, `tests/unit/test_contact_knowledge.py`, `tests/unit/test_contact_learning.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_knowledge.py tests/unit/test_contact_learning.py -q` e `./scripts/evi-test contact-learning`
 
-- [ ] 2.3 Consumidores usam `read_contact_knowledge`: `get_contact_info`, `whatsapp_llm_extract._contact_context`, `promise_context.conversation_context(knowledge=…)`
+- [x] 2.3 Consumidores usam `read_contact_knowledge`: `get_contact_info`, `whatsapp_llm_extract._contact_context`, `promise_context.conversation_context(knowledge=…)`
   - SCN-MEM-16, SCN-DEBT-10
   - Files: `agent/tools/contact_tool.py`, `agent/services/whatsapp_llm_extract.py`, `agent/services/promise_context.py`, `tests/unit/test_contact_tool.py`, `tests/unit/test_promise_context.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_tool.py tests/unit/test_promise_context.py tests/unit/test_whatsapp_llm_extract.py -q`
 
 ## 3. Lote, agendamento e migração
 
-- [ ] 3.1 `run_contact_learn_batch`: só pastas com mensagens novas, por recência, `limit=15`, por jid
+- [x] 3.1 `run_contact_learn_batch`: só pastas com mensagens novas, por recência, `limit=15`, por jid
   - SCN-MEM-19
   - Files: `agent/services/contact_learn_cron.py`, `tests/unit/test_contact_learn_cron.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_learn_cron.py -q`

@@ -43,7 +43,7 @@ def test_contact_block_wrapped():
     from tools import contact_tool
 
     with (
-        patch.object(contact_tool, "read_profile_excerpt", return_value=EVIL),
+        patch.object(contact_tool, "read_contact_knowledge", return_value=EVIL),
         patch.object(
             contact_tool, "read_timeline_tail", return_value=[{"ts": "2026-01-01T10:00", "text_preview": EVIL}]
         ),

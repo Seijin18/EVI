@@ -92,3 +92,15 @@ if __name__ == "__main__":
     test_fallback_uses_llm_when_heuristic_fails()
     test_llm_disabled_by_default()
     print("ok")
+
+
+def test_contact_context_uses_knowledge(tmp_path, monkeypatch):
+    from services import contact_knowledge as ck
+    from services.whatsapp_llm_extract import _contact_context
+
+    monkeypatch.setenv("EVI_CONTACT_MEMORY_DIR", str(tmp_path))
+    jid = "5511988887777@s.whatsapp.net"
+    ck.write_knowledge(jid, [("Dentista da família", None)], [])
+    ctx = _contact_context(IncomingMessage(id="c1", sender=jid, text="oi", ts="2026-06-03T11:00:00"))
+    assert "Dentista da família" in ctx
+    assert "**jid**" not in ctx

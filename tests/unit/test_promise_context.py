@@ -133,6 +133,24 @@ def test_knowledge_block():
     assert "(nada)" in p
 
 
+def test_evaluate_fetches_knowledge_and_ignores_failure(monkeypatch):
+    from services import contact_knowledge as ck
+
+    use_msgs(monkeypatch, [])
+    seen = []
+    llm(monkeypatch, {"usuario_se_compromete": False}, seen)
+    monkeypatch.setattr(ck, "read_contact_knowledge", lambda jid, max_chars=1200: "Fatos:\n- Irmã do usuário")
+    pc.evaluate_promise(JID, "ok", REF)
+    assert seen[-1].startswith("SOBRE Ana:\nFatos:\n- Irmã do usuário")
+
+    def boom(*a, **k):
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(ck, "read_contact_knowledge", boom)
+    assert pc.evaluate_promise(JID, "ok", REF) is not None
+    assert "SOBRE" not in seen[-1]
+
+
 # --- process_due_evaluations (needs_eval queue worker) ---------------------------
 
 NOW = datetime(2026, 10, 12, 18, 0, tzinfo=TZ)

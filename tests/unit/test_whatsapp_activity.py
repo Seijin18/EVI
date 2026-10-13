@@ -52,11 +52,9 @@ def test_summarize_whatsapp_wraps_messages_and_names():
 def test_extract_prompt_wraps_message_and_profile(tmp_path, monkeypatch):
     monkeypatch.setenv("EVI_CONTACT_MEMORY_DIR", str(tmp_path))
     monkeypatch.setenv("EVI_WHATSAPP_LLM_EXTRACT", "true")
-    from services.contact_filesystem import contact_dir
+    from services.contact_knowledge import write_knowledge
 
-    d = contact_dir("5511@s.whatsapp.net")
-    d.mkdir(parents=True)
-    (d / "profile.md").write_text(f"Perfil: {INJECTION}", encoding="utf-8")
+    write_knowledge("5511@s.whatsapp.net", [(INJECTION, None)], [])
     msg = IncomingMessage(
         id="m1", sender="5511@s.whatsapp.net", text=INJECTION, ts="2026-06-03T11:00:00"
     )

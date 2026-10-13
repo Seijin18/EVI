@@ -233,6 +233,13 @@ def evaluate_promise(
     """Ask the LLM whether the user's message is a promise; None if it failed."""
     from services.whatsapp_processor import resolve_due
 
+    if not (knowledge or "").strip():
+        try:
+            from services.contact_knowledge import read_contact_knowledge
+
+            knowledge = read_contact_knowledge(jid, max_chars=800)
+        except Exception:  # noqa: BLE001 - knowledge is optional context
+            knowledge = ""
     ctx = conversation_context(jid, message_ts, message_id=message_id, now=now, knowledge=knowledge)
     ref = _local(message_ts)
     prompt = build_promise_prompt(
