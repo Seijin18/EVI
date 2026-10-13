@@ -130,7 +130,7 @@ For every direct WhatsApp conversation (not a group, not a control chat, not a o
 - **THEN** that channel is not listed
 
 ### Requirement: Reply debts are computed deterministically
-A conversation SHALL be a reply debt when its last inbound message is newer than the user's last outbound message and than its acknowledgement, is older than `EVI_REPLY_DEBT_HOURS` (default 4) and younger than 7 days, and is not a closing-only message ("ok", "valeu", "obrigado", emoji only). No LLM SHALL be used. `dismiss_reply_debt` SHALL acknowledge a debt until a new inbound message arrives.
+A conversation SHALL be a reply debt when its last inbound message is newer than the user's last outbound message and than its acknowledgement, is older than `EVI_REPLY_DEBT_HOURS` (default 4) and younger than 7 days, and is not a closing-only message ("ok", "valeu", "obrigado", "joia", "tranquilo", "fechou", approval emoji only, or a thanks followed by a short vocative such as "obrigado, Marcão!"). No LLM SHALL be used. `dismiss_reply_debt` SHALL acknowledge a debt until a new inbound message arrives.
 
 #### Scenario: SCN-DEBT-01
 - **GIVEN** a contact wrote "consegue me mandar o orçamento?" 6 hours ago and the user did not reply
@@ -141,6 +141,11 @@ A conversation SHALL be a reply debt when its last inbound message is newer than
 - **GIVEN** the last inbound message of a conversation is "valeu 👍"
 - **WHEN** reply debts are listed
 - **THEN** that conversation is not listed
+
+#### Scenario: SCN-UX-05
+- **GIVEN** the last inbound messages of two conversations are "Joia" and "obrigado, Marcão!"
+- **WHEN** reply debts are listed
+- **THEN** neither conversation is listed
 
 ### Requirement: The user's own promises are captured by pattern
 When `EVI_REPLY_DEBTS_ENABLED=true`, a `fromMe` message in a direct conversation matching a versioned list of promise patterns SHALL be stored at once as a `pending_commitments` row with `type='promise'`, `source='whatsapp_from_me'` and `status='needs_eval'`, which is never listed, briefed or notified. When `EVI_PROMISE_CONTEXT_ENABLED=true` (default), the row SHALL be evaluated outside the webhook request no earlier than `EVI_PROMISE_EVAL_DELAY_MIN` (default 30) minutes after the message, with up to 10 messages of the previous 24 hours and the messages that followed (both sides; third-party text wrapped as external data). The evaluation SHALL use the structured LLM task `PROMISE`; the LLM SHALL return the deadline as the expression used in the conversation and the code SHALL resolve it to a date. A confirmed, unfulfilled promise SHALL become `pending` with a title naming what was promised; a rejected one SHALL become `dismissed`; a fulfilled one SHALL become `done`. When the evaluation fails it SHALL be retried, and a row still `needs_eval` after 48 hours SHALL become `pending` with the message as title (a deadline already in the past is dropped so the row is listed). Rejections by the evaluation are not counted as user actions in usage metrics, and rows still waiting are never exposed by any listing, count or agent tool. When the flag is turned off, rows waiting for evaluation are released to `pending`. When the flag is off, the row SHALL be stored as `pending` from the pattern alone, with a resolved date when the message has one.
