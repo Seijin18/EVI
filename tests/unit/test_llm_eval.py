@@ -348,3 +348,75 @@ def test_knowledge_import_prior(tmp_path):
     assert kev.import_prior(src, dest) == 1
     assert [c["id"] for c in kev.load_real(dest)] == ["R1"]
     assert oct(dest.stat().st_mode & 0o777) == "0o600"
+
+
+# ---------------------------------------------------------------- contact-name-hint evaluator
+
+from testing.llm_eval import contact_name_hint as nev  # noqa: E402
+
+
+def _nh_oracle(monkeypatch, correct: bool):
+    """Fake CONTACT_NAME_HINT LLM answering from YAML expectations (or always hallucinating)."""
+    by_prompt = {nev.build_prompt(c): c for c in nev.load_synthetic()}
+
+    def fake(task, prompt, schema, *, provider=None, models=None):
+        assert task == "CONTACT_NAME_HINT" and provider == "openrouter"
+        c = by_prompt[prompt]
+        if not correct:
+            return {"nome": "Paulo", "evidencia": "sou o Paulo"}
+        names = c["expect"].get("nome") or []
+        if not names:
+            return {"nome": "", "evidencia": ""}
+        for _, me, text in c["messages"]:
+            if not me and names[0] in text.casefold():
+                i = text.casefold().index(names[0])
+                return {"nome": text[i:i + len(names[0])], "evidencia": text[max(0, i - 6):i + len(names[0])]}
+        raise AssertionError(c["id"])
+
+    monkeypatch.setattr(llm_structured, "run_structured", fake)
+
+
+def test_name_hint_yaml_has_enough_cases_incl_negatives():
+    cases = nev.load_synthetic()
+    assert len(cases) >= 8
+    assert sum(1 for c in cases if not c["expect"]["nome"]) >= 4
+
+
+def test_name_hint_gate_passes_with_oracle(monkeypatch):
+    _nh_oracle(monkeypatch, correct=True)
+    out: list[str] = []
+    assert nev.run("synthetic", "openrouter", ["m1"], out=out.append) == 0, out
+    assert any(" accuracy=100%" in l for l in out)
+
+
+def test_name_hint_hallucinations_fail_the_gate(monkeypatch):
+    _nh_oracle(monkeypatch, correct=False)
+    out: list[str] = []
+    assert nev.run("synthetic", "openrouter", ["m1"], out=out.append) == 1
+    assert any("GATE FAILED" in l for l in out)
+
+
+def test_name_hint_no_answer_is_failure(monkeypatch):
+    monkeypatch.setattr(llm_structured, "run_structured", lambda *a, **k: None)
+    out: list[str] = []
+    assert nev.run("synthetic", "openrouter", ["m1"], out=out.append) == 1
+    assert "json=0%" in out[0]
+
+
+def test_name_hint_real_cases_privacy_matrix(tmp_path):
+    real = tmp_path / "r.json"
+    real.write_text('[{"id": "r1", "messages": [{"me": false, "text": "sou o Fulano"}]}]')
+    _, notes = nev.select_cases("real", "openrouter", real_path=real)
+    assert "skipped" in notes[0]
+    assert nev.select_cases("real", "gemini", allow_cloud_real=True, real_path=real)[0] == []
+    assert len(nev.select_cases("real", "openrouter", allow_cloud_real=True, real_path=real)[0]) == 1
+    assert len(nev.select_cases("real", "ollama", real_path=real)[0]) == 1
+
+
+def test_cli_dispatches_contact_name_hint(monkeypatch):
+    from testing import cli
+
+    seen = []
+    monkeypatch.setattr(nev, "main", lambda argv, cwd=None: seen.append(argv) or 0)
+    assert cli.run_llm_eval(["contact-name-hint", "--cases", "synthetic"], ".") is True
+    assert seen == [["contact-name-hint", "--cases", "synthetic"]]

@@ -566,3 +566,70 @@ def test_resolve_reply_debt_kind(monkeypatch):
     assert _resolve(monkeypatch, rows, [1], kind="reply_debt") == (["55@s.whatsapp.net"], [])
     ids, errs = _resolve(monkeypatch, rows, [2], kind="reply_debt")
     assert ids == [] and "não é" in errs[0]
+
+
+# ---- "Conversas sem nome" (SCN-NAME-05) ---------------------------------------
+
+MONDAY = datetime(2026, 10, 12, 7, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))
+
+
+def _unnamed(monkeypatch, jids_and_texts):
+    from services import contact_names
+
+    cands = [{"jid": j, "count": 5, "last": t, "ts": MONDAY, "label": ""} for j, t in jids_and_texts]
+    monkeypatch.setattr(contact_names, "unnamed_candidates", lambda now=None, limit=3: cands[:limit])
+    monkeypatch.setattr(contact_names, "suggest_name", lambda jid, label="": None)
+
+
+def test_monday_briefing_lists_unnamed_with_wrapped_snippets_and_continuing_numbers(setup, monkeypatch):
+    setup()
+    _unnamed(monkeypatch, [("5511900000001@s.whatsapp.net", "preciso do orçamento"), ("123@lid", "oi, tudo bem?")])
+    b = briefing.assemble_briefing(now=MONDAY)
+    names = b.sections[-1]
+    assert names.key == "names" and [i.n for i in names.items] == [7, 8]
+    assert names.items[0].ref == {"kind": "name_prompt", "id": "5511900000001@s.whatsapp.net"}
+    assert "7. +5511900000001 — «externo:whatsapp» preciso do orçamento «/externo»" in b.text
+    assert "8. contato @lid — «externo:whatsapp»" in b.text
+    assert "Conversas sem nome" in b.text and "nomeia N" in b.text
+
+
+def test_non_monday_or_evening_has_no_names_section(setup, monkeypatch):
+    setup()
+    _unnamed(monkeypatch, [("5511900000001@s.whatsapp.net", "x")])
+    assert "names" not in [s.key for s in briefing.assemble_briefing(now=NOW).sections]
+    assert "names" not in [s.key for s in briefing.assemble_briefing("evening", now=MONDAY).sections]
+
+
+def test_names_section_failure_is_isolated_and_cap_is_three(setup, monkeypatch):
+    setup()
+    from services import contact_names
+
+    monkeypatch.setattr(contact_names, "unnamed_candidates", lambda now=None, limit=3: (_ for _ in ()).throw(RuntimeError("boom")))
+    b = briefing.assemble_briefing(now=MONDAY)
+    assert b.sections[-1].error and len(b.items) == 6
+    _unnamed(monkeypatch, [(f"55119000000{i}@s.whatsapp.net", "x") for i in range(5)])
+    names = briefing.assemble_briefing(now=MONDAY).sections[-1]
+    assert len(names.items) == 3
+
+
+def test_scn_name_05_reply_names_first_item_and_summary_shows_name(setup, monkeypatch):
+    """Monday briefing -> snapshot refs -> "nomeia 1 Hollmann" resolves the right numbered item."""
+    from services import contact_names
+
+    setup(commitments=[])  # no whatsapp items: unnamed items start after calendar/tasks/email
+    jids = ["5511900000001@s.whatsapp.net", "5511900000002@s.whatsapp.net"]
+    _unnamed(monkeypatch, [(j, "oi") for j in jids])
+    b = briefing.assemble_briefing(now=MONDAY)
+    first = b.sections[-1].items[0].n
+    refs = {str(i.n): f"{i.ref.get('kind')}:{i.ref.get('id')}" for i in b.items}
+    monkeypatch.setattr(briefing, "now_local", lambda: MONDAY)
+    monkeypatch.setattr(db, "load_tool_snapshots", lambda sid, limit=5: [{
+        "tool_name": "morning_briefing", "payload": {"refs": refs}, "created_at": MONDAY.isoformat()}])
+    named, ignored = {}, {}
+    monkeypatch.setattr("services.contact_registry.assign_contact_name",
+                        lambda jid, *, display_name, name_source="user", **kw: named.update({jid: (display_name, name_source)}))
+    monkeypatch.setattr(db, "init_db", lambda: None)
+    monkeypatch.setattr(db, "set_name_prompt_ignored", lambda jid, until: ignored.update({jid: until}))
+    assert contact_names.try_name_reply(f"nomeia {first} Hollmann", "telegram-1")
+    assert contact_names.try_name_reply(f"ignora {first + 1}", "telegram-1")
+    assert named == {jids[0]: ("Hollmann", "user")} and list(ignored) == [jids[1]]

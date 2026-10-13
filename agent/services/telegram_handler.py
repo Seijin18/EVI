@@ -226,6 +226,26 @@ def process_telegram_update(
             extra={"chat_command": True},
         )
 
+    if not forwarded:
+        # "nomeia N <nome>" / "ignora N" on the Monday briefing's unnamed-conversation items.
+        try:
+            from services.contact_names import try_name_reply
+
+            named = try_name_reply(text, session_id)
+        except Exception as exc:
+            from services.soft_fail import soft_fail
+            soft_fail("telegram_handler.name_reply", exc)
+            named = None
+        if named:
+            return _reply_direct(
+                session_id=session_id,
+                chat_id=chat_id,
+                text=text,
+                ai_content=named,
+                tools=[{"type": "direct", "tool": "contact_name_reply"}],
+                extra={"name_reply": True},
+            )
+
     if direct_handlers_enabled():
         reviewed = try_direct_review(text, confirmed_via="telegram")
         if reviewed:

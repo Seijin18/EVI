@@ -1361,11 +1361,15 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
 
 
 def run_llm_eval(extra: list[str], cwd: str) -> bool:
-    """``llm-eval promise|contact-knowledge [flags]`` — real-LLM benchmarks (needs provider keys)."""
+    """``llm-eval promise|contact-knowledge|contact-name-hint [flags]`` — real-LLM benchmarks (needs provider keys)."""
     if extra and extra[0] == "contact-knowledge":
         from testing.llm_eval import contact_knowledge
 
         return contact_knowledge.main(extra, cwd) == 0
+    if extra and extra[0] == "contact-name-hint":
+        from testing.llm_eval import contact_name_hint
+
+        return contact_name_hint.main(extra, cwd) == 0
     from testing.llm_eval import promise
 
     return promise.main(extra, cwd) == 0

@@ -30,7 +30,7 @@ from services.untrusted import wrap_external
 from tools.calendar_time import evi_timezone, now_local
 
 MAX_CHARS = 4000
-LIMITS = {"calendar": 8, "tasks": 5, "email": 3, "whatsapp": 5}
+LIMITS = {"calendar": 8, "tasks": 5, "email": 3, "whatsapp": 5, "names": 3}
 _EMAIL_FETCH = 15
 _EMAIL_DROP_LABELS = frozenset({"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES"})
 _NOREPLY_RE = re.compile(r"no-?reply", re.IGNORECASE)
@@ -65,7 +65,10 @@ class Briefing:
     items: list[BriefItem]
 
 
-_TITLES = {"calendar": "Agenda", "tasks": "Tarefas", "email": "E-mail", "whatsapp": "WhatsApp"}
+_TITLES = {
+    "calendar": "Agenda", "tasks": "Tarefas", "email": "E-mail", "whatsapp": "WhatsApp",
+    "names": 'Conversas sem nome (responda "nomeia N <nome>" ou "ignora N")',
+}
 
 
 def _tz() -> ZoneInfo:
@@ -301,6 +304,12 @@ def _collect_whatsapp() -> list[tuple]:
     return debts + promises + rows
 
 
+def _collect_names(now: datetime) -> list[tuple[str, dict]]:
+    from services.contact_names import prompt_rows
+
+    return prompt_rows(now)
+
+
 # ---------------------------------------------------------------- assembly
 
 
@@ -356,7 +365,9 @@ def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Bri
         ("email", _collect_email),
         ("whatsapp", _collect_whatsapp),
     ]
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    if kind == "morning" and now.weekday() == 0:  # weekly "Conversas sem nome" (SCN-NAME-05)
+        sources.append(("names", lambda: _collect_names(now)))
+    with ThreadPoolExecutor(max_workers=len(sources)) as pool:
         futures = [pool.submit(_run_source, key, fn) for key, fn in sources]
         raw_sections = [f.result() for f in futures]
 
@@ -438,7 +449,7 @@ def resolve_briefing_items(
             soft_fail("briefing.resolve_items", exc)
     if refs is None:
         return [], [NO_BRIEFING_TODAY] if nums else []
-    label = {"commitment": "um compromisso", "reply_debt": "uma conversa esperando resposta"}.get(kind, f"do tipo {kind}")
+    label = {"commitment": "um compromisso", "reply_debt": "uma conversa esperando resposta", "name_prompt": "uma conversa sem nome"}.get(kind, f"do tipo {kind}")
     ids: list = []
     errors: list[str] = []
     for n in nums:
@@ -447,7 +458,7 @@ def resolve_briefing_items(
             errors.append(f"item {n} não existe no briefing")
             continue
         ref_kind, _, ref_id = str(ref).partition(":")
-        if kind == "reply_debt":
+        if kind in ("reply_debt", "name_prompt"):
             if ref_kind != kind or not ref_id:
                 errors.append(f"item {n} do briefing não é {label}")
             elif ref_id not in ids:

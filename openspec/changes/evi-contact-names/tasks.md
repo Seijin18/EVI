@@ -29,12 +29,12 @@
 
 ## 3. Pergunta semanal
 
-- [ ] 3.1 Seção "Conversas sem nome" no briefing de segunda (até 3) + respostas "nomeia N <nome>" / "ignora N"
+- [x] 3.1 Seção "Conversas sem nome" no briefing de segunda (até 3) + respostas "nomeia N <nome>" / "ignora N"
   - SCN-NAME-05
   - Files: `agent/services/briefing.py`, `agent/services/contact_names.py`, `tests/unit/test_briefing.py`, `tests/unit/test_contact_names.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_contact_names.py -q` e `./scripts/evi-test briefing`
 
-- [ ] 3.2 Sugestão de nome `CONTACT_NAME_HINT` (evidência literal validada) + casos no avaliador
+- [x] 3.2 Sugestão de nome `CONTACT_NAME_HINT` (evidência literal validada) + casos no avaliador
   - SCN-NAME-06
   - Files: `agent/services/contact_names.py`, `agent/testing/llm_eval/contact_name_hint.py`, `tests/eval/contact_name_hint_cases.yaml`, `tests/unit/test_contact_names.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_names.py -q` e `./scripts/evi-test llm-eval contact-name-hint --cases synthetic`

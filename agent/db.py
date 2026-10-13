@@ -121,6 +121,8 @@ def _run_migrations() -> None:
                     ON whatsapp_contacts(display_name);
                 ALTER TABLE whatsapp_contacts
                     ADD COLUMN IF NOT EXISTS name_source text;
+                ALTER TABLE whatsapp_contacts
+                    ADD COLUMN IF NOT EXISTS name_prompt_ignored_until timestamptz;
                 CREATE TABLE IF NOT EXISTS turn_log (
                     id BIGSERIAL PRIMARY KEY,
                     ts TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -756,13 +758,26 @@ def get_whatsapp_contact(jid: str) -> Dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def set_name_prompt_ignored(jid: str, until: Any) -> None:
+    """Stop the weekly "conversas sem nome" question for ``jid`` until ``until``."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO whatsapp_contacts (jid, aliases, name_prompt_ignored_until) "
+                "VALUES (%s, '[]'::jsonb, %s) "
+                "ON CONFLICT (jid) DO UPDATE SET name_prompt_ignored_until = EXCLUDED.name_prompt_ignored_until",
+                (jid, until),
+            )
+        conn.commit()
+
+
 def list_whatsapp_contacts_db(limit: int = 500) -> List[Dict[str, Any]]:
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
                 SELECT jid, whatsapp_label, display_name, aliases, phone, notes,
-                       name_source, created_at, updated_at
+                       name_source, name_prompt_ignored_until, created_at, updated_at
                 FROM whatsapp_contacts
                 ORDER BY COALESCE(display_name, whatsapp_label, jid)
                 LIMIT %s
