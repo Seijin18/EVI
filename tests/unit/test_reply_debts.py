@@ -189,7 +189,12 @@ def test_tracking_failure_does_not_break_webhook(client, fake_db):
     "text",
     ["ok", "OK!", "okay", "blz", "beleza", "valeu", "vlw", "obrigado", "Obrigada!",
      "brigado", "muito obrigado", "valeu 👍", "👍", "👍🙏", "de nada", "tmj", "show",
-     "top", "ok, valeu.", "Ok. Obrigado!!", "..."],
+     "top", "ok, valeu.", "Ok. Obrigado!!", "...",
+     # closings v2 (SCN-UX-05)
+     "Joia", "jóia", "JOIA!", "Tranquilo", "tranquilo 🙏", "Fechou, valeu!", "fechou",
+     "ótimo", "Perfeito!", "combinado", "👍🏽", "👌", "😊", "❤️", "🙏🏾",
+     "obrigado, Marcão!", "valeu Ana", "brigadão fulano", "muito obrigada, Dani 😊",
+     "Obrigada Dani!!", "VLW, Zé", "obrigado, Marcão 👍"],
 )
 def test_closing_positive(text):
     assert reply_debts.is_closing_message(text)
@@ -198,7 +203,10 @@ def test_closing_positive(text):
 @pytest.mark.parametrize(
     "text",
     ["ok, me manda amanhã?", "consegue me mandar o orçamento?", "valeu, e o prazo?",
-     "obrigado, mas ainda preciso do contrato", "", None, "okupa", "123"],
+     "obrigado, mas ainda preciso do contrato", "", None, "okupa", "123",
+     "valeu, me manda o contrato?", "valeu! me manda o contrato", "obrigado, Marcão, consegue ver isso?",
+     "joia, qual o valor", "fechou, quando começa", "perfeito, pode me passar o link",
+     "obrigado pelo contrato", "valeu Ana, como faço?", "tranquilo?", "obrigado pelo envio, Ana"],
 )
 def test_closing_negative(text):
     assert not reply_debts.is_closing_message(text)
@@ -233,6 +241,30 @@ def test_list_debts_filters_closing_and_formats(monkeypatch):
     assert [d["name"] for d in out] == ["Fulana"]
     assert out[0]["preview"].startswith("consegue") and round(out[0]["age_h"]) == 6
     assert seen["mn"] == timedelta(hours=4) and seen["mx"] == timedelta(days=7)
+
+
+def test_list_debts_v2_closings_dropped_but_closing_plus_request_kept(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 10, 12, 18, 0, tzinfo=timezone.utc)
+    previews = {"a": "Joia", "b": "obrigado, Marcão!", "c": "Tranquilo",
+                "d": "Fechou, valeu!", "e": "valeu, me manda o contrato?"}
+    rows = [{"jid": f"{k}@s.whatsapp.net", "last_in_at": now - timedelta(hours=6),
+             "last_in_preview": v} for k, v in previews.items()]
+
+    class Db:
+        def init_db(self):
+            pass
+
+        def list_debt_candidates(self, n, mn, mx, limit=200):
+            return rows
+
+        def get_whatsapp_contact(self, jid):
+            return None
+
+    monkeypatch.setitem(sys.modules, "db", Db())
+    out = reply_debts.list_debts(now=now)
+    assert [d["jid"] for d in out] == ["e@s.whatsapp.net"]
 
 
 def test_tools_empty_and_listing(monkeypatch):

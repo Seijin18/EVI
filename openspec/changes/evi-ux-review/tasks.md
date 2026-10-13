@@ -22,7 +22,7 @@
   - Files: `agent/services/briefing.py`, `tests/unit/test_briefing.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py -q`
 
-- [ ] 2.4 Fechamentos v2 ("joia", "tranquilo", agradecimento + vocativo) com os casos reais de 12/10
+- [x] 2.4 Fechamentos v2 ("joia", "tranquilo", agradecimento + vocativo) com os casos reais de 12/10
   - SCN-DEBT-03, SCN-UX-05
   - Files: `agent/services/reply_debts.py`, `tests/unit/test_reply_debts.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reply_debts.py -q`

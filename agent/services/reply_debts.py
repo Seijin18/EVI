@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
@@ -83,22 +84,60 @@ def track_conversation(messages: Iterable) -> int:
 # Versioned: bump when the vocabulary changes. A message is "closing" only when
 # EVERY word is one of these (or it has no words at all: emoji/punctuation only),
 # so "ok, me manda amanhã?" still counts as a debt.
-CLOSING_VERSION = 1
+CLOSING_VERSION = 2
 _CLOSING_TOKEN = (
-    r"(?:ok(?:ay)?|blz|beleza|valeu|vlw|obrigad[oa]s?|brigad[oa]s?|"
-    r"de\s+nada|tmj|show|top|muito)"
+    r"(?:ok(?:ay)?|blz|beleza|valeu|vlw|obrigad[oa]s?|brigad[oa]s?|brigadao|"
+    r"de\s+nada|tmj|show|top|muito|joia|tranquilo|fechou|fechado|otimo|"
+    r"perfeito|combinado|certo|entendido)"
 )
 CLOSING_RE = re.compile(
     rf"[\W_]*(?:{_CLOSING_TOKEN}(?:[\W_]+|$))+", re.IGNORECASE | re.UNICODE
 )
 _NO_WORDS_RE = re.compile(r"[\W_]+", re.UNICODE)
 
+# "thanks + vocative" ("obrigado, Marcão!", "valeu Ana"): a thanks word followed
+# by at most two name-like words. Anything that reads as a request/question is
+# never a closing, so "valeu! me manda o contrato?" stays a debt.
+_THANKS_RE = re.compile(
+    r"[\W_]*(?:muito\s+)?(?:obrigad[oa]s?|brigad[oa]s?|brigadao|valeu|vlw)"
+    r"(?:[\W_]+(?P<name>[^\W\d_]+(?:\s+[^\W\d_]+)?))?[\W_]*",
+    re.IGNORECASE | re.UNICODE,
+)
+_REQUEST_RE = re.compile(
+    r"\b(?:me|manda|mande|passa|passe|envia|envie|consegue|pode|poderia|qual|"
+    r"quais|quando|como|onde|quem|quanto|por\s*que|preciso|queria|quero|"
+    r"mas|porem|e\s+o|e\s+a)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_NOT_A_NAME = frozenset(
+    "e o a os as um uma de do da dos das pelo pela por pra para com sem "
+    "que se no na em ao ja ainda tambem so la aqui".split()
+)
+
+
+def _fold(text: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", text)
+        if unicodedata.category(c) != "Mn" or c == "\u20e3"
+    )
+
 
 def is_closing_message(text: str | None) -> bool:
     t = (text or "").strip()
     if not t:
         return False
-    return bool(_NO_WORDS_RE.fullmatch(t) or CLOSING_RE.fullmatch(t))
+    if _NO_WORDS_RE.fullmatch(t):
+        return True
+    f = _fold(t)
+    if "?" in f or _REQUEST_RE.search(f):
+        return False
+    if CLOSING_RE.fullmatch(f):
+        return True
+    m = _THANKS_RE.fullmatch(f)
+    if m:
+        name = m.group("name") or ""
+        return not any(w.lower() in _NOT_A_NAME for w in name.split())
+    return False
 
 
 def _min_hours() -> float:
