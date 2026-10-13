@@ -29,7 +29,7 @@
 
 ## 3. Avaliação com contexto
 
-- [ ] 3.1 `promise_context.conversation_context(jid, at_ts, knowledge="")` (antes 24 h/10 msgs + depois, dois lados, `wrap_external`, nome do registro; fallback timeline) e `evaluate_promise(...)` com o prompt v3 da avaliação prévia
+- [x] 3.1 `promise_context.conversation_context(jid, at_ts, knowledge="")` (antes 24 h/10 msgs + depois, dois lados, `wrap_external`, nome do registro; fallback timeline) e `evaluate_promise(...)` com o prompt v3 da avaliação prévia
   - SCN-DEBT-10, SCN-DEBT-11, SCN-DEBT-15
   - Files: `agent/services/promise_context.py`, `tests/unit/test_promise_context.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_promise_context.py -q` e `./scripts/evi-test llm-eval promise` ≥ limiar do design

@@ -137,9 +137,10 @@ briefing e notificações). Nova tentativa em 30 min; depois, na varredura diár
 ### 6. Fora do caminho do webhook
 
 `capture_promises` grava `needs_eval` imediatamente (idempotência por
-`(source, source_id)`) e agenda a avaliação em `background_jobs`. O loop in-process
-(o mesmo dos lembretes, `evi-reminders`) pega linhas `needs_eval` com
-`created_at + delay <= now`. Reinício do container não perde nada: o estado está no
+`(source, source_id)`) com `next_eval_at = msg_ts + delay` e `eval_attempts = 0`
+(colunas novas em `pending_commitments`; não existe tabela `background_jobs` — o estado
+da fila é a própria linha). O loop in-process (o mesmo dos lembretes, `evi-reminders`)
+pega linhas `needs_eval` com `next_eval_at <= now`. Reinício do container não perde nada: o estado está no
 Postgres.
 
 ### 7. Reavaliação das existentes
