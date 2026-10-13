@@ -171,3 +171,30 @@ def test_start_loop_releases_stranded_promises_when_context_disabled(monkeypatch
         rel.assert_called_once()
     with patch("db.release_needs_eval", side_effect=RuntimeError("down")):
         assert reminder_loop.release_stranded_promises() == 0  # soft-fails
+
+
+def test_maybe_sweep_runs_once_per_day_after_0645(monkeypatch):
+    import datetime as dt
+
+    monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "true")
+    monkeypatch.setattr(reminder_loop, "_last_sweep_date", None)
+    d = dt.datetime(2026, 10, 12, 6, 44)
+    with patch("services.promise_context.sweep_fulfilled", return_value={}) as sw:
+        assert reminder_loop._maybe_sweep(d) is False  # too early
+        assert reminder_loop._maybe_sweep(d.replace(minute=45)) is True
+        assert reminder_loop._maybe_sweep(d.replace(hour=9)) is False  # same day
+        assert reminder_loop._maybe_sweep(d + dt.timedelta(days=1, hours=1)) is True
+        assert sw.call_count == 2
+
+
+def test_maybe_sweep_disabled_flag_and_failure_is_soft(monkeypatch):
+    import datetime as dt
+
+    monkeypatch.setattr(reminder_loop, "_last_sweep_date", None)
+    d = dt.datetime(2026, 10, 12, 8, 0)
+    monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "false")
+    with patch("services.promise_context.sweep_fulfilled") as sw:
+        assert reminder_loop._maybe_sweep(d) is False and sw.call_count == 0
+    monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "true")
+    with patch("services.promise_context.sweep_fulfilled", side_effect=RuntimeError("x")):
+        assert reminder_loop._maybe_sweep(d) is True  # soft-fails, no raise

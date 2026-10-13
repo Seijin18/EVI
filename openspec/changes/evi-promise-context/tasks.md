@@ -39,12 +39,12 @@
   - Files: `agent/services/promises.py`, `agent/services/promise_context.py`, `agent/db.py`, `tests/unit/test_promises.py`, `tests/unit/test_db.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_promises.py tests/unit/test_reply_debts.py -q` e `./scripts/evi-test smoke`
 
-- [ ] 3.3 Varredura diária de cumprimento (promessas `pending` com mensagens novas do usuário → `done`)
+- [x] 3.3 Varredura diária de cumprimento (promessas `pending` com mensagens novas do usuário → `done`)
   - SCN-DEBT-16
   - Files: `agent/services/promise_context.py`, `agent/services/reminder_loop.py`, `tests/unit/test_promise_context.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_promise_context.py -q`
 
-- [ ] 3.4 `reevaluate_pending_promises()` + `./scripts/evi-test promise-reeval` (dry-run; `--apply`)
+- [x] 3.4 `reevaluate_pending_promises()` + `./scripts/evi-test promise-reeval` (dry-run; `--apply`)
   - SCN-DEBT-13
   - Files: `agent/services/promise_context.py`, `agent/testing/cli.py`, `tests/unit/test_promise_context.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_promise_context.py -q`

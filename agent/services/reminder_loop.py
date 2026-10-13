@@ -22,6 +22,9 @@ DEFAULT_TICK_SEC = 30.0
 MIN_TICK_SEC = 5.0
 PROMISE_EVAL_EVERY_SEC = 60.0
 PROMISE_EVAL_BATCH = 3
+SWEEP_HOUR, SWEEP_MINUTE = 6, 45  # daily fulfilment sweep, before the 07:00 briefing
+
+_last_sweep_date: str | None = None
 
 _thread: threading.Thread | None = None
 _stop: threading.Event | None = None
@@ -66,6 +69,28 @@ def release_stranded_promises() -> int:
         return 0
 
 
+def _maybe_sweep(now=None) -> bool:
+    """Run the fulfilment sweep once per local day, at/after 06:45. True when it ran."""
+    global _last_sweep_date
+    if now is None:
+        from tools.calendar_time import now_local
+
+        now = now_local()
+    today = now.date().isoformat()
+    if _last_sweep_date == today or (now.hour, now.minute) < (SWEEP_HOUR, SWEEP_MINUTE):
+        return False
+    if not _promise_context_enabled():
+        return False
+    _last_sweep_date = today  # set first: a failing sweep is not retried every minute
+    try:
+        from services import promise_context
+
+        promise_context.sweep_fulfilled()
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("reminder_loop.promise_sweep", exc)
+    return True
+
+
 def _run(stop: threading.Event, interval: float) -> None:
     from services import reminders
 
@@ -87,6 +112,10 @@ def _run(stop: threading.Event, interval: float) -> None:
                     promise_context.process_due_evaluations(limit=PROMISE_EVAL_BATCH)
                 except Exception as exc:
                     soft_fail("reminder_loop.promise_eval", exc)
+                try:
+                    _maybe_sweep()
+                except Exception as exc:
+                    soft_fail("reminder_loop.promise_sweep_hook", exc)
         stop.wait(interval)
 
 

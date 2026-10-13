@@ -346,3 +346,123 @@ def process_due_evaluations(now: datetime | None = None, limit: int = 10) -> dic
             except Exception as exc2:  # noqa: BLE001
                 soft_fail("promise_context.bump_after_error", exc2)
     return counts
+
+
+# --- daily fulfilment sweep (SCN-DEBT-16) ----------------------------------------
+
+SWEEP_MAX_AGE_DAYS = 14
+SWEEP_MIN_GAP_HOURS = 20
+
+
+def _row_ts(row: dict, now: datetime) -> datetime:
+    return _aware(row.get("msg_ts"), _aware(row.get("created_at"), now))
+
+
+def _row_text(row: dict) -> str:
+    return row.get("raw_text") or row.get("title") or ""
+
+
+def sweep_fulfilled(now: datetime | None = None, limit: int = 50) -> dict:
+    """Mark `pending` promises as `done` when the user's later messages fulfil them.
+
+    Fulfilment only: never dismisses or retitles. Rows whose conversation has no
+    new message from the user are skipped without an LLM call.
+    """
+    import db
+    from services.soft_fail import soft_fail
+
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    counts = {"checked": 0, "done": 0, "unchanged": 0, "skipped": 0, "error": 0}
+
+    for row in db.list_promises_to_sweep(
+        now, limit, max_age_days=SWEEP_MAX_AGE_DAYS, min_gap_hours=SWEEP_MIN_GAP_HOURS
+    ):
+        counts["checked"] += 1
+        try:
+            jid = row.get("source_chat") or ""
+            ts = _row_ts(row, now)
+            ctx = conversation_context(jid, ts, message_id=row.get("source_id"), now=now)
+            if not any("] Você:" in ln for ln in ctx["after"]):
+                db.mark_promise_swept(row["id"], now)
+                counts["skipped"] += 1
+                continue
+            res = evaluate_promise(
+                jid=jid, message_text=_row_text(row), message_ts=ts,
+                message_id=row.get("source_id"), now=now,
+            )
+            if res is None:
+                counts["error"] += 1
+                continue
+            db.mark_promise_swept(row["id"], now)
+            if res.get("is_promise") and res.get("done") and db.mark_promise_done_by_sweep(row["id"]):
+                counts["done"] += 1
+            else:
+                counts["unchanged"] += 1
+        except Exception as exc:  # noqa: BLE001
+            counts["error"] += 1
+            soft_fail("promise_context.sweep_row", exc)
+    return counts
+
+
+# --- one-off re-evaluation of existing pending promises (SCN-DEBT-13) -------------
+
+
+def reevaluate_pending_promises(apply: bool = False, now: datetime | None = None, limit: int = 500) -> list[dict]:
+    """Apply the contextual evaluation to every pending promise.
+
+    Returns one record per row: ``{id, old_title, decision, new_title, new_due,
+    jid_label}`` with decision in dismiss|update|done|keep|error. Only writes
+    when ``apply`` is true; an error leaves the row untouched.
+    """
+    import db
+    from services.soft_fail import soft_fail
+
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    out: list[dict] = []
+    for row in db.list_pending_promises(limit):
+        rec = {
+            "id": row["id"], "old_title": row.get("title") or "", "decision": "error",
+            "new_title": None, "new_due": None,
+            "jid_label": _contact_name(row.get("source_chat") or "") if row.get("source_chat") else "",
+        }
+        out.append(rec)
+        try:
+            if not row.get("source_chat"):
+                continue
+            res = evaluate_promise(
+                jid=row["source_chat"], message_text=_row_text(row), message_ts=_row_ts(row, now),
+                message_id=row.get("source_id"), now=now,
+            )
+            if res is None:
+                continue
+            if not res.get("is_promise"):
+                rec["decision"] = "dismiss"
+                if apply:
+                    db.finish_pending_promise(row["id"], "dismissed", "auto-eval")
+            elif res.get("done"):
+                rec["decision"] = "done"
+                if apply:
+                    db.finish_pending_promise(row["id"], "done", "auto-eval")
+            else:
+                title, due = res.get("title") or None, res.get("due") or None
+                changed = (title and title != rec["old_title"]) or (due and due != row.get("due_date"))
+                rec["decision"] = "update" if changed else "keep"
+                rec["new_title"], rec["new_due"] = title, due
+                if changed and apply:
+                    db.update_pending_promise(row["id"], title, due, False)
+        except Exception as exc:  # noqa: BLE001
+            rec["decision"] = "error"
+            soft_fail("promise_context.reeval_row", exc)
+    return out
+
+
+def format_reeval(records: list[dict]) -> str:
+    lines = ["id | decision | old title -> new title | due"]
+    for r in records:
+        new = f" -> {r['new_title']}" if r.get("new_title") else ""
+        lines.append(f"{r['id']} | {r['decision']} | {r['old_title']}{new} | {r.get('new_due') or ''}")
+    return "\n".join(lines)

@@ -1367,6 +1367,29 @@ def run_llm_eval_collect(extra: list[str], cwd: str) -> bool:
     return promise.main_collect(extra, cwd) == 0
 
 
+def run_promise_reeval(extra: list[str]) -> bool:
+    """``promise-reeval [--apply]`` — contextual re-evaluation of pending promises.
+
+    Needs DATABASE_URL + Evolution + LLM keys: run inside agent-api
+    (``docker compose up -d --build agent-api`` first, the image must have this code).
+    """
+    from services import promise_context
+
+    apply = "--apply" in extra
+    records = promise_context.reevaluate_pending_promises(apply=apply)
+    print(promise_context.format_reeval(records))
+    print(f"\n{len(records)} promise(s); {'APPLIED' if apply else 'dry-run (use --apply)'}")
+    return True
+
+
+def run_promise_sweep() -> bool:
+    """``promise-sweep`` — run the daily fulfilment sweep once (agent-api container)."""
+    from services import promise_context
+
+    print(promise_context.sweep_fulfilled())
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="EVI feature test harness")
     parser.add_argument("feature", nargs="?", default="smoke")
@@ -1422,10 +1445,12 @@ def main() -> int:
         "injection": run_injection,
         "llm-eval": lambda: run_llm_eval(extra, orig_cwd),
         "llm-eval-collect": lambda: run_llm_eval_collect(extra, orig_cwd),
+        "promise-reeval": lambda: run_promise_reeval(extra),
+        "promise-sweep": run_promise_sweep,
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
 
-    if extra and feature not in ("llm-eval", "llm-eval-collect"):
+    if extra and feature not in ("llm-eval", "llm-eval-collect", "promise-reeval"):
         parser.error(f"unrecognized arguments: {' '.join(extra)}")
 
     if feature not in runners:

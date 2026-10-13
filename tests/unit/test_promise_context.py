@@ -258,3 +258,131 @@ def test_exception_in_one_row_does_not_stop_the_others(queue, monkeypatch):
     assert out["error"] == 1 and out["pending"] == 1
     assert queue.bumped == [(1, NOW + timedelta(minutes=30))]  # failing row not retried every tick
     assert queue.finished == [(2, "pending", "T", None)]
+
+
+# --- daily sweep (SCN-DEBT-16) and re-evaluation (SCN-DEBT-13) -------------------
+
+
+class FakeSweepDb:
+    def __init__(self, rows):
+        self.rows = rows
+        self.swept, self.done, self.dismissed, self.updated = [], [], [], []
+
+    def list_promises_to_sweep(self, now, limit=50, **kw):
+        return list(self.rows)[:limit]
+
+    def mark_promise_swept(self, rid, ts):
+        self.swept.append(rid)
+        return True
+
+    def mark_promise_done_by_sweep(self, rid):
+        self.done.append(rid)
+        return True
+
+    def list_pending_promises(self, limit=500):
+        return list(self.rows)[:limit]
+
+    def finish_pending_promise(self, rid, status, via):
+        self.dismissed.append((rid, status, via))
+        return True
+
+    def update_pending_promise(self, rid, title, due, clear_due=False):
+        self.updated.append((rid, title, due))
+        return True
+
+
+@pytest.fixture
+def sdb(monkeypatch):
+    import sys
+
+    d = FakeSweepDb([])
+    monkeypatch.setitem(sys.modules, "db", d)
+    return d
+
+
+def ctx(monkeypatch, after):
+    monkeypatch.setattr(
+        pc, "conversation_context",
+        lambda jid, ts, **kw: {"contact": "Ana", "before": [], "after": after, "source": "evolution"},
+    )
+
+
+USER_AFTER = ["[22:00] Você: https://drive.google.com/x"]
+
+
+def test_sweep_marks_done_when_fulfilled(sdb, monkeypatch):
+    sdb.rows[:] = [qrow(1, age_h=20, text="Mandar o link do drive")]
+    ctx(monkeypatch, USER_AFTER)
+    fake_eval(monkeypatch, {"is_promise": True, "title": "x", "due": None, "done": True})
+    c = pc.sweep_fulfilled(NOW)
+    assert sdb.done == [1] and sdb.swept == [1]
+    assert c["done"] == 1 and c["checked"] == 1
+
+
+def test_sweep_skips_without_user_message_after_and_no_llm(sdb, monkeypatch):
+    sdb.rows[:] = [qrow(1)]
+    ctx(monkeypatch, ["[22:00] Ana: e aí?"])
+    fake_eval(monkeypatch, lambda kw: pytest.fail("LLM must not be called"))
+    c = pc.sweep_fulfilled(NOW)
+    assert c["skipped"] == 1 and sdb.done == [] and sdb.swept == [1]
+
+
+def test_sweep_none_is_error_and_not_marked_swept(sdb, monkeypatch):
+    sdb.rows[:] = [qrow(1)]
+    ctx(monkeypatch, USER_AFTER)
+    fake_eval(monkeypatch, None)
+    c = pc.sweep_fulfilled(NOW)
+    assert c["error"] == 1 and sdb.done == [] and sdb.swept == []
+
+
+def test_sweep_not_done_or_not_promise_is_unchanged(sdb, monkeypatch):
+    sdb.rows[:] = [qrow(1), qrow(2)]
+    ctx(monkeypatch, USER_AFTER)
+    fake_eval(monkeypatch, lambda kw: {"is_promise": kw["message_id"] == "m1", "done": False,
+                                       "title": "t", "due": None})
+    c = pc.sweep_fulfilled(NOW)
+    assert c["unchanged"] == 2 and sdb.done == [] and sdb.dismissed == [] and sdb.updated == []
+
+
+def test_sweep_exception_in_row_does_not_stop_others(sdb, monkeypatch):
+    sdb.rows[:] = [qrow(1), qrow(2)]
+    ctx(monkeypatch, USER_AFTER)
+    fake_eval(monkeypatch, lambda kw: RuntimeError("x") if kw["message_id"] == "m1"
+              else {"is_promise": True, "done": True, "title": "t", "due": None})
+    c = pc.sweep_fulfilled(NOW)
+    assert c["error"] == 1 and sdb.done == [2]
+
+
+def reeval_setup(sdb, monkeypatch, result):
+    sdb.rows[:] = [qrow(1, text="Pode deixar")]
+    fake_eval(monkeypatch, result)
+
+
+def test_scn_debt_13_rejected_pending_is_dismissed_on_apply(sdb, monkeypatch):
+    reeval_setup(sdb, monkeypatch, {"is_promise": False, "title": "", "due": None, "done": False})
+    recs = pc.reevaluate_pending_promises(apply=False, now=NOW)
+    assert recs[0]["decision"] == "dismiss" and sdb.dismissed == []  # dry-run changes nothing
+    recs = pc.reevaluate_pending_promises(apply=True, now=NOW)
+    assert recs[0]["decision"] == "dismiss" and sdb.dismissed == [(1, "dismissed", "auto-eval")]
+
+
+def test_reeval_confirmed_gets_title_and_due(sdb, monkeypatch):
+    reeval_setup(sdb, monkeypatch, {"is_promise": True, "title": "Mandar o orçamento", "due": "2026-10-16", "done": False})
+    recs = pc.reevaluate_pending_promises(apply=True, now=NOW)
+    assert recs[0]["decision"] == "update" and recs[0]["new_title"] == "Mandar o orçamento"
+    assert sdb.updated == [(1, "Mandar o orçamento", "2026-10-16")]
+
+
+def test_reeval_done_and_error_and_keep(sdb, monkeypatch):
+    reeval_setup(sdb, monkeypatch, {"is_promise": True, "title": "", "due": None, "done": True})
+    assert pc.reevaluate_pending_promises(apply=True, now=NOW)[0]["decision"] == "done"
+    assert sdb.dismissed == [(1, "done", "auto-eval")]
+    sdb.dismissed.clear()
+    fake_eval(monkeypatch, None)
+    assert pc.reevaluate_pending_promises(apply=True, now=NOW)[0]["decision"] == "error"
+    fake_eval(monkeypatch, RuntimeError("boom"))
+    assert pc.reevaluate_pending_promises(apply=True, now=NOW)[0]["decision"] == "error"
+    fake_eval(monkeypatch, {"is_promise": True, "title": "Pode deixar", "due": None, "done": False})
+    assert pc.reevaluate_pending_promises(apply=True, now=NOW)[0]["decision"] == "keep"
+    assert sdb.dismissed == [] and sdb.updated == []
+    assert "Pode deixar" in pc.format_reeval(pc.reevaluate_pending_promises(now=NOW))

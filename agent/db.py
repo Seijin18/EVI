@@ -75,6 +75,8 @@ def _run_migrations() -> None:
                     ADD COLUMN IF NOT EXISTS eval_attempts INT NOT NULL DEFAULT 0;
                 ALTER TABLE pending_commitments
                     ADD COLUMN IF NOT EXISTS msg_ts TIMESTAMPTZ;
+                ALTER TABLE pending_commitments
+                    ADD COLUMN IF NOT EXISTS last_swept_at TIMESTAMPTZ;
                 CREATE TABLE IF NOT EXISTS session_tool_snapshots (
                     id SERIAL PRIMARY KEY,
                     session_id VARCHAR(128) NOT NULL,
@@ -386,6 +388,112 @@ def bump_promise_eval(commitment_id: int, next_eval_at: Any) -> bool:
                 WHERE id = %s AND status = 'needs_eval'
                 """,
                 (next_eval_at, commitment_id),
+            )
+            ok = cur.rowcount > 0
+        conn.commit()
+    return ok
+
+
+def list_promises_to_sweep(now: Any, limit: int = 50, *, max_age_days: int = 14,
+                           min_gap_hours: int = 20) -> List[Dict[str, Any]]:
+    """Pending whatsapp promises (≤ max_age_days old) not swept within min_gap_hours."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, source_id, title, due_date::text, raw_text, source_chat,
+                       msg_ts, created_at, last_swept_at
+                FROM pending_commitments
+                WHERE status = 'pending' AND type = 'promise' AND source = 'whatsapp_from_me'
+                  AND source_chat IS NOT NULL AND source_chat <> ''
+                  AND created_at >= %s::timestamptz - make_interval(days => %s)
+                  AND (last_swept_at IS NULL
+                       OR last_swept_at < %s::timestamptz - make_interval(hours => %s))
+                ORDER BY id ASC
+                LIMIT %s
+                """,
+                (now, max_age_days, now, min_gap_hours, limit),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+def mark_promise_swept(commitment_id: int, ts: Any) -> bool:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE pending_commitments SET last_swept_at = %s WHERE id = %s",
+                (ts, commitment_id),
+            )
+            ok = cur.rowcount > 0
+        conn.commit()
+    return ok
+
+
+def mark_promise_done_by_sweep(commitment_id: int) -> bool:
+    """Fulfilment found by the daily sweep: pending → done (guarded)."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE pending_commitments
+                SET status = 'done', confirmed_via = 'auto-sweep'
+                WHERE id = %s AND status = 'pending'
+                """,
+                (commitment_id,),
+            )
+            ok = cur.rowcount > 0
+        conn.commit()
+    return ok
+
+
+def list_pending_promises(limit: int = 500) -> List[Dict[str, Any]]:
+    """Every pending type='promise' row (any source), oldest first (re-evaluation)."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, source_id, title, due_date::text, raw_text, source_chat,
+                       msg_ts, created_at
+                FROM pending_commitments
+                WHERE status = 'pending' AND type = 'promise'
+                ORDER BY id ASC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+def update_pending_promise(commitment_id: int, title: str | None, due_date: str | None,
+                           clear_due: bool = False) -> bool:
+    """Retitle / redate a still-pending promise (guarded by status='pending')."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE pending_commitments
+                SET title = COALESCE(%s, title),
+                    due_date = CASE WHEN %s THEN NULL ELSE COALESCE(%s, due_date) END
+                WHERE id = %s AND status = 'pending' AND type = 'promise'
+                """,
+                (title or None, clear_due, due_date or None, commitment_id),
+            )
+            ok = cur.rowcount > 0
+        conn.commit()
+    return ok
+
+
+def finish_pending_promise(commitment_id: int, new_status: str, confirmed_via: str) -> bool:
+    """Re-evaluation outcome for a pending promise (dismissed/done), guarded by 'pending'."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE pending_commitments
+                SET status = %s, confirmed_via = %s
+                WHERE id = %s AND status = 'pending' AND type = 'promise'
+                """,
+                (new_status, confirmed_via, commitment_id),
             )
             ok = cur.rowcount > 0
         conn.commit()

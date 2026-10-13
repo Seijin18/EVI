@@ -249,6 +249,45 @@ def test_bump_promise_eval_reschedules_and_counts_attempts():
         assert cur.fetchone()[0] == 1
 
 
+def _promise(**kw):
+    return _insert(source="whatsapp_from_me", ctype="promise", event_date=None,
+                   source_chat="5511@s.whatsapp.net", **kw)
+
+
+def test_sweep_helpers_select_mark_and_guard():
+    import db
+
+    now = dt.datetime.now(dt.timezone.utc)
+    ok, _ = _promise()
+    swept, _ = _promise()
+    other_src, _ = _insert(ctype="promise", event_date=None, source_chat="x@s.whatsapp.net")
+    old, _ = _promise()
+    with db._conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE pending_commitments SET created_at = NOW() - interval '20 days' WHERE id = %s", (old,))
+        conn.commit()
+    assert db.mark_promise_swept(swept, now - dt.timedelta(hours=2))
+    ids = [r["id"] for r in db.list_promises_to_sweep(now, 500)]
+    assert ok in ids and swept not in ids and other_src not in ids and old not in ids
+    later = now + dt.timedelta(hours=21)
+    assert swept in [r["id"] for r in db.list_promises_to_sweep(later, 500)]
+    assert db.mark_promise_done_by_sweep(ok) is True
+    assert db.mark_promise_done_by_sweep(ok) is False  # guarded by status='pending'
+    assert ok not in [r["id"] for r in db.list_promises_to_sweep(now, 500)]
+
+
+def test_reeval_helpers_guarded_by_pending():
+    import db
+
+    rid, _ = _promise()
+    assert rid in [r["id"] for r in db.list_pending_promises(5000)]
+    assert db.update_pending_promise(rid, "Novo título", "2099-03-03")
+    row = next(r for r in db.list_pending_promises(5000) if r["id"] == rid)
+    assert row["title"] == "Novo título" and row["due_date"] == "2099-03-03"
+    assert db.finish_pending_promise(rid, "dismissed", "auto-eval")
+    assert db.finish_pending_promise(rid, "done", "auto-eval") is False
+    assert db.update_pending_promise(rid, "x", None) is False
+
+
 def test_scn_debt_12_expired_row_with_past_due_is_listed_after_clear_due():
     import db
 
