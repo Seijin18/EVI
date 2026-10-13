@@ -19,6 +19,18 @@ def _today_str(when: date | None = None) -> str:
     return datetime.now(tz).date().strftime("%Y-%m-%d")
 
 
+def _local_day(ts: str) -> str:
+    """Timeline ``ts`` is UTC ISO; the summary day is in ``EVI_TIMEZONE``."""
+    try:
+        dt = datetime.fromisoformat(ts)
+    except ValueError:
+        return ts[:10]
+    if dt.tzinfo is None:
+        return ts[:10]
+    tz = ZoneInfo(os.getenv("EVI_TIMEZONE", "America/Sao_Paulo"))
+    return dt.astimezone(tz).date().strftime("%Y-%m-%d")
+
+
 def _read_timeline(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
@@ -68,7 +80,7 @@ def build_summary_markdown(
     day_s = _today_str(day)
     root = ensure_contact(jid, label=label)
     timeline = _read_timeline(root / "timeline.jsonl")
-    day_entries = [e for e in timeline if str(e.get("ts", "")).startswith(day_s)]
+    day_entries = [e for e in timeline if _local_day(str(e.get("ts", ""))) == day_s]
     scheduled = [
         r
         for r in _scheduled_today_rows()
