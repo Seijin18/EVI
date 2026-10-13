@@ -1,0 +1,15 @@
+id: SIM-MEM-04
+title: Contact memory - get_whatsapp_contact_info mostra os fatos aprendidos pela atualização (SCN-MEM-16)
+tags: [contact-memory]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "Oi! Aqui é a Ana, trabalho na Vetor Logística. Consegue me mandar a planilha de custos até quinta?", from_me: false, jid: "5511955550301@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - whatsapp_contact: {text: "mando sim", from_me: true, jid: "5511955550301@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - clock: D0 09:30
+  - job: contact-learn
+  - telegram: "O que você sabe sobre a Ana Exemplo? Use get_whatsapp_contact_info."
+    expect:
+      reply_within_s: 90
+      tools_called_any: [get_whatsapp_contact_info]
+      reply_matches: "Vetor"

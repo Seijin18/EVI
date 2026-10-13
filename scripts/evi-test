@@ -25,7 +25,7 @@ if _agent_api_up; then
   if [[ "$feature" == "chat" ]] || [[ "$feature" == "memory-live" ]]; then
     use_container=true
   fi
-  if [[ "$feature" == "promise-reeval" ]] || [[ "$feature" == "promise-sweep" ]] || [[ "$feature" == "contact-identity-migrate" ]]; then
+  if [[ "$feature" == "promise-reeval" ]] || [[ "$feature" == "promise-sweep" ]] || [[ "$feature" == "contact-identity-migrate" ]] || [[ "$feature" == "contact-knowledge-migrate" ]]; then
     use_container=true  # needs DATABASE_URL (compose hostname); image must be rebuilt first
   fi
   if [[ " $* " == *" --live-windmill "* ]] || [[ " $* " == *" --live-qdrant "* ]]; then

@@ -1,6 +1,6 @@
 # Execução da fila — iniciada 2026-10-12 (2ª rodada)
 ## Estado
-- Change atual: evi-contact-knowledge (fase: implementar) — task 1.1
+- Change atual: evi-contact-knowledge (fase: implementar) — tasks 1.1–3.3 fechadas; 4.1 quase (bloqueada), 4.2 pendente
 - Ordem: evi-promise-context → evi-security-review → evi-contact-knowledge → evi-contact-names → evi-ux-review
 - Concluídos: evi-promise-context (arquivado 2026-10-13, commits 8d6472f..8c5b4c8 + archive), evi-security-review (arquivado 2026-10-13, commits e58da95..4ab5471 + archive)
 - Pulados: evi-background-execution (#38) — condicional (inalterado)
@@ -28,6 +28,7 @@
 - [ ] Limite de crédito mensal na chave do OpenRouter — https://openrouter.ai/settings/keys
 - [ ] Publicar o schedule diário das 03:30 do conhecimento de contatos: `cd windmill && wmill sync push` (cria `f/integrations/contact_learn_daily`; confirmar `enabled` na UI) — evi-contact-knowledge 3.2
 ## Bloqueios
+- 2026-10-13 evi-contact-knowledge 4.1: o Gemini devolve `429 RESOURCE_EXHAUSTED: Your project has exceeded its monthly spending cap`. Impacto: (a) o chat de produção também usa essa chave — os logs do agent-api mostram 16 ocorrências de 429 nas últimas 12 h; (b) não dá para regravar o cassette de SIM-DEBT-06 (replay do tag `reply-debts` fica vermelho nesse cenário) nem rodar `critical --repeat 3 --llm live`. Tentado: 2 gravações (429 nas duas); espera não resolve (teto mensal). Precisa do usuário: aumentar/zerar o teto do projeto Gemini (https://aistudio.google.com/ → Spend / Billing). Depois: `./scripts/evi-sim run --id SIM-DEBT-06 --llm record`, `--id SIM-DEBT-06 --repeat 3 --llm live`, `./scripts/evi-sim run --tag reply-debts --llm replay`, `./scripts/evi-sim run --tag critical --repeat 3 --llm live`, e então a task 4.2. A fila retoma de 4.2 (migração `--apply` com você, primeira execução do lote, auditoria de 5 perfis).
 
 ---
 

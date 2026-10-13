@@ -49,14 +49,14 @@
   - Files: `windmill/f/integrations/`, `docs/windmill.md`
   - Verify: `./scripts/evi-test windmill` e schedule `enabled` listado no Windmill
 
-- [ ] 3.3 Migração `contact-knowledge-migrate` (dry-run / `--apply`): `## Síntese (…)` → `history.md`
+- [x] 3.3 Migração `contact-knowledge-migrate` (dry-run / `--apply`): `## Síntese (…)` → `history.md`
   - SCN-MEM-20
   - Files: `agent/services/contact_knowledge.py`, `agent/testing/cli.py`, `tests/unit/test_contact_knowledge.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_knowledge.py -q` e `./scripts/evi-test contact-knowledge-migrate` (dry-run)
 
 ## 4. Simulação e fechamento
 
-- [ ] 4.1 Cenários `SIM-MEM-*`: conversa com pedido → "Em aberto" com o item; metadado não vira fato; JSON inválido não apaga perfil; `get_contact_info` mostra fatos; regravar cassettes; `docs/testing.md`
+- [ ] 4.1 (SIM-MEM-01/02/04 prontos e verdes no replay; falta regravar o cassette de SIM-DEBT-06 e rodar `critical --repeat 3 --llm live`: bloqueado pelo teto mensal do Gemini) Cenários `SIM-MEM-*`: conversa com pedido → "Em aberto" com o item; metadado não vira fato; JSON inválido não apaga perfil; `get_contact_info` mostra fatos; regravar cassettes; `docs/testing.md`
   - SCN-MEM-16..18
   - Files: `tests/sim/scenarios/contact-memory/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag contact-memory --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --repeat 3 --llm live`

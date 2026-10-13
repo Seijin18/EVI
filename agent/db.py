@@ -635,8 +635,17 @@ def upsert_whatsapp_contact(
 
     with _conn() as conn:
         with conn.cursor() as cur:
+            # Atomic against concurrent writers (webhook vs tick loops): a bare
+            # SELECT-then-INSERT lost the pushName label on a duplicate-key race, and
+            # SELECT-then-UPDATE overwrote it with a stale NULL.
             cur.execute(
-                "SELECT whatsapp_label, display_name, aliases, phone, notes FROM whatsapp_contacts WHERE jid = %s",
+                "INSERT INTO whatsapp_contacts (jid, aliases) VALUES (%s, '[]'::jsonb) "
+                "ON CONFLICT (jid) DO NOTHING",
+                (jid,),
+            )
+            cur.execute(
+                "SELECT whatsapp_label, display_name, aliases, phone, notes FROM whatsapp_contacts "
+                "WHERE jid = %s FOR UPDATE",
                 (jid,),
             )
             row = cur.fetchone()

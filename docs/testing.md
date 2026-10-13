@@ -69,6 +69,13 @@ relógio simulado. A chamada `run_structured("promise")` vai ao OpenRouter real 
 `EVI_LLM_TASK_DAILY_USD=0.50`) com a chave de `OPENROUTER_API_KEY` do `.env` (ou
 `EVI_SIM_OPENROUTER_API_KEY`); em `record`/`replay` é gravada/servida no mesmo cassete do cenário
 (chave `structured:<sha256>` de task+prompt+schema, com data/dia da semana/horários normalizados).
+Conhecimento de contato: `./scripts/evi-sim run --tag contact-memory --repeat 3 --llm live` (SIM-MEM-01/02/04).
+O passo `job: contact-learn` chama `POST /jobs/contact-learn?wait=true` (atualiza fatos/"Em aberto" dos contatos com
+mensagens novas; a chamada estruturada `CONTACT_KNOWLEDGE` usa o OpenRouter ZDR em `live`/`record` e o cassete em `replay`).
+`expect.contact_profile: {jid, section?, matches?, not_matches?}` lê o `profile.md` do contato no container do sim e
+aplica regex (sem diferenciar maiúsculas) ao arquivo ou a uma seção (`Fatos`, `Em aberto`). SCN-MEM-18 (JSON inválido não
+altera o perfil) fica só nos testes unitários: o harness não injeta falha no LLM. Migração das sínteses antigas:
+`./scripts/evi-test contact-knowledge-migrate [--apply]` (dry-run por padrão; só contagens).
 Lembretes: `./scripts/evi-sim run --tag reminders --repeat 3 --llm live` (o loop roda dentro do
 `agent-api` com `EVI_REMINDERS_TICK_SEC=5` e lê o relógio libfaketime). Um passo `clock` aceita
 `expect: {reply_within_s, reply_matches, no_reply}`: captura as mensagens enviadas ao Telegram

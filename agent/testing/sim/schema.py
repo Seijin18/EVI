@@ -30,7 +30,7 @@ STEP_TYPES = (
 )
 VOICE_STEPS = ("telegram_voice", "whatsapp_control_voice", "whatsapp_contact_voice")
 AUDIO_FIXTURE_RE = re.compile(r"^[A-Za-z0-9_.-]+$")  # name inside tests/fixtures/audio/
-JOBS = ("heartbeat", "daily-summary", "briefing")
+JOBS = ("heartbeat", "daily-summary", "briefing", "contact-learn")
 # agent tables a scenario may inspect via expect.postgres (never free-form SQL)
 PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log", "reminders", "reminder_fires", "wa_conversation_state")
 
@@ -53,6 +53,7 @@ EXPECT_KEYS = {
     "no_reply_window_s",
     "messages_min",
     "telegram_sent_count_matching",
+    "contact_profile",
     "judge",
 }
 DEFAULT_NO_REPLY_WINDOW_S = 15
@@ -186,6 +187,17 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
             re.compile(tm["regex"])
         except (re.error, TypeError) as exc:
             raise _err(path, f"{where}.telegram_sent_count_matching.regex", f"invalid regex: {exc}") from exc
+    if "contact_profile" in exp:
+        cp = exp["contact_profile"]
+        _check_keys(cp, {"jid", "section", "matches", "not_matches"}, path, f"{where}.contact_profile")
+        if not isinstance(cp.get("jid"), str) or not ({"matches", "not_matches"} & set(cp)):
+            raise _err(path, f"{where}.contact_profile", "needs 'jid' and 'matches' and/or 'not_matches'")
+        for k in ("matches", "not_matches"):
+            if k in cp:
+                try:
+                    re.compile(cp[k])
+                except (re.error, TypeError) as exc:
+                    raise _err(path, f"{where}.contact_profile.{k}", f"invalid regex: {exc}") from exc
     for key in ("tools_called_any", "tools_not_called"):
         if key in exp and not isinstance(exp[key], list):
             raise _err(path, f"{where}.{key}", "must be a list")
@@ -398,6 +410,36 @@ def count_third_party_outbound(
     return n
 
 
+def profile_section(text: str, section: str | None) -> str:
+    """Body of ``## <section>`` in a profile.md (whole text when ``section`` is None)."""
+    if not section:
+        return text
+    body: list[str] | None = None
+    for line in (text or "").splitlines():
+        if line.startswith("## "):
+            if body is not None:
+                break
+            if line[3:].strip() == section:
+                body = []
+        elif body is not None:
+            body.append(line)
+    return "\n".join(body or [])
+
+
+def eval_contact_profile(exp: dict, text: str | None) -> list[str]:
+    """``expect.contact_profile``: regexes (case-insensitive) over the contact's profile.md or one section."""
+    if text is None:
+        return ["contact_profile: profile.md not found for the contact"]
+    sec = profile_section(text, exp.get("section"))
+    where = f"profile.md{' ## ' + exp['section'] if exp.get('section') else ''}"
+    fails: list[str] = []
+    if "matches" in exp and not re.search(exp["matches"], sec, re.S | re.I):
+        fails.append(f"contact_profile: /{exp['matches']}/ did not match {where}")
+    if "not_matches" in exp and re.search(exp["not_matches"], sec, re.S | re.I):
+        fails.append(f"contact_profile: /{exp['not_matches']}/ matched {where}")
+    return fails
+
+
 def eval_expect(exp: dict, obs: dict) -> list[str]:
     """Pure: apply one ``expect`` block to observations; returns failure reasons.
 
@@ -463,6 +505,8 @@ def eval_expect(exp: dict, obs: dict) -> list[str]:
         )
         if n != tm["count"]:
             fails.append(f"telegram_sent_count_matching: /{tm['regex']}/ expected {tm['count']} user-bound messages got {n}")
+    if "contact_profile" in exp:
+        fails += eval_contact_profile(exp["contact_profile"], obs.get("contact_profile"))
     for row, got in zip(exp.get("postgres") or [], obs.get("postgres") or []):
         if got != row["count"]:
             fails.append(f"postgres {row['table']} {row.get('where') or ''}: expected count {row['count']} got {got}")

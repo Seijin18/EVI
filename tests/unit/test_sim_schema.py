@@ -259,3 +259,30 @@ def test_postgres_where_operators_and_within_s():
 def test_postgres_bad_operator_rejected(row, needle):
     with pytest.raises(ScenarioError, match=needle):
         parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"postgres": [row]}}]))
+
+
+PROFILE_TXT = "# Contact memory\n\n## Fatos\n- Gosta de café (2026-10-12)\n\n## Em aberto\n- Usuário vai mandar a planilha de custos (2026-10-12)\n\n## Notas\nx\n"
+
+
+def test_contact_profile_expect_and_job_contact_learn():
+    s = parse_scenario(_scn(steps=[
+        {"job": "contact-learn"},
+        {"clock": "D0 10:00", "expect": {"contact_profile": {"jid": "5511@s.whatsapp.net", "section": "Em aberto", "matches": "planilha"}}},
+    ]))
+    exp = s.steps[1].expect["contact_profile"]
+    assert schema.eval_expect({"contact_profile": exp}, {"contact_profile": PROFILE_TXT}) == []
+
+
+def test_contact_profile_section_scoping_and_failures():
+    sec = {"jid": "j", "section": "Em aberto", "matches": "café"}
+    assert schema.eval_expect({"contact_profile": sec}, {"contact_profile": PROFILE_TXT})  # café is in Fatos only
+    assert schema.eval_expect({"contact_profile": {"jid": "j", "not_matches": "planilha"}}, {"contact_profile": PROFILE_TXT})
+    assert schema.eval_expect({"contact_profile": {"jid": "j", "not_matches": "reuni"}}, {"contact_profile": PROFILE_TXT}) == []
+    assert schema.eval_expect({"contact_profile": {"jid": "j", "matches": "x"}}, {"contact_profile": None})  # missing file fails
+
+
+def test_contact_profile_validation():
+    with pytest.raises(ScenarioError):
+        parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"contact_profile": {"jid": "j"}}}]))
+    with pytest.raises(ScenarioError):
+        parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"contact_profile": {"jid": "j", "matches": "("}}}]))

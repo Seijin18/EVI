@@ -568,3 +568,43 @@ def test_concurrent_updates_are_serialised_per_jid(mem, monkeypatch):
     assert active["max"] == 1
     assert sorted(res) == ["no-messages", "ok"]  # the second re-read the profile and found nothing new
     assert active["calls"] == 1
+
+
+SYNTH = "## Síntese (2026-06-17, últimos 7 dias)\nConversaram sobre o projeto X.\nLinha dois.\n"
+SYNTH_PROFILE = PROFILE.replace("\n## Notas\n", f"\n{SYNTH}\n## Notas\n") + "\n## Síntese (2026-06-24, últimos 7 dias)\nOutra.\n"
+
+
+def test_scn_mem_20_migrate_syntheses(mem):
+    p = _seed(SYNTH_PROFILE)
+    hist = p.parent / "history.md"
+    hist.write_text("# História\nantigo\n", encoding="utf-8")
+
+    dry = ck.migrate_syntheses()
+    assert dry["with_synthesis"] == 1 and dry["sections"] == 2 and dry["moved"] == 0
+    assert p.read_text(encoding="utf-8") == SYNTH_PROFILE  # dry-run changes nothing
+    assert hist.read_text(encoding="utf-8") == "# História\nantigo\n"
+
+    res = ck.migrate_syntheses(apply=True)
+    assert res["moved"] == 2
+    new = p.read_text(encoding="utf-8")
+    assert "## Síntese" not in new
+    assert "## Fatos\n- Trabalha na Unnawave (2026-10-07)" in new
+    assert new.rstrip("\n") == PROFILE.rstrip("\n")  # all else, Notas included, byte-for-byte
+    h = hist.read_text(encoding="utf-8")
+    assert h.startswith("# História\nantigo\n")
+    assert "## Síntese (2026-06-17, últimos 7 dias)\nConversaram sobre o projeto X.\nLinha dois." in h
+    assert "## Síntese (2026-06-24, últimos 7 dias)\nOutra." in h
+    assert (p.parent / "profile.md.pre-migrate").read_text(encoding="utf-8") == SYNTH_PROFILE
+
+    again = ck.migrate_syntheses(apply=True)  # idempotent
+    assert again["moved"] == 0 and again["with_synthesis"] == 0
+    assert hist.read_text(encoding="utf-8") == h
+
+
+def test_migrate_does_not_duplicate_block_already_in_history(mem):
+    p = _seed(SYNTH_PROFILE)
+    hist = p.parent / "history.md"
+    hist.write_text(SYNTH, encoding="utf-8")
+    ck.migrate_syntheses(apply=True)
+    assert hist.read_text(encoding="utf-8").count("Conversaram sobre o projeto X.") == 1
+    assert "## Síntese" not in p.read_text(encoding="utf-8")

@@ -1,0 +1,14 @@
+id: SIM-MEM-02
+title: Contact memory - metadado do arquivo (criação, data) nunca vira fato nem item (SCN-MEM-17)
+tags: [contact-memory]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "oi", from_me: false, jid: "5511955550302@s.whatsapp.net", push_name: "Bia Exemplo"}
+  - clock: D0 09:30
+  - job: contact-learn
+    expect:
+      contact_profile: {jid: "5511955550302@s.whatsapp.net", section: "Fatos", not_matches: "reuni|criad|created|2026"}
+  - clock: D0 09:31
+    expect:
+      contact_profile: {jid: "5511955550302@s.whatsapp.net", section: "Em aberto", not_matches: "reuni|criad|created|2026"}

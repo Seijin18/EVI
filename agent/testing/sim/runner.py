@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import re
 import subprocess
 import sys
 import time
@@ -246,6 +247,16 @@ def pg_count(ctx: Ctx, row: dict) -> int:
         time.sleep(1)
 
 
+def read_contact_profile(ctx: Ctx, jid: str) -> str | None:
+    """profile.md of a contact inside the sim container (None when absent)."""
+    root = ctx.env.get("EVI_CONTACT_MEMORY_DIR")
+    if not root or not root.startswith("/tmp/evi-sim-"):
+        return None
+    safe = re.sub(r"[^a-zA-Z0-9@._-]+", "_", jid.strip())[:120]
+    out = ctx.exec("agent-api", "sh", "-c", f"cat '{root}/contacts/{safe}/profile.md' 2>/dev/null || echo __NO_PROFILE__")
+    return None if out.strip() == "__NO_PROFILE__" else out
+
+
 def observe(ctx: Ctx, step_obs: dict, exp: dict) -> dict:
     state = ctx.fakes("GET", "/_sim/state")
     obs = {
@@ -259,6 +270,7 @@ def observe(ctx: Ctx, step_obs: dict, exp: dict) -> dict:
         "tz": ctx.tz,
         "tools_called": tools_called(ctx) if ("tools_called_any" in exp or "tools_not_called" in exp) else [],
         "postgres": [pg_count(ctx, r) for r in exp.get("postgres") or []],
+        "contact_profile": read_contact_profile(ctx, exp["contact_profile"]["jid"]) if "contact_profile" in exp else None,
     }
     obs.update(step_obs)
     return obs
@@ -394,7 +406,7 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
     elif step.type == "job":
         base = len(_telegram_replies(ctx))
         # briefing runs in the background unless ?wait=true: without it the delivered text is read too early
-        ctx.agent("POST", f"/jobs/{step.value}" + ("?wait=true" if step.value == "briefing" else ""), {})
+        ctx.agent("POST", f"/jobs/{step.value}" + ("?wait=true" if step.value in ("briefing", "contact-learn") else ""), {})
         sr.latency_s = time.monotonic() - t0
         # a job's observable output is what it sent to the user's Telegram chat
         # (so reply_matches/reply_within_s can assert the delivered text)

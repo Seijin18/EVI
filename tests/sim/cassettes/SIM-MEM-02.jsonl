@@ -1,0 +1,1 @@
+{"key": "structured:0b7c9c14a5171d1f39669f48d2b3813d66f8ac363e9435ac8c979055b208d688", "prompt_tail": "ndo só o id no campo item (ex.: {\"item\": \"A2\", \"date\": \"...\"}) ou o texto idêntico; tire os resolvidos. Cada novo com a data em que surgiu.\nSe não houver nada, use listas vazias. Responda só com JSON.", "response": {"add": [], "remove": [], "open": []}}

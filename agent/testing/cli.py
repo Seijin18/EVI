@@ -1405,6 +1405,18 @@ def run_contact_identity_migrate(extra: list[str]) -> bool:
     return True
 
 
+def run_contact_knowledge_migrate(extra: list[str]) -> bool:
+    """``contact-knowledge-migrate [--apply]`` — move ``## Síntese`` sections to history.md.
+
+    Dry-run by default; prints counts only.
+    """
+    from services import contact_knowledge
+
+    apply = "--apply" in extra
+    print(contact_knowledge.format_migration(contact_knowledge.migrate_syntheses(apply=apply), apply=apply))
+    return True
+
+
 def run_promise_sweep() -> bool:
     """``promise-sweep`` — run the daily fulfilment sweep once (agent-api container)."""
     from services import promise_context
@@ -1471,10 +1483,11 @@ def main() -> int:
         "promise-reeval": lambda: run_promise_reeval(extra),
         "promise-sweep": run_promise_sweep,
         "contact-identity-migrate": lambda: run_contact_identity_migrate(extra),
+        "contact-knowledge-migrate": lambda: run_contact_knowledge_migrate(extra),
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
 
-    if extra and feature not in ("llm-eval", "llm-eval-collect", "promise-reeval", "contact-identity-migrate"):
+    if extra and feature not in ("llm-eval", "llm-eval-collect", "promise-reeval", "contact-identity-migrate", "contact-knowledge-migrate"):
         parser.error(f"unrecognized arguments: {' '.join(extra)}")
 
     if feature not in runners:

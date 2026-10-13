@@ -1,0 +1,13 @@
+id: SIM-MEM-01
+title: Contact memory - pedido do contato aceito pelo usuário vira item em "Em aberto" (SCN-MEM-17)
+tags: [contact-memory]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "consegue me mandar a planilha de custos até quinta?", from_me: false, jid: "5511955550301@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - whatsapp_contact: {text: "mando sim", from_me: true, jid: "5511955550301@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - clock: D0 09:30
+  - job: contact-learn
+    expect:
+      contact_profile: {jid: "5511955550301@s.whatsapp.net", section: "Em aberto", matches: "planilha"}
+      outbound_to_third_parties: 0

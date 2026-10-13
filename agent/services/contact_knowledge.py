@@ -619,3 +619,72 @@ def _update_locked(jid: str) -> dict:
     if path is None:
         return {"status": "disabled"}
     return {**counts, "status": "ok"}
+
+
+# --- migration: legacy `## Síntese (...)` sections -> history.md --------------------------
+
+_SYNTH_RE = re.compile(r"^## Síntese\b")
+
+
+def _split_syntheses(text: str) -> tuple[str, list[str]]:
+    """(profile text without the Síntese sections, the removed blocks verbatim).
+
+    Raw line surgery (no parse/render) so every other byte of the profile is untouched.
+    """
+    kept: list[str] = []
+    blocks: list[list[str]] = []
+    in_synth = False
+    for line in text.splitlines(keepends=True):
+        if line.startswith("## "):
+            in_synth = bool(_SYNTH_RE.match(line))
+            if in_synth:
+                blocks.append([])
+        if in_synth:
+            blocks[-1].append(line)
+        else:
+            kept.append(line)
+    return "".join(kept), ["".join(b) for b in blocks]
+
+
+def migrate_syntheses(*, apply: bool = False) -> dict[str, int]:
+    """Move every ``## Síntese (...)`` section from profile.md to history.md, unchanged.
+
+    Dry-run by default. Idempotent (a block already present in history.md is not appended
+    again). On ``apply`` a ``profile.md.pre-migrate`` copy is kept and profile.md is
+    rewritten atomically. Does not generate facts. Returns counts only.
+    """
+    from services.contact_filesystem import list_contact_dirs
+
+    counts = {"profiles": 0, "with_synthesis": 0, "sections": 0, "moved": 0}
+    for cdir in list_contact_dirs():
+        profile = cdir / "profile.md"
+        if not profile.is_file():
+            continue
+        counts["profiles"] += 1
+        try:
+            text = profile.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        new_text, blocks = _split_syntheses(text)
+        if not blocks:
+            continue
+        counts["with_synthesis"] += 1
+        counts["sections"] += len(blocks)
+        if not apply:
+            continue
+        hist = cdir / "history.md"
+        hist_text = hist.read_text(encoding="utf-8") if hist.is_file() else ""
+        add = [b.rstrip("\n") + "\n" for b in blocks if b.rstrip("\n") not in hist_text]
+        if add:
+            sep = "" if not hist_text else ("\n" if hist_text.endswith("\n") else "\n\n")
+            with hist.open("a", encoding="utf-8", newline="") as f:
+                f.write(sep + "\n".join(add))
+        (cdir / "profile.md.pre-migrate").write_text(text, encoding="utf-8", newline="")
+        _atomic_write(profile, new_text)
+        counts["moved"] += len(blocks)
+    return counts
+
+
+def format_migration(counts: dict[str, int], *, apply: bool) -> str:
+    mode = "APPLIED" if apply else "dry-run (use --apply)"
+    return f"contact-knowledge-migrate {mode}: " + ", ".join(f"{k}={v}" for k, v in counts.items())
