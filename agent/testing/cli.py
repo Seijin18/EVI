@@ -1353,6 +1353,20 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
     return 1 if failed else 0
 
 
+def run_llm_eval(extra: list[str], cwd: str) -> bool:
+    """``llm-eval promise [flags]`` — real-LLM benchmark (needs provider keys; see llm_eval/promise.py)."""
+    from testing.llm_eval import promise
+
+    return promise.main(extra, cwd) == 0
+
+
+def run_llm_eval_collect(extra: list[str], cwd: str) -> bool:
+    """``llm-eval-collect promise [flags]`` — builds data/eval/promise_real.json (gitignored)."""
+    from testing.llm_eval import promise
+
+    return promise.main_collect(extra, cwd) == 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="EVI feature test harness")
     parser.add_argument("feature", nargs="?", default="smoke")
@@ -1368,9 +1382,10 @@ def main() -> int:
         action="store_true",
         help="Live chat/telegram: fail instead of skip when API/deps missing",
     )
-    args = parser.parse_args()
+    args, extra = parser.parse_known_args()
     live_wm = args.live_windmill or args.live_n8n
 
+    orig_cwd = os.getcwd()
     os.chdir(AGENT_DIR)
     feature = args.feature.replace("_", "-")
 
@@ -1405,8 +1420,13 @@ def main() -> int:
         "inbox-ux": run_inbox_ux,
         "briefing": run_briefing,
         "injection": run_injection,
+        "llm-eval": lambda: run_llm_eval(extra, orig_cwd),
+        "llm-eval-collect": lambda: run_llm_eval_collect(extra, orig_cwd),
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
+
+    if extra and feature not in ("llm-eval", "llm-eval-collect"):
+        parser.error(f"unrecognized arguments: {' '.join(extra)}")
 
     if feature not in runners:
         print(f"Unknown feature: {feature}. Available: {', '.join(runners)}")

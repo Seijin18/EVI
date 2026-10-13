@@ -12,7 +12,7 @@
 
 ## 2. Base: tarefa estruturada, datas e avaliador
 
-- [ ] 2.0 Avaliador `agent/testing/llm_eval/` + `./scripts/evi-test llm-eval promise` e `llm-eval-collect promise`; casos simulados em `tests/eval/promise_cases.yaml` (portar os 30 da avaliação prévia); reais em `data/eval/` (gitignored); Gemini nunca recebe reais
+- [x] 2.0 Avaliador `agent/testing/llm_eval/` + `./scripts/evi-test llm-eval promise` e `llm-eval-collect promise`; casos simulados em `tests/eval/promise_cases.yaml` (portar os 30 da avaliação prévia); reais em `data/eval/` (gitignored); Gemini nunca recebe reais
   - SCN-DEBT-10, SCN-DEBT-11
   - Files: `agent/testing/llm_eval/__init__.py`, `agent/testing/llm_eval/promise.py`, `agent/testing/cli.py`, `tests/eval/promise_cases.yaml`, `tests/unit/test_llm_eval.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_llm_eval.py -q` e `./scripts/evi-test llm-eval promise --cases synthetic`
