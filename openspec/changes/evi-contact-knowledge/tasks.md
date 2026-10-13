@@ -1,11 +1,11 @@
 ## 1. Fontes
 
-- [ ] 1.1 `fromMe` diretas gravadas na timeline em `track_conversation` (sem entrar na extração)
+- [x] 1.1 `fromMe` diretas gravadas na timeline em `track_conversation` (sem entrar na extração)
   - SCN-MEM-14
   - Files: `agent/services/reply_debts.py`, `agent/services/message_timeline.py`, `tests/unit/test_reply_debts.py`, `tests/unit/test_message_timeline.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reply_debts.py tests/unit/test_message_timeline.py -q` e `./scripts/evi-test contact-memory`
 
-- [ ] 1.2 `ensure_contact` recusa grupos, canais e broadcasts
+- [x] 1.2 `ensure_contact` recusa grupos, canais e broadcasts
   - SCN-MEM-15
   - Files: `agent/services/contact_filesystem.py`, `tests/unit/test_contact_filesystem.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_filesystem.py -q`
@@ -22,7 +22,7 @@
   - Files: `agent/testing/llm_eval/contact_knowledge.py`, `tests/eval/contact_knowledge_cases.yaml`, `tests/unit/test_llm_eval.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_llm_eval.py -q` e `./scripts/evi-test llm-eval contact-knowledge --cases synthetic`
 
-- [ ] 2.1 `contact_knowledge.py`: parse/escrita de `## Fatos`, `## Em aberto`, `## Notas`, `knowledge_updated`; `read_contact_knowledge`
+- [x] 2.1 `contact_knowledge.py`: parse/escrita de `## Fatos`, `## Em aberto`, `## Notas`, `knowledge_updated`; `read_contact_knowledge`
   - SCN-MEM-16
   - Files: `agent/services/contact_knowledge.py`, `tests/unit/test_contact_knowledge.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_knowledge.py -q` — `## Notas` preservada byte a byte
