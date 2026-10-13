@@ -333,3 +333,44 @@ def test_one_way_jids_are_not_debts(monkeypatch):
     assert reply_debts.is_one_way_jid("120363173003902460@newsletter")
     assert reply_debts.is_one_way_jid("status@broadcast")
     assert not reply_debts.is_one_way_jid("5511988887777@s.whatsapp.net")
+
+
+def test_scn_ux_01_ack_names_the_person_not_a_count_or_jid(monkeypatch):
+    from services import reply_debts
+    from tools import reply_debt_tools
+
+    class Db:
+        def init_db(self):
+            pass
+
+        def acknowledge(self, jid, ts):
+            pass
+
+    monkeypatch.setitem(sys.modules, "db", Db())
+    monkeypatch.setattr(
+        reply_debts, "list_debts",
+        lambda: [{"jid": "a@s.whatsapp.net", "name": "Marina Teste"}, {"jid": "9@lid", "name": ""}],
+    )
+    monkeypatch.setattr(
+        "services.briefing.resolve_briefing_items",
+        lambda nums, session_id=None, kind="commitment": (["a@s.whatsapp.net"], []),
+    )
+    out = reply_debt_tools.dismiss_reply_debt.invoke({"briefing_items": [1]})
+    assert out == "Ok, Marina Teste não aparece mais como pendente de resposta."
+    monkeypatch.setattr(
+        "services.briefing.resolve_briefing_items",
+        lambda nums, session_id=None, kind="commitment": (["a@s.whatsapp.net", "9@lid"], []),
+    )
+    out = reply_debt_tools.dismiss_reply_debt.invoke({"briefing_items": [1, 2]})
+    assert "Marina Teste e contato sem nome" in out and "@lid" not in out
+
+
+def test_scn_ux_01_missing_item_error_states_the_valid_range(monkeypatch):
+    from services import briefing
+
+    monkeypatch.setattr(briefing.db, "load_tool_snapshots", lambda sid, limit=50: [
+        {"tool_name": "morning_briefing", "created_at": "2026-10-13T08:00:00",
+         "payload": {"day": briefing.now_local().date().isoformat(),
+                     "refs": {"1": "reply_debt:a@s.whatsapp.net", "2": "reply_debt:b@s.whatsapp.net"}}}])
+    ids, errors = briefing.resolve_briefing_items([9], session_id="s", kind="reply_debt")
+    assert ids == [] and errors == ["item 9 não existe no briefing (o briefing vai de 1 a 2)"]

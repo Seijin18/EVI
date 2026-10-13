@@ -31,6 +31,10 @@ from services.probe import _resource
 from services.soft_fail import soft_fail
 from services.tool_result import OAUTH, ToolResult, parse_windmill_result
 from services.untrusted import plain_external, strip_markers, wrap_external
+from services.ux_format import short_age as _short_age
+from services.ux_format import short_day as _short_day
+from services.ux_format import short_due as _short_due
+from services.ux_format import who_label as _who_label
 from tools.calendar_time import evi_timezone, now_local
 
 MAX_CHARS = 4000
@@ -101,9 +105,6 @@ class Row(NamedTuple):
     group: str = ""
 
 
-_WD_ABBR = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
-
-
 def _esc(text: str) -> str:
     return html.escape(text, quote=False)
 
@@ -131,51 +132,6 @@ def _as_row(raw: tuple, key: str) -> Row:
         return raw
     group = raw[2] if len(raw) > 2 else ""
     return Row(raw[0], raw[1], _user_from_model(raw[0], bold_head=key == "names"), group)
-
-
-def _short_due(d: date, today: date) -> str:
-    delta = (d - today).days
-    if delta < 0:
-        return f"venceu {d.strftime('%d/%m')}"
-    if delta == 0:
-        return "até hoje"
-    if delta == 1:
-        return "até amanhã"
-    if delta < 7:
-        return f"até {_WD_ABBR[d.weekday()]}"
-    return f"até {d.strftime('%d/%m')}"
-
-
-def _short_day(d: date, today: date) -> str:
-    delta = (d - today).days
-    if delta == 0:
-        return "hoje"
-    if delta == 1:
-        return "amanhã"
-    if 1 < delta < 7:
-        return _WD_ABBR[d.weekday()]
-    return d.strftime("%d/%m")
-
-
-def _short_age(hours: float) -> str:
-    if hours < 1:
-        return "agora"
-    if hours < 24:
-        return f"{int(hours)} h"
-    if hours < 48:
-        return "ontem"
-    return f"{int(hours // 24)} d"
-
-
-def _who_label(name: str) -> str:
-    """Nome para o usuário: JID/@lid cru nunca aparece."""
-    name = (name or "").strip()
-    if "@" not in name:
-        return name
-    digits = re.sub(r"\D", "", name.partition("@")[0])
-    if name.endswith("@s.whatsapp.net") and digits:
-        return f"+{digits}"
-    return "contato sem nome"
 
 
 def _tz() -> ZoneInfo:
@@ -729,7 +685,9 @@ def resolve_briefing_items(
     for n in nums:
         ref = refs.get(str(n))
         if ref is None:
-            errors.append(f"item {n} não existe no briefing")
+            last = max((int(k) for k in refs if str(k).isdigit()), default=0)
+            span = f" (o briefing vai de 1 a {last})" if last else ""
+            errors.append(f"item {n} não existe no briefing{span}")
             continue
         ref_kind, _, ref_id = str(ref).partition(":")
         if kind in ("reply_debt", "name_prompt"):
@@ -766,7 +724,10 @@ def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime |
         soft_fail("briefing.deliver.idempotency", exc)
 
     brief = assemble_briefing(kind, now)
-    sections = {s.key: {"count": len(s.items), "error": s.error} for s in brief.sections}
+    sections = {
+        s.key: {"count": s.total if s.collapsed else len(s.items), "error": s.error}
+        for s in brief.sections
+    }
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     # O usuário recebe o texto limpo (HTML); a memória/LLM guarda a versão marcada.
     if brief.text_user:

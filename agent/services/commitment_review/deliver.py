@@ -7,7 +7,7 @@ import os
 from typing import Iterable, List
 
 from db import count_unnotified_pending, list_pending_commitments, mark_pending_notified
-from services.commitment_review.digest import format_pending_digest
+from services.commitment_review.digest import format_pending_digest_user
 from services.commitment_review.channels.telegram import send_telegram_message
 from services.commitment_review.channels.whatsapp import send_whatsapp_text
 
@@ -52,7 +52,7 @@ def maybe_notify_new_pending(
     rows = [r for r in list_pending_commitments(limit=10) if not r.get("notified_at")]
     if not rows:
         return False
-    text = format_pending_digest(rows)
+    text = format_pending_digest_user(rows)
     sent_any = False
     for ch in _notify_channels():
         if ch == "telegram" and send_telegram_message(text):

@@ -92,16 +92,30 @@ def try_direct_review(text: str, *, confirmed_via: str = "chat") -> Optional[str
 
     if _LIST_INTENT.search(stripped) or _PENDING.search(stripped) or _TODAY.search(stripped):
         if _TODAY.search(stripped) and not _PENDING.search(stripped):
-            from tools.commitment_tools import list_scheduled_today
+            # Texto para o usuário (sem marcadores/ids); a tool, que alimenta o LLM, segue marcada.
+            from services.commitment_review.digest import (
+                UserText,
+                format_scheduled_today,
+                format_scheduled_today_user,
+            )
+            from tools.commitment_tools import scheduled_today_rows
 
-            return list_scheduled_today.invoke({})
+            rows = scheduled_today_rows()
+            return UserText(format_scheduled_today_user(rows), format_scheduled_today(rows))
 
         # "compromissos" / "pendentes" → fila Postgres; Google Calendar só se explícito
         if _PENDING.search(stripped) or not _CALENDAR_ONLY.search(stripped):
-            from tools.commitment_tools import list_pending_commitments
+            from services.commitment_review.digest import (
+                UserText,
+                format_pending_digest,
+                format_pending_digest_user,
+            )
+            from tools.commitment_tools import pending_rows
 
-            raw = list_pending_commitments.invoke({"limit": 20})
-            return raw
+            rows = pending_rows(20)
+            if not rows:
+                return "Nenhum compromisso pendente."
+            return UserText(format_pending_digest_user(rows), format_pending_digest(rows))
 
         from tools.calendar_tool import list_calendar_events
 

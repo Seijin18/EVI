@@ -376,3 +376,27 @@ def test_forwarded_message_is_flagged_to_invoke_chat():
         ):
             process_telegram_update(update, fake_chat)
     assert seen["forwarded"] is True
+
+
+def test_scn_ux_02_direct_list_sends_clean_text_and_persists_marked(monkeypatch):
+    """The user gets no «externo» marker; the session memory keeps the delimited text."""
+    from services.untrusted import has_marker
+
+    rows = [{"id": 31, "title": "Mandar a modelagem", "type": "promise",
+             "source_label": "Eliana", "event_date": "2026-10-16"}]
+    update = {"message": {"text": "listar compromissos pendentes",
+                          "chat": {"id": 933619568, "type": "private"}}}
+    sent, persisted = [], []
+    monkeypatch.setattr("tools.commitment_tools.pending_rows", lambda limit=20: rows)
+    with _DIRECT_ON:
+        with (
+            patch("services.telegram_handler.send_telegram_message",
+                  side_effect=lambda text, chat_id=None, **kw: sent.append(text) or True),
+            patch("services.telegram_handler._persist_turn",
+                  side_effect=lambda sid, user, assistant: persisted.append(assistant)),
+            patch("services.telegram_handler.log_telegram_turn"),
+        ):
+            out = process_telegram_update(update, lambda m, s: {})
+    assert out.get("review_direct") is True
+    assert sent and not has_marker(sent[0]) and "Eliana · Mandar a modelagem" in sent[0]
+    assert persisted and has_marker(persisted[0])

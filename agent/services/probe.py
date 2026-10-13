@@ -128,12 +128,17 @@ def _warning_text(check: str, reason: str, detail: str) -> str:
     if reason == OAUTH:
         name = _resource_name(check)
         return (
-            f"⚠️ {label} está sem acesso (credencial OAuth expirada ou inválida). "
+            f"⚠️ O acesso ao {label} expirou. "
             f"Reconecte em Windmill → Resources → {name} (reconectar OAuth)."
         )
     if reason == "not_configured":
-        return f"⚠️ {label} não está configurado ({detail[:120] or 'integração ausente'})."
-    return f"⚠️ {label} não respondeu à verificação diária (motivo: {reason}). {detail[:200]}".strip()
+        return f"⚠️ {label} não está configurado. Configure a integração no .env e no Windmill."
+    # O motivo de máquina (http_error, upstream_error…) fica no log/DB; o usuário lê causa + o que fazer.
+    return (
+        f"⚠️ {label} não respondeu à verificação diária de hoje. "
+        "Costuma ser instabilidade passageira — o EVI tenta de novo amanhã; "
+        "se o aviso se repetir, rode make status."
+    )
 
 
 def _notify(day: date, check: str, reason: str, detail: str) -> bool:

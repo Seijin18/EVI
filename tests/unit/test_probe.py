@@ -361,3 +361,23 @@ def test_scn_rel_04_db_backed(monkeypatch):
         assert len(sent) == 1
     finally:
         db.release_probe_notification(day, "gmail")
+
+
+def test_scn_ux_01_probe_warning_is_human_and_machine_reason_stays_in_logs(env, caplog):
+    import logging
+
+    env.install({"list_events": "HTTP 502 Bad Gateway from upstream"})
+    with caplog.at_level(logging.WARNING, logger="evi.probe"):
+        out = probe.run_probe()
+    reason = out["checks"]["calendar"]["reason"]
+    msg = next(m for m in env.sent if "Calendar" in m)
+    assert reason not in msg and "motivo" not in msg and "502" not in msg
+    assert "make status" in msg
+    assert any(reason in r.getMessage() for r in caplog.records)  # stable reason kept in the log
+
+
+def test_scn_ux_01_oauth_warning_says_access_expired_and_where_to_reconnect(env):
+    env.install({"summarize_inbox": OAUTH_ERR})
+    probe.run_probe()
+    msg = next(m for m in env.sent if "Gmail" in m)
+    assert "O acesso ao Gmail expirou" in msg and "Windmill → Resources → gmail" in msg

@@ -16,6 +16,29 @@ def _fmt_age(hours: float) -> str:
     return f"{int(hours // 24)} d"
 
 
+def _debt_names(jids: list[str]) -> list[str]:
+    """Nomes legíveis (nunca JID cru) das conversas, na ordem de ``jids``."""
+    from services.reply_debts import list_debts
+    from services.untrusted import plain_external
+    from services.ux_format import who_label
+
+    try:
+        by_jid = {d["jid"]: d.get("name") or "" for d in list_debts()}
+    except Exception:  # noqa: BLE001 - the ack must not fail because the name lookup did
+        by_jid = {}
+    return [plain_external(who_label(by_jid.get(j) or j), 40) for j in jids]
+
+
+def _ack_text(names: list[str], n: int) -> str:
+    """Confirmação com o NOME da pessoa (até 3); acima disso, a contagem."""
+    if n == 1:
+        return f"Ok, {names[0]} não aparece mais como pendente de resposta."
+    if n <= 3:
+        listed = ", ".join(names[:-1]) + f" e {names[-1]}"
+        return f"Ok, {listed} não aparecem mais como pendentes de resposta."
+    return f"Ok, {n} conversas não aparecem mais como pendentes de resposta."
+
+
 @tool
 def list_reply_debts() -> str:
     """List WhatsApp conversations where someone is waiting for the user's reply.
@@ -51,6 +74,7 @@ def dismiss_reply_debt(jid_or_name: str = "", briefing_items: list[int] | None =
         from services.briefing import resolve_briefing_items
 
         jids, errors = resolve_briefing_items(list(briefing_items), kind="reply_debt")
+        names = _debt_names(jids) if jids else []
         if jids:
             import db
 
@@ -58,7 +82,7 @@ def dismiss_reply_debt(jid_or_name: str = "", briefing_items: list[int] | None =
             now = now_local()
             for jid in jids:
                 db.acknowledge(jid, now)
-        parts = [f"Ok, {len(jids)} conversa(s) não aparecem mais como pendentes de resposta."] if jids else []
+        parts = [_ack_text(names, len(jids))] if jids else []
         return "\n".join(parts + errors)
     q = (jid_or_name or "").strip()
     if not q:

@@ -36,33 +36,31 @@ def test_dismiss_ids():
     assert "Dismissed" in result
 
 
+_ROW = {"id": 5, "title": "Pagar boleto", "type": "task", "source_label": "Davi"}
+
+
 def test_list_pending():
-    mock = MagicMock()
-    mock.invoke.return_value = "EVI: compromissos pendentes"
-    with patch("tools.commitment_tools.list_pending_commitments", mock):
+    with patch("tools.commitment_tools.pending_rows", return_value=[_ROW]) as rows:
         result = try_direct_review("listar compromissos pendentes")
-    mock.invoke.assert_called_once()
-    assert result is not None
+    rows.assert_called_once()
+    assert result and "5. Davi · Pagar boleto" in result
 
 
 def test_revisar_compromissos_uses_pending_not_calendar():
-    pending = MagicMock()
-    pending.invoke.return_value = "EVI: compromissos pendentes"
     calendar = MagicMock()
-    with patch("tools.commitment_tools.list_pending_commitments", pending):
+    with patch("tools.commitment_tools.pending_rows", return_value=[_ROW]) as rows:
         with patch("tools.calendar_tool.list_calendar_events", calendar):
             result = try_direct_review("Revisar compromissos")
-    pending.invoke.assert_called_once()
+    rows.assert_called_once()
     calendar.invoke.assert_not_called()
     assert result is not None
 
 
 def test_list_today():
-    mock = MagicMock()
-    mock.invoke.return_value = "Nenhum hoje."
-    with patch("tools.commitment_tools.list_scheduled_today", mock):
+    with patch("tools.commitment_tools.scheduled_today_rows", return_value=[]) as rows:
         result = try_direct_review("hoje")
-    mock.invoke.assert_called_once()
+    rows.assert_called_once()
+    assert "Nenhum compromisso agendado hoje" in result
 
 
 def test_list_calendar():

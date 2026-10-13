@@ -29,12 +29,12 @@
 
 ## 3. Outras superfícies
 
-- [ ] 3.1 Listas e respostas diretas (`telegram_list`, comandos) com a mesma regra de duas renderizações e o mesmo formato de item
+- [x] 3.1 Listas e respostas diretas (`telegram_list`, comandos) com a mesma regra de duas renderizações e o mesmo formato de item
   - SCN-UX-02
   - Files: `agent/services/telegram_list.py`, `agent/services/telegram_handler.py`, `tests/unit/test_telegram_list.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_list.py tests/unit/test_telegram_handler.py -q`
 
-- [ ] 3.2 Correções priorizadas na revisão (até 3, um commit cada; o resto → BACKLOG)
+- [x] 3.2 Correções priorizadas na revisão (até 3, um commit cada; o resto → BACKLOG)
   - SCN-UX-01
   - Files: `docs/ux/review-2026-10.md`, `openspec/BACKLOG.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`

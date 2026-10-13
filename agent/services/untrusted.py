@@ -23,7 +23,7 @@ _MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 # Só os marcadores que ``wrap_external`` emite («externo:fonte» / «/externo»); sem sósias ASCII.
-_WRAP_MARKER_RE = re.compile(r"«\s*/?\s*externo\b[^»\n]*»", re.IGNORECASE)
+_WRAP_MARKER_RE = re.compile(r"«\s*/?\s*externo(?::[\w.\-]*)?\s*»", re.IGNORECASE)
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f​-‏  ‪-‮⁠⁡⁢⁣⁤᠎﻿]")
 _SOURCE_BAD_RE = re.compile(r"[^a-z0-9_-]")
 

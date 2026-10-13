@@ -14,9 +14,9 @@ from tools.calendar_tool import schedule_event_result
 from tools.task_tool import create_task_result
 
 
-@tool
-def list_pending_commitments(limit: int = 20) -> str:
-    """List pending commitments queued from WhatsApp (not yet on calendar)."""
+def pending_rows(limit: int = 20) -> list:
+    """Pending commitments (after the optional Evolution-log replay); shared by the tool
+    (marked text for the model) and the direct list command (clean text for the user)."""
     import os
 
     from db import init_db, list_pending_commitments as _list
@@ -32,7 +32,25 @@ def list_pending_commitments(limit: int = 20) -> str:
         replay_commitments_from_evolution_log(days=days)
 
     init_db()
-    rows = _list(limit=limit)
+    return _list(limit=limit)
+
+
+def scheduled_today_rows(limit: int = 25) -> list:
+    from db import init_db, list_scheduled_today as _list_today
+
+    init_db()
+    rows = _list_today(limit=limit)
+    for r in rows:
+        for k in ("created_at", "confirmed_at"):
+            if r.get(k):
+                r[k] = str(r[k])
+    return rows
+
+
+@tool
+def list_pending_commitments(limit: int = 20) -> str:
+    """List pending commitments queued from WhatsApp (not yet on calendar)."""
+    rows = pending_rows(limit)
     if not rows:
         return "Nenhum compromisso pendente."
     return format_pending_digest(rows)
@@ -41,16 +59,9 @@ def list_pending_commitments(limit: int = 20) -> str:
 @tool
 def list_scheduled_today(limit: int = 25) -> str:
     """List commitments scheduled today with source chat and confirmation channel."""
-    from db import init_db, list_scheduled_today as _list_today
     from services.commitment_review.digest import format_scheduled_today
 
-    init_db()
-    rows = _list_today(limit=limit)
-    for r in rows:
-        for k in ("created_at", "confirmed_at"):
-            if r.get(k):
-                r[k] = str(r[k])
-    return format_scheduled_today(rows)
+    return format_scheduled_today(scheduled_today_rows(limit))
 
 
 def _merge_briefing_ids(

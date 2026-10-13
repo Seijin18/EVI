@@ -123,3 +123,12 @@ def test_plain_external_is_single_line_clean_and_word_cut():
     assert "\n" not in out and "externo" not in out and "«" not in out
     assert len(out) <= 41 and out.endswith("…") and not out.endswith(" …")
     assert plain_external(None) == "" and plain_external("ok", 10) == "ok"
+
+
+def test_marker_guard_ignores_prose_that_merely_mentions_externo():
+    from services.untrusted import has_marker, strip_markers
+
+    prose = "o lado «externo é o de fora» da casa"
+    assert not has_marker(prose)
+    assert strip_markers(prose) == prose
+    assert has_marker("«externo:whatsapp» oi «/externo»")

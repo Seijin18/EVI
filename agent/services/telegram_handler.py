@@ -62,13 +62,16 @@ def _reply_direct(
 ) -> Dict[str, Any]:
     from services.send_result import EMPTY_TEXT, send_outcome
 
+    # Resposta direta com duas renderizações (``UserText``): o usuário recebe o texto limpo,
+    # a memória da sessão guarda a versão marcada (conteúdo de terceiros delimitado).
+    model_content = getattr(ai_content, "model", None)
     ai_content = format_for_telegram(extract_llm_text(ai_content))
     outgoing = f"{reply_prefix}{ai_content}" if ai_content else ""
     result = send_telegram_message(outgoing, chat_id=chat_id) if outgoing else False
     sent, reason = send_outcome(result)
     if not ai_content:
         reason = EMPTY_TEXT
-    _persist_turn(session_id, text, ai_content)
+    _persist_turn(session_id, text, model_content if (model_content and ai_content) else ai_content)
     log_telegram_turn(
         session_id,
         text,

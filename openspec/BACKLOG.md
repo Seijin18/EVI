@@ -37,6 +37,15 @@ F13 backup diário (`pg_dump` evi/windmill/evolution + teste de restore); F18 `a
 F20 `/jobs/import-contacts` restrito a diretórios montados; F22 `wrap_external` no resumo diário com LLM;
 F11 (Calendar) escopos mínimos; nomes em `pending_commitments.source_label` (combinados criados quando o contato era só número continuam mostrando o número após a sincronização da agenda). Ações do usuário abertas: F5 Ollama, F6 plano Gemini, F9–F12, F26.
 
+**Revisão de UX (2026-10)** — achados P3 de [`docs/ux/review-2026-10.md`](../docs/ux/review-2026-10.md) não corrigidos no change `evi-ux-review`:
+
+- Briefing da noite: prévia de amanhã antes das dívidas do dia (achado 11).
+- Lembrete sem a dica "responda: feito · adia 1h" (achado 12).
+- `/ajuda` sem "respondido N", "nomeia N", "dispensa N" e sem a frase do `+N` (achado 13).
+- `list_reply_debts` (tool → LLM) ainda com idade em horas ("há 30 h"); usar `ux_format.short_age` (achado 14).
+- Botões inline do Telegram (confirma/dispensa por item) — recomendação, fora de escopo (achado 15).
+- `confirmar`/`dispensar` sobre a lista de pendentes usam o id do compromisso como número do item; um snapshot por lista (como o do briefing) daria numeração 1..N estável.
+
 **Deferido / cortado:** ver [`specs/roadmap.md`](specs/roadmap.md).
 
 ---
