@@ -94,3 +94,18 @@ def test_startup_accepts_strong_key(monkeypatch):
     monkeypatch.delenv("EVI_REQUIRE_API_KEY", raising=False)
     monkeypatch.setenv("EVI_API_KEY", "k" * 32)
     require_api_key_configured()
+
+
+def test_compose_images_are_pinned_not_latest_or_main():
+    # SCN-SEC-06: every image carries an explicit version tag, or a digest.
+    compose = yaml.safe_load((_root / "docker-compose.yml").read_text())
+    images = {n: s["image"] for n, s in compose["services"].items() if s.get("image")}
+    assert images, "no images found in docker-compose.yml"
+    bad = []
+    for name, image in images.items():
+        if "@sha256:" in image:
+            continue
+        tag = image.rsplit("/", 1)[-1].partition(":")[2]
+        if tag in ("", "latest", "main", "master"):
+            bad.append(f"{name}={image}")
+    assert bad == [], f"unpinned images (use a version tag or @sha256 digest): {bad}"

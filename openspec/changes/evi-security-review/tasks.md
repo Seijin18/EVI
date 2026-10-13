@@ -51,7 +51,7 @@
   - Files: `agent/main.py`, `tests/unit/test_security_guards.py`, `tests/unit/test_main_auth.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_security_guards.py tests/unit/test_main_auth.py -q`
 
-- [ ] 4.2 CI: `pip-audit`, `ruff --select S` (exceções justificadas), varredura de segredos; smoke de container verifica 401; imagens com versão fixa
+- [x] 4.2 CI: `pip-audit`, `ruff --select S` (exceções justificadas), varredura de segredos; smoke de container verifica 401; imagens com versão fixa
   - SCN-SEC-03, SCN-SEC-06
   - Files: `.github/workflows/ci.yml`, `scripts/evi-container-smoke.sh`, `docker-compose.yml`, `pyproject.toml`
   - Verify: CI verde no push; `./scripts/evi-container-smoke.sh`

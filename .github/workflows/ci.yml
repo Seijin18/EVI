@@ -57,6 +57,31 @@ jobs:
           EVI_CONTACT_MEMORY_DIR=$(mktemp -d) ./scripts/evi-test daily-summary
           ./scripts/evi-test commitments
 
+  security:
+    # SCN-SEC-03 / SCN-SEC-06: CI-safe subset of evi-security-scan (compose binds and
+    # pinned images, route auth, ruff S blocking rules, secrets in git history, pip-audit).
+    # Needs the full history (secret scan walks every commit). pip-audit reports SKIP, not
+    # FAIL, when PyPI is unreachable, so a network blip never reddens the job; a known
+    # vulnerability with a published fix does.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff blocking security rules
+        run: ruff check agent/ --select S102,S307,S602,S604,S605,S608
+
+      - name: Security scan (CI-safe checks)
+        run: ./scripts/evi-security-scan --ci
+
   container:
     # Separate job: the image build must never delay unit feedback, and a
     # failure here should read on its own. Asserts the composed system — the

@@ -38,6 +38,14 @@ HISTORY_PATTERN = (
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----|OPENROUTER_API_KEY=[A-Za-z0-9_-]{10,}"
     r"|GEMINI_API_KEY=[A-Za-z0-9_-]{10,}|TELEGRAM_BOT_TOKEN=[0-9]{6,}:[A-Za-z0-9_-]{20,})"
 )
+# Documented FAKE placeholders in test fixtures (F24): file path -> prefixes of matches that are
+# allowed there. Exact files and prefixes only, so a real key in any other file (or a different
+# secret in these files) is still reported. Prefixes are shorter than the pattern's minimum length
+# so this module never matches its own pattern.
+HISTORY_ALLOW = {
+    "tests/unit/test_security_scan.py": ("sk-THISISAFAKE",),
+    "tests/unit/test_rotate_secrets.py": ("TELEGRAM_BOT_TOKEN=123456:keep-this",),
+}
 FORBIDDEN_TRACKED = (".env", "data/", "logs/", "EVI_WORKSPACE/MEMORY.md", "EVI_WORKSPACE/USER.md")
 
 BLOCKING_S_RULES = {"S102", "S307", "S602", "S604", "S605", "S608"}
@@ -246,7 +254,12 @@ def check_git(root: Path, max_seconds: int = 120) -> List[Finding]:
                 if f.endswith((".lock",)):
                     continue
                 p = _run(["git", "show", f"{sha}:{f}"], cwd=root, timeout=30)
-                if p.returncode == 0 and rx.search(p.stdout):
+                if p.returncode != 0:
+                    continue
+                matches = [m.group(0) for m in rx.finditer(p.stdout)]
+                allowed = HISTORY_ALLOW.get(f, ())
+                matches = [m for m in matches if not any(m.startswith(a) for a in allowed)]
+                if matches:
                     confirmed.append(f"{sha}:{f}")
         if confirmed:
             out.append(Finding("git.history", FAIL, "Secret-like strings in git history",
@@ -461,6 +474,41 @@ def check_routes(main_path: Path) -> List[Finding]:
 
 
 # --------------------------------------------------------------------- main
+# CI-safe checks: nothing that reads the live .env, the host (ss, file modes of local
+# data/logs) or needs docker. Their ids, used to filter and to escalate WARN -> FAIL.
+CI_CHECKS = {
+    "binds.compose", "secrets.compose", "git.tracked", "git.history", "git.rewrite",
+    "ruff.blocking", "ruff.other", "deps.audit", "images.pinned",
+    "routes.auth", "routes.review", "routes.allowlist",
+}
+# WARN in the interactive scan, but a regression when it happens in CI.
+CI_BLOCKING_WARN = {"secrets.compose", "images.pinned", "routes.review", "routes.allowlist"}
+
+
+def run_ci(root: Path) -> List[Finding]:
+    """Subset that gives the same answer on any checkout (SCN-SEC-03/SCN-SEC-06)."""
+    compose = root / "docker-compose.yml"
+    results: List[Finding] = []
+    if compose.is_file():
+        results += check_binds(compose)
+        # Deliberately a path that never exists: only the compose-fallback check is wanted here,
+        # the .env-derived findings it also yields are filtered out below.
+        results += check_default_secrets(root / ".env.ci-absent", compose)
+        results += check_images(compose)
+    results += check_git(root)
+    results += check_ruff(root)
+    results += check_dependencies(root)   # SKIP (not FAIL) when pip-audit/network is unavailable
+    results += check_routes(root / "agent/main.py")
+    kept = []
+    for f in results:
+        if f.id not in CI_CHECKS:
+            continue                       # drops secrets.env/secrets.qdrant (no .env in CI)
+        if f.status == WARN and f.id in CI_BLOCKING_WARN:
+            f = Finding(f.id, FAIL, f.title, f.evidence)
+        kept.append(f)
+    return kept
+
+
 def run_all(root: Path, images: bool = False) -> List[Finding]:
     compose = root / "docker-compose.yml"
     results: List[Finding] = []
@@ -501,8 +549,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--markdown", action="store_true")
     ap.add_argument("--images", action="store_true", help="also run trivy on locally pulled images (slow)")
+    ap.add_argument("--ci", action="store_true",
+                    help="only CI-safe checks (no .env/host/docker dependent ones); WARN on pins/compose is FAIL")
     args = ap.parse_args(argv)
-    findings = run_all(Path(args.root), images=args.images)
+    findings = run_ci(Path(args.root)) if args.ci else run_all(Path(args.root), images=args.images)
     if args.json:
         print(json.dumps([asdict(f) for f in findings], indent=2))
     elif args.markdown:

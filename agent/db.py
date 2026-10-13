@@ -530,7 +530,7 @@ def list_pending_commitments(limit: int = 50, *, include_past: bool = False) -> 
                     COALESCE(event_date, due_date) ASC NULLS LAST,
                     created_at DESC
                 LIMIT %s
-                """,
+                """,  # noqa: S608 — past_filter is one of two literal fragments, never user input; limit is bound
                 (limit,),
             )
             rows = cur.fetchall()
@@ -1256,7 +1256,7 @@ def list_reminders(chat_id: str | None = None, statuses=("pending",),
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "SELECT * FROM reminders WHERE status = ANY(%s) "
+                "SELECT * FROM reminders WHERE status = ANY(%s) "  # noqa: S608 — interpolated _EFFECTIVE is a module-level constant; values are bound via %s
                 "AND (%s::text IS NULL OR chat_id = %s) "
                 f"ORDER BY {_EFFECTIVE}, id LIMIT %s",
                 (list(statuses), chat_id, chat_id, limit),
@@ -1270,7 +1270,7 @@ def claim_due(now, limit: int = 20) -> List[Dict[str, Any]]:
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "UPDATE reminders SET status = 'firing', claimed_at = now() "
+                "UPDATE reminders SET status = 'firing', claimed_at = now() "  # noqa: S608 — interpolated _EFFECTIVE is a module-level constant; values are bound via %s
                 "WHERE id IN (SELECT id FROM reminders "
                 f"             WHERE status = 'pending' AND {_EFFECTIVE} <= %s "
                 f"             ORDER BY {_EFFECTIVE} FOR UPDATE SKIP LOCKED LIMIT %s) "
@@ -1286,7 +1286,7 @@ def claim_due(now, limit: int = 20) -> List[Dict[str, Any]]:
 
 
 _FIRE_LOG_SQL = (
-    "INSERT INTO reminder_fires (reminder_id, due_at, fired_at, drift_s) "
+    "INSERT INTO reminder_fires (reminder_id, due_at, fired_at, drift_s) "  # noqa: S608 — interpolated _EFFECTIVE is a module-level constant; values are bound via %s
     f"SELECT id, {_EFFECTIVE}, %s, %s FROM reminders WHERE id = %s"
 )
 

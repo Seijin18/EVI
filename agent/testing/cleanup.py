@@ -58,17 +58,17 @@ def run(conn, apply: bool = False, out=print) -> dict[str, int]:
                 out(f"[{name}] table absent, skipped")
                 counts[name] = 0
                 continue
-            cur.execute(f"SELECT count(*) FROM {table} WHERE {where}")
+            cur.execute(f"SELECT count(*) FROM {table} WHERE {where}")  # noqa: S608 — table/where/cols come from the module-level TARGETS constant, never user input
             counts[name] = int(cur.fetchone()[0])
             out(f"[{name}] {counts[name]} row(s)  WHERE {where}")
-            cur.execute(f"SELECT {cols} FROM {table} WHERE {where} ORDER BY id LIMIT 5")
+            cur.execute(f"SELECT {cols} FROM {table} WHERE {where} ORDER BY id LIMIT 5")  # noqa: S608 — table/where/cols come from the module-level TARGETS constant, never user input
             for rid, text in cur.fetchall():
                 out(f"    id={rid}  {_sample(text)}")
         if apply:
             for name, (table, where, _cols) in TARGETS.items():
                 if name not in present:
                     continue
-                cur.execute(f"DELETE FROM {table} WHERE {where}")
+                cur.execute(f"DELETE FROM {table} WHERE {where}")  # noqa: S608 — table/where/cols come from the module-level TARGETS constant, never user input
                 out(f"DELETED {cur.rowcount} row(s) from {name}")
             conn.commit()
         else:
@@ -78,7 +78,7 @@ def run(conn, apply: bool = False, out=print) -> dict[str, int]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    where_help = "\n".join(f"  {n}: DELETE FROM {t} WHERE {w}" for n, (t, w, _c) in TARGETS.items())
+    where_help = "\n".join(f"  {n}: DELETE FROM {t} WHERE {w}" for n, (t, w, _c) in TARGETS.items())  # noqa: S608 — table/where/cols come from the module-level TARGETS constant, never user input
     ap = argparse.ArgumentParser(
         description="List harness/test rows in production tables; delete only with --apply.",
         epilog="Exact WHERE clauses:\n" + where_help,

@@ -35,7 +35,7 @@ def organize_inbox(confirm: bool = False) -> str:
             target = dest / file.name
 
             if target.exists():
-                h = hashlib.md5(file.read_bytes()).hexdigest()[:6]
+                h = hashlib.md5(file.read_bytes(), usedforsecurity=False).hexdigest()[:6]
                 target = dest / f"{file.stem}_{h}{file.suffix}"
 
             shutil.move(str(file), str(target))

@@ -237,7 +237,7 @@ def pg_count(ctx: Ctx, row: dict) -> int:
             clauses.append(f"{col} = {val}")
         else:
             clauses.append(f"{col}::text = '{str(val).replace(chr(39), chr(39) * 2)}'")
-    sql = f"SELECT count(*) FROM {table}" + (" WHERE " + " AND ".join(clauses) if clauses else "")
+    sql = f"SELECT count(*) FROM {table}" + (" WHERE " + " AND ".join(clauses) if clauses else "")  # noqa: S608 — table is checked against schema.PG_TABLES; scenario YAML values are quote-escaped; test harness only
     deadline = time.monotonic() + float(row.get("within_s") or 0)
     while True:
         got = int(ctx.psql(sql).strip() or 0)

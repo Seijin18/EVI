@@ -431,7 +431,7 @@ class Rotator:
             quoted = ",".join(f"'{r}'" for r in roles)
             out = self._must("role lookup", self._compose(
                 ["exec", "-T", "postgres", "psql", "-U", pg_user, "-d", "postgres", "-X", "-Atc",
-                 f"SELECT rolname FROM pg_roles WHERE rolname IN ({quoted})"]))
+                 f"SELECT rolname FROM pg_roles WHERE rolname IN ({quoted})"]))  # noqa: S608 — role names are validated by psql_role_sql/SAFE_IDENT above, never free text
             missing = sorted(set(roles) - set(out.split()))
             if missing:
                 raise RotationError(f"DB role(s) not found in pg_roles: {', '.join(missing)}")

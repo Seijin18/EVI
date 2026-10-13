@@ -124,6 +124,22 @@ def test_git_history_finds_secret_without_printing_it(repo):
     assert SECRET not in json.dumps([x.__dict__ for x in findings])
 
 
+def test_git_history_allows_documented_fake_fixture_only(repo):
+    # F24: the known FAKE placeholder in its own test file is allowed...
+    (repo / "tests/unit").mkdir(parents=True)
+    write(repo / "tests/unit/test_security_scan.py", f'SECRET = "{SECRET}"\n')
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "fixture")
+    assert by_id(ss.check_git(repo), "git.history").status == ss.PASS
+    # ...but the same string elsewhere, or another secret in that file, still fails.
+    write(repo / "other.py", f'SECRET = "{SECRET}"\n')
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "elsewhere")
+    f = by_id(ss.check_git(repo), "git.history")
+    assert f.status == ss.FAIL and "other.py" in f.evidence and "test_security_scan.py" not in f.evidence
+    write(repo / "tests/unit/test_security_scan.py", f'SECRET = "{SECRET}"\nREAL = "sk-' + "A" * 30 + '"\n')
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "real one")
+    assert "test_security_scan.py" in by_id(ss.check_git(repo), "git.history").evidence
+
+
 def test_git_clean_history_and_tracked_env(repo):
     write(repo / "a.txt", "hello\n")
     write(repo / ".env", "X=1\n")
@@ -221,3 +237,38 @@ def test_main_exit_code_and_formats(tmp_path, capsys):
     assert any(d["id"] == "binds.compose" and d["status"] == "FAIL" for d in data)
     ss.main(["--root", str(tmp_path), "--markdown"])
     assert "| Status | Check | Evidence |" in capsys.readouterr().out
+
+
+# ---- --ci mode
+def test_ci_mode_skips_env_and_host_checks_and_passes_on_clean_tree(tmp_path, monkeypatch):
+    write(tmp_path / "docker-compose.yml",
+          "services:\n  a:\n    image: redis:7-alpine\n    ports: ['127.0.0.1:1:1']\n")
+    write(tmp_path / ".env", "POSTGRES_PASSWORD=changeme\n", 0o644)   # must be ignored in --ci
+    monkeypatch.setattr(ss, "check_ruff", lambda root: [ss.Finding("ruff.blocking", ss.PASS, "t", "e")])
+    monkeypatch.setattr(ss, "check_dependencies", lambda root: [ss.Finding("deps.audit", ss.SKIP, "t", "net")])
+    monkeypatch.setattr(ss, "check_routes", lambda p: [ss.Finding("routes.auth", ss.PASS, "t", "e")])
+    findings = ss.run_ci(tmp_path)
+    ids = {f.id for f in findings}
+    assert not ids & {"secrets.env", "secrets.qdrant", "binds.host"}
+    assert not any(i.startswith("perms.") for i in ids)
+    assert "binds.compose" in ids and "images.pinned" in ids
+    assert not any(f.status == ss.FAIL for f in findings)
+
+
+def test_ci_mode_fails_on_unpinned_image_and_exposed_port(tmp_path, monkeypatch):
+    write(tmp_path / "docker-compose.yml",
+          "services:\n  a:\n    image: foo/bar:latest\n    ports: ['8000:8000']\n")
+    monkeypatch.setattr(ss, "check_ruff", lambda root: [])
+    monkeypatch.setattr(ss, "check_dependencies", lambda root: [])
+    monkeypatch.setattr(ss, "check_routes", lambda p: [])
+    by = {f.id: f for f in ss.run_ci(tmp_path)}
+    assert by["images.pinned"].status == ss.FAIL   # WARN interactively, blocking in CI
+    assert by["binds.compose"].status == ss.FAIL
+
+
+def test_ci_main_exit_code_nonzero_on_fail(tmp_path, monkeypatch, capsys):
+    write(tmp_path / "docker-compose.yml", "services:\n  a:\n    image: x:latest\n")
+    monkeypatch.setattr(ss, "check_ruff", lambda root: [])
+    monkeypatch.setattr(ss, "check_dependencies", lambda root: [])
+    monkeypatch.setattr(ss, "check_routes", lambda p: [])
+    assert ss.main(["--root", str(tmp_path), "--ci"]) == 1

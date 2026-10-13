@@ -98,6 +98,24 @@ só podem usar endpoints com retenção zero (OpenRouter `provider.zdr=true` +
 `data_collection: "deny"`), aprovado pelo usuário em 2026-10-12. O tier gratuito da
 Gemini API usa os dados para melhorar produtos — não usar para conteúdo pessoal.
 
+## Gates de CI
+
+O job `security` de `.github/workflows/ci.yml` roda, em todo push/PR:
+
+| Gate | O que verifica |
+|---|---|
+| `ruff check agent/ --select S102,S307,S602,S604,S605,S608` | sem `eval`/`exec`/`shell=True`/SQL montado por string; exceções só com `# noqa: Sxxx — motivo` |
+| `./scripts/evi-security-scan --ci` | portas do compose em `127.0.0.1`, imagens com versão fixa, rotas exigindo a chave, sem arquivos proibidos rastreados nem segredos no histórico git (placeholders FAKE de testes em `HISTORY_ALLOW`), `pip-audit` (vulnerabilidade com correção disponível reprova; rede indisponível vira SKIP) |
+| `scripts/evi-container-smoke.sh` (job `container`) | `POST /chat` sem chave devolve 401 no stack composto |
+
+O modo `--ci` ignora o que depende do `.env`, do host ou do docker (`secrets.env`, `binds.host`,
+`perms.*`, trivy); isso só roda no scan completo. Localmente:
+
+```bash
+./scripts/evi-security-scan --ci    # o mesmo que o CI (exit 1 em FAIL)
+./scripts/evi-security-scan         # scan completo, inclui .env, permissões e portas do host
+```
+
 ## Pendências conhecidas
 
 | Item | Onde |
