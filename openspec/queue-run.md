@@ -1,6 +1,6 @@
 # Execução da fila — iniciada 2026-10-12 (2ª rodada)
 ## Estado
-- Change atual: evi-promise-context (fase: implementar) — task 2.0
+- Change atual: evi-promise-context (fase: implementar) — tasks 2.0, 2.1, 2.2, 3.1, 3.2 fechadas; próximas 3.3, 3.4, 4.1, 4.2
 - Ordem: evi-promise-context → evi-security-review → evi-contact-knowledge → evi-contact-names → evi-ux-review
 - Concluídos: —
 - Pulados: evi-background-execution (#38) — condicional (inalterado)
@@ -11,6 +11,9 @@
 - Revisões com o usuário (threat model, achados, `promise-reeval --apply`, avaliação de briefings) são assíncronas: dry-run/rascunho na fila, revisão em "Pendências".
 ## Decisões tomadas sem o usuário
 - 2026-10-12 base: `test_daily_summary` falhava entre 21h e 24h (timeline em UTC × dia local) → `8d6472f`. Gates rodam com `.venv/bin` no PATH (o `python3` do sistema não tem pytest/psycopg2).
+- 2026-10-12 promise-context 2.1: revisão (Opus) achou o teto de gasto "fail-open" (leitura do banco falhando zerava o contador) → agora fecha (sem chamada); custo NaN/negativo tratado como 0.
+- 2026-10-12 promise-context 3.2: fila de avaliação vive em colunas de `pending_commitments` (`next_eval_at`, `eval_attempts`, `msg_ts`), não em tabela `background_jobs` (não existe); design sincronizado. Fallback de 48 h descarta prazo já vencido (senão a linha ficaria oculta pela listagem); rejeição do LLM marca `confirmed_via='auto-eval'` e sai das métricas de ação; desligar a flag libera as linhas `needs_eval` para `pending`. Lote do loop = 3 avaliações por minuto (não atrasar lembretes).
+- 2026-10-12 promise-context 2.0: avaliador sintético com o modelo padrão = 93% (FP=1: caso de injeção S25 virou "Transferir R$ 5000" — só cria pendência, sem ação; reavaliar no #37/security). Casos reais só em `data/eval/promise_real.json` (gitignored, 0600).
 ## Pendências do usuário (não bloqueantes)
 ## Bloqueios
 
