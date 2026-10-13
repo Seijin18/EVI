@@ -26,6 +26,7 @@
 - [ ] Verificar em 24 h que `docker logs evi-agent-api-1` não tem `/webhooks/evolution ... 401` e que mensagens do WhatsApp continuam chegando (webhook global desligado)
 - [ ] Apagar os backups de rotação quando não precisar mais deles: `data/backups/env-pre-rotate-*` e `pre-rotate-*.sql` (guardam segredos/dados antigos)
 - [ ] Limite de crédito mensal na chave do OpenRouter — https://openrouter.ai/settings/keys
+- [ ] Publicar o schedule diário das 03:30 do conhecimento de contatos: `cd windmill && wmill sync push` (cria `f/integrations/contact_learn_daily`; confirmar `enabled` na UI) — evi-contact-knowledge 3.2
 ## Bloqueios
 
 ---

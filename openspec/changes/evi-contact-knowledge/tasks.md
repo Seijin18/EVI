@@ -44,7 +44,7 @@
   - Files: `agent/services/contact_learn_cron.py`, `tests/unit/test_contact_learn_cron.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_learn_cron.py -q`
 
-- [ ] 3.2 Agendamento diário 03:30 de `f/integrations/contact_learn` (yaml no repo se o sync suportar; senão passo na UI documentado e confirmado com o usuário)
+- [x] 3.2 (yaml no repo; publicar no Windmill = `wmill sync push`, pendência do usuário) Agendamento diário 03:30 de `f/integrations/contact_learn` (yaml no repo se o sync suportar; senão passo na UI documentado e confirmado com o usuário)
   - SCN-MEM-19
   - Files: `windmill/f/integrations/`, `docs/windmill.md`
   - Verify: `./scripts/evi-test windmill` e schedule `enabled` listado no Windmill
