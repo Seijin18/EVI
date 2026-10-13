@@ -146,3 +146,10 @@ def _no_retry_sleep(monkeypatch):
     """Probe/briefing retry once after a pause in production; tests don't wait."""
     monkeypatch.setenv("EVI_PROBE_RETRY_SEC", "0")
     monkeypatch.setenv("EVI_BRIEFING_RETRY_SEC", "0")
+
+
+@pytest.fixture(autouse=True)
+def _api_key_enforcement_off_by_default(monkeypatch):
+    """EVI_REQUIRE_API_KEY defaults to true in code (F8); unit tests that exercise
+    routes without a key opt out explicitly. Auth tests override this per test."""
+    monkeypatch.setenv("EVI_REQUIRE_API_KEY", "false")

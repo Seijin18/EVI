@@ -197,12 +197,11 @@ def test_routes_flags_unlisted_open_route(tmp_path):
     assert "POST /open" in res["routes.auth"].evidence and "/health" not in res["routes.auth"].evidence
 
 
-def test_routes_pass_and_metrics_warn(tmp_path):
+def test_unauthenticated_metrics_is_a_failure(tmp_path):
     m = write(tmp_path / "main.py", APP.replace('@app.post("/open")', '@app.get("/metrics")')
               .replace('@app.get("/health")', '@app.get("/health")\ndef r(): ...\n@app.get("/")'))
     res = {f.id: f for f in ss.check_routes(m)}
-    assert res["routes.auth"].status == ss.PASS
-    assert res["routes.review"].status == ss.WARN
+    assert res["routes.auth"].status == ss.FAIL
 
 
 def test_real_main_has_no_unlisted_open_routes():

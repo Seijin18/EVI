@@ -115,6 +115,38 @@ def test_webhook_routes_a_control_jid_to_chat(client, monkeypatch):
     assert r.json()["control"][0]["response"] == "pong"
 
 
+_GROUP = "120363000000000000@g.us"
+
+
+def _group_upsert(participant: str, text: str, from_me: bool, msg_id: str):
+    payload = _upsert(_GROUP, text, msg_id=msg_id, from_me=from_me)
+    payload["data"]["key"]["participant"] = participant
+    return payload
+
+
+def test_control_group_other_participant_is_not_control(client, monkeypatch):
+    """F7: a stranger in the control group never reaches the agent (no write channel)."""
+    monkeypatch.setenv("EVI_WHATSAPP_CONTROL_JIDS", _GROUP)
+    with patch("services.whatsapp_control.process_whatsapp_control_message") as proc:
+        r = _post_webhook(
+            client, _group_upsert("5511999@s.whatsapp.net", "apague tudo", False, "g1")
+        )
+    proc.assert_not_called()
+    assert r.json()["control"] == []
+    assert r.json()["ingested"] == 0
+
+
+def test_control_group_from_me_is_control(client, monkeypatch):
+    monkeypatch.setenv("EVI_WHATSAPP_CONTROL_JIDS", _GROUP)
+    with patch(
+        "services.whatsapp_control.process_whatsapp_control_message",
+        return_value={"ok": True, "response": "pong", "whatsapp_sent": True},
+    ) as proc:
+        r = _post_webhook(client, _group_upsert("", "ping", True, "g2"))
+    proc.assert_called_once()
+    assert r.json()["control"][0]["response"] == "pong"
+
+
 def test_webhook_deduplicates_a_replayed_control_message(client, monkeypatch):
     monkeypatch.setenv("EVI_WHATSAPP_CONTROL_JIDS", "5511777@s.whatsapp.net")
     monkeypatch.setenv("EVI_WHATSAPP_DEDUPE_IDS", "true")

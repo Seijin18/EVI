@@ -124,7 +124,7 @@ services:
       retries: 8
       start_period: 40s
 
-  # Prometheus: scrape http://agent-api:8000/metrics when EVI_METRICS_ENABLED=true (no prometheus container in compose)
+  # Prometheus: scrape http://agent-api:8000/metrics (needs X-Api-Key) when EVI_METRICS_ENABLED=true (no prometheus container in compose)
   agent-api:
     restart: unless-stopped
     build: ./agent
@@ -166,7 +166,7 @@ services:
       - EVI_TIMEZONE=${EVI_TIMEZONE:-America/Sao_Paulo}
       - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-}
       - EVI_API_KEY=${EVI_API_KEY:-}
-      - EVI_REQUIRE_API_KEY=${EVI_REQUIRE_API_KEY:-false}
+      - EVI_REQUIRE_API_KEY=${EVI_REQUIRE_API_KEY:-true}
       - EVI_SESSION_MEMORY_MAX=${EVI_SESSION_MEMORY_MAX:-32}
       - EVI_PROJECT_ROOT=${EVI_PROJECT_ROOT:-/home/marshibs/Projects/EVI}
       # Host path in .env is for local scripts; container uses mounted /workspace

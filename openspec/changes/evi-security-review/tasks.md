@@ -34,19 +34,19 @@
   - Files: `docker-compose.yml`, `docs/security/findings.md`, `docs/remote-access.md`
   - Verify: `./scripts/evi-security-scan` (binds) e `./scripts/evi-test smoke`
 
-- [ ] 3.2 Segredos: trocar padrões (`evi-dev-key`, `changeme`, `windmill`), chave do Qdrant, permissões 600/700 em `.env`, `data/`, `logs/`; procedimento de rotação documentado
+- [x] 3.2 (ferramenta pronta e revisada 2×; `--apply` no sistema vivo: ver queue-run) Segredos: trocar padrões (`evi-dev-key`, `changeme`, `windmill`), chave do Qdrant, permissões 600/700 em `.env`, `data/`, `logs/`; procedimento de rotação documentado
   - SCN-SEC-04
   - Files: `docker-compose.yml`, `.env.example`, `scripts/evi-rotate-secrets`, `docs/security/findings.md`
   - Verify: `./scripts/evi-security-scan` sem segredo padrão e `./scripts/evi-container-smoke.sh`
 
-- [ ] 3.3 Demais achados críticos/altos do registro (um commit por achado; médios/baixos → BACKLOG)
+- [x] 3.3 Demais achados críticos/altos do registro (um commit por achado; médios/baixos → BACKLOG)
   - SCN-SEC-02
   - Files: `docs/security/findings.md`, `openspec/BACKLOG.md`
   - Verify: `docs/security/findings.md` sem crítico/alto aberto
 
 ## 4. Guardas de regressão
 
-- [ ] 4.1 Guarda de inicialização (sem chave → não sobe) + teste "toda rota não pública exige chave" + teste "nenhuma porta publicada sem 127.0.0.1"
+- [x] 4.1 Guarda de inicialização (sem chave → não sobe) + teste "toda rota não pública exige chave" + teste "nenhuma porta publicada sem 127.0.0.1"
   - SCN-SEC-05, SCN-AUTH-01
   - Files: `agent/main.py`, `tests/unit/test_security_guards.py`, `tests/unit/test_main_auth.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_security_guards.py tests/unit/test_main_auth.py -q`

@@ -23,7 +23,7 @@ PASS, WARN, FAIL, SKIP = "PASS", "WARN", "FAIL", "SKIP"
 # Routes that intentionally answer without the API key.
 PUBLIC_ROUTES = {("GET", "/"), ("GET", "/health")}
 # Reachable without a key but only informational; reported as WARN, not FAIL.
-REVIEW_ROUTES = {("GET", "/metrics")}
+REVIEW_ROUTES: set = set()
 
 WEAK_DEFAULTS = {
     "EVOLUTION_API_KEY": {"evi-dev-key", ""},

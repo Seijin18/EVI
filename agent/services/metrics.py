@@ -175,7 +175,9 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         start = time.perf_counter()
         response = await call_next(request)
         elapsed = time.perf_counter() - start
-        path = request.url.path
+        # Route template, never the raw URL (unbounded label cardinality, F14).
+        route = request.scope.get("route")
+        path = getattr(route, "path", None) or "unmatched"
         if REQUEST_COUNT is not None:
             REQUEST_COUNT.labels(
                 method=request.method,

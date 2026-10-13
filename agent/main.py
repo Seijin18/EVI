@@ -222,7 +222,7 @@ def health():
 
 
 @app.get("/metrics")
-def metrics():
+def metrics(_: None = Depends(verify_api_key)):
     from services.metrics import metrics_response
 
     return metrics_response()
@@ -503,6 +503,21 @@ def evolution_webhook(
     ingest_raw = []
     audio_activity = []
     for msg in raw:
+        if msg.sender in control_jids and msg.is_group and not msg.from_me:
+            # F7: in a control GROUP only the owner's own account (fromMe) commands
+            # the agent; other participants never get the whatsapp_control channel.
+            append_jsonl(
+                log_path,
+                {
+                    "ts": ts,
+                    "step": "skip",
+                    "event": event,
+                    "hint": "control_group_not_owner",
+                    "sender": msg.sender,
+                    "source_id": msg.id,
+                },
+            )
+            continue
         if msg.sender in control_jids:
             if is_evi_bot_message(msg.text):
                 append_jsonl(

@@ -22,7 +22,7 @@ from fastapi import HTTPException  # noqa: E402
 _KEY = "s3cret"
 
 # Routes that must 401 without a key. `/` and `/health` stay open on purpose:
-# the compose healthcheck hits `/` and a Prometheus scrape cannot send a header.
+# the compose healthcheck hits `/`.
 PROTECTED = [
     ("get", "/tools", None),
     ("post", "/reset", {}),
@@ -35,6 +35,7 @@ PROTECTED = [
     ("post", "/jobs/contact-learn", {}),
     ("post", "/webhooks/telegram", {"message": {}}),
     ("post", "/webhooks/evolution", {}),
+    ("get", "/metrics", None),
 ]
 
 OPEN = [("get", "/"), ("get", "/health")]
@@ -43,6 +44,7 @@ OPEN = [("get", "/"), ("get", "/health")]
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("EVI_API_KEY", _KEY)
+    monkeypatch.setenv("EVI_REQUIRE_API_KEY", "true")
     main.app_state.graph = MagicMock()
     return TestClient(main.app)
 
@@ -80,10 +82,27 @@ def test_correct_key_is_accepted(client):
 
 
 def test_no_key_configured_leaves_routes_open(monkeypatch):
-    """Backward compatible: empty EVI_API_KEY keeps the local setup working."""
+    """Explicit opt-out (EVI_REQUIRE_API_KEY=false) keeps the local setup working."""
+    monkeypatch.setenv("EVI_REQUIRE_API_KEY", "false")
     monkeypatch.setenv("EVI_API_KEY", "")
     main.app_state.graph = MagicMock()
     assert TestClient(main.app).get("/tools").status_code == 200
+
+
+def test_empty_key_with_enforcement_fails_closed(monkeypatch):
+    monkeypatch.setenv("EVI_REQUIRE_API_KEY", "true")
+    monkeypatch.setenv("EVI_API_KEY", "")
+    with pytest.raises(HTTPException) as exc:
+        verify_api_key("anything")
+    assert exc.value.status_code == 401
+
+
+def test_verify_api_key_uses_constant_time_compare():
+    import inspect
+
+    import auth
+
+    assert "compare_digest" in inspect.getsource(auth.verify_api_key)
 
 
 def test_verify_api_key_directly(monkeypatch):
@@ -98,18 +117,27 @@ def test_require_api_key_configured_blocks_startup(monkeypatch):
     monkeypatch.setenv("EVI_REQUIRE_API_KEY", "true")
     monkeypatch.setenv("EVI_API_KEY", "")
     assert api_key_required() is True
-    with pytest.raises(RuntimeError, match="EVI_REQUIRE_API_KEY"):
+    with pytest.raises(RuntimeError, match="EVI_API_KEY"):
         require_api_key_configured()
 
 
 def test_require_api_key_configured_passes_when_set(monkeypatch):
     monkeypatch.setenv("EVI_REQUIRE_API_KEY", "true")
-    monkeypatch.setenv("EVI_API_KEY", _KEY)
+    monkeypatch.setenv("EVI_API_KEY", "k" * 16)
     require_api_key_configured()
 
 
-def test_enforcement_is_off_by_default(monkeypatch):
+def test_enforcement_is_on_by_default(monkeypatch):
     monkeypatch.delenv("EVI_REQUIRE_API_KEY", raising=False)
     monkeypatch.setenv("EVI_API_KEY", "")
-    assert api_key_required() is False
-    require_api_key_configured()
+    assert api_key_required() is True
+    with pytest.raises(RuntimeError):
+        require_api_key_configured()
+
+
+def test_explicit_opt_out_starts_with_loud_warning(monkeypatch, caplog):
+    monkeypatch.setenv("EVI_REQUIRE_API_KEY", "false")
+    monkeypatch.setenv("EVI_API_KEY", "")
+    with caplog.at_level("WARNING", logger="auth"):
+        require_api_key_configured()
+    assert any("UNAUTHENTICATED" in r.getMessage() for r in caplog.records)

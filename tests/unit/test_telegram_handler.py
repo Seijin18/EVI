@@ -5,10 +5,19 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 _agent = Path(__file__).resolve().parents[2] / "agent"
 sys.path.insert(0, str(_agent))
 
 from services.telegram_handler import process_telegram_update  # noqa: E402
+
+@pytest.fixture(autouse=True)
+def _owner_chat(monkeypatch):
+    """The allowlist fails closed without TELEGRAM_CHAT_ID (F16); fixtures use these ids."""
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "933619568")
+    monkeypatch.setenv("TELEGRAM_ALLOWED_CHAT_IDS", "1,7")
+
 
 _DIRECT_OFF = patch.dict(os.environ, {"EVI_DIRECT_HANDLERS": "false"}, clear=False)
 _DIRECT_ON = patch.dict(os.environ, {"EVI_DIRECT_HANDLERS": "true"}, clear=False)
@@ -153,7 +162,8 @@ _VOICE = {"message": {"chat": {"id": 7}, "voice": {"file_id": "F1", "duration": 
 def voice_env(monkeypatch):
     monkeypatch.setenv("EVI_VOICE_ENABLED", "true")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "SECRET:TOKEN")
-    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "7")
+    monkeypatch.delenv("TELEGRAM_ALLOWED_CHAT_IDS", raising=False)
     with (
         patch("services.telegram_handler.send_telegram_message", return_value=True) as send,
         patch("services.telegram_handler._persist_turn"),
@@ -315,14 +325,15 @@ def test_extra_allowed_chat_id(monkeypatch):
     assert out["skipped"] == "chat not allowed" and calls == []
 
 
-def test_unset_owner_allows_all_and_warns_once(monkeypatch, caplog):
+def test_unset_owner_fails_closed_and_warns_once(monkeypatch, caplog):
     import services.telegram_handler as th
 
     monkeypatch.setattr(th, "_warned_open", False)
     with caplog.at_level("WARNING", logger="services.telegram_handler"):
-        _, calls, _ = _run_guard(_text(5), {}, monkeypatch)
+        out, calls, send = _run_guard(_text(5), {}, monkeypatch)
         _run_guard(_text(6), {}, monkeypatch)
-    assert calls == ["olá"]
+    assert calls == [] and out["skipped"] == "chat not allowed"
+    send.assert_not_called()
     warns = [r for r in caplog.records if "TELEGRAM_CHAT_ID not set" in r.getMessage()]
     assert len(warns) == 1
 

@@ -29,8 +29,8 @@ def _chat_allowed(chat_id: Any) -> bool:
     if not owner:
         if not _warned_open:
             _warned_open = True
-            _log.warning("TELEGRAM_CHAT_ID not set; accepting any chat")
-        return True
+            _log.warning("TELEGRAM_CHAT_ID not set; rejecting all Telegram chats (fail-closed)")
+        return False
     allowed = {owner}
     allowed.update(
         p.strip() for p in os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "").split(",") if p.strip()

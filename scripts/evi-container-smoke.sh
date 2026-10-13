@@ -54,6 +54,8 @@ export EVI_CONTACT_MEMORY_DIR=/data/contact_memory
 # start a Telegram poller against the real bot (that is what caused the 409s).
 export TELEGRAM_MODE= TELEGRAM_BOT_TOKEN= TELEGRAM_CHAT_ID=
 export EVI_WHATSAPP_CONTROL_JIDS= GEMINI_API_KEY=
+# Auth is on by default; the smoke uses a throwaway key and also proves 401 without it.
+export EVI_API_KEY=smoke-throwaway-key-0123456789abcdef EVI_REQUIRE_API_KEY=true
 
 # Guard, learned the hard way on 2026-08-12: a bind mount ignores the compose
 # project name, so `-p evi-smoke` alone does NOT isolate anything. Running this
@@ -134,7 +136,14 @@ else
 fi
 
 HEALTH="$(curl -s -m 20 "$API/health" || echo '{}')"
-TOOLS="$(curl -s -m 10 "$API/tools" || echo '{}')"
+TOOLS_NOKEY_CODE="$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$API/tools" || echo 000)"
+TOOLS="$(curl -s -m 10 -H "X-Api-Key: ${EVI_API_KEY}" "$API/tools" || echo '{}')"
+
+if [ "$TOOLS_NOKEY_CODE" = "401" ]; then
+  echo "[PASS] /tools sem chave -> 401 (autenticação ligada por padrão)"
+else
+  echo "[FAIL] /tools sem chave devolveu $TOOLS_NOKEY_CODE (esperado 401)"; FAILED=1
+fi
 
 echo "==> 4/7 Health por check (não só o agregado)..."
 HEALTH="$HEALTH" python3 - <<'PY' || FAILED=1
