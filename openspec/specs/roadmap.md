@@ -226,6 +226,11 @@ As-built: modelo de ameaças e registro de 28 achados (`docs/security/`); `agent
 Change: [`evi-contact-names`](../changes/archive/2026-10-13-evi-contact-names/proposal.md).
 As-built: script Windmill `list_contacts` (People API, só nome+telefones); `name_source` (`user`/`agenda`/`vcard`) e `apply_entries` genérico (nome do usuário nunca sobrescrito, ambíguos e números estrangeiros ignorados); `/jobs/contact-names-sync` (dry-run por padrão) e wrapper Windmill com schedule 03:15 desligado até o OAuth `gcontacts`; `@lid` herda nome do telefone; pergunta semanal no briefing de segunda com respostas determinísticas "nomeia N <nome>"/"ignora N" e sugestão de nome com evidência literal (`CONTACT_NAME_HINT`).
 
+### Etapa 29 — Revisão de usabilidade — `evi-ux-review` — **Done** (2026-10-13)
+
+Change: [`evi-ux-review`](../changes/archive/2026-10-13-evi-ux-review/proposal.md).
+As-built: revisão em `docs/ux/review-2026-10.md`; briefing com `text_user` (HTML do Telegram, pessoa em negrito, uma linha por item, `+N` com frase, rodapé de comandos, ≤ 25 linhas com seções colapsadas) e `text_model` (marcado) na sessão; guarda que remove marcadores «externo» de qualquer texto ao Telegram; listas diretas e acks limpos (`ux_format`); aviso de OAuth legível; fechamentos v2 nas dívidas de resposta.
+
 ---
 
 ## Deferido (sem data)
