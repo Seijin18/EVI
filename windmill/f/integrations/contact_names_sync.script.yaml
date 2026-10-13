@@ -8,5 +8,5 @@ schema:
   properties:
     apply:
       type: boolean
-      default: true
+      default: false
   required: []

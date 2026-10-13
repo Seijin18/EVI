@@ -204,8 +204,6 @@ def resolve_chat_label(
     alt_jid: str = "",
 ) -> tuple[str, str]:
     """(display label, formatted phone) for a chat; the label is never a raw JID."""
-    from services.contact_registry import effective_label
-
     is_group = "@g.us" in jid
     phone_jid = "" if is_group else (jid if jid.endswith("@s.whatsapp.net") else alt_jid)
     if not phone_jid and jid.endswith("@lid"):
@@ -213,8 +211,19 @@ def resolve_chat_label(
 
         paired = canonical_jid(jid)
         phone_jid = paired if paired.endswith("@s.whatsapp.net") else ""
-    row = registry.get(phone_jid) or registry.get(jid)
-    name = effective_label(row, "")
+    # A name set on either row counts (the user may have named the @lid once paired):
+    # display_name (lid first, then phone), then the phone's pushName, then the lid's.
+    rows = [r for r in (registry.get(jid), registry.get(phone_jid)) if r]
+    name = ""
+    for r in rows:
+        name = (r.get("display_name") or "").strip()
+        if name:
+            break
+    if not name:
+        labels = [(r.get("whatsapp_label") or "").strip() for r in reversed(rows)]
+        name = next((lb for lb in labels if lb and not _looks_like_id(lb)), "") or next(
+            (lb for lb in labels if lb), ""
+        )
     if _looks_like_id(name):
         name = ""
     if not name and not _looks_like_id(raw_label):

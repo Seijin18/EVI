@@ -172,6 +172,31 @@ def build_registry_index(rows: Iterable[dict]) -> dict[str, list[dict]]:
     return index
 
 
+def _intl_digits(phone: str) -> str:
+    """Normalised international digits: explicit +/00 country code kept; a number
+    without one is taken as Brazilian (the user's address book is)."""
+    raw = (phone or "").strip()
+    digits = _DIGITS.sub("", raw)
+    if raw.startswith("+"):
+        return digits
+    if raw.startswith("00"):
+        return digits[2:]
+    if digits.startswith("55") and len(digits) >= 12:
+        return digits
+    return "55" + digits
+
+
+def _country_compatible(phone: str, jid: str) -> bool:
+    """match_key drops the country code, so +351 912345678 would collide with a
+    Brazilian 5551912345678-like jid. Brazilian numbers only match 55… jids; any other
+    country must equal the jid's number exactly."""
+    intl = _intl_digits(phone)
+    jid_digits = _DIGITS.sub("", jid.split("@", 1)[0])
+    if intl.startswith("55"):
+        return jid_digits.startswith("55")
+    return intl == jid_digits
+
+
 def apply_entries(
     entries: Iterable[dict],
     *,
@@ -205,6 +230,7 @@ def apply_entries(
         "unchanged": 0,
         "ambiguous": 0,
         "no_whatsapp": 0,
+        "skipped_foreign": 0,
         "protected_user": 0,
         "skipped_no_phone": 0,
         "dry_run": dry_run,
@@ -222,6 +248,7 @@ def apply_entries(
                 names_by_key.setdefault(key, set()).add(name.casefold())
 
     index = build_registry_index(list_whatsapp_contacts_db(limit=limit))
+    seen_pairs: set[tuple[str, str]] = set()  # (phone key, casefolded name) already handled
 
     for name, phones in items:
         if not phones or not name:
@@ -233,15 +260,22 @@ def apply_entries(
             rep["ambiguous"] += 1
             rep["examples"].append(f"ambíguo: «{name}» divide telefone com outro nome")
             continue
+        pairs = {(k, name.casefold()) for k in keys}
+        if pairs and pairs <= seen_pairs:
+            continue  # same contact listed twice (e.g. "Ana"/"ana"): one write only
+        seen_pairs |= pairs
 
         hits: list[dict] = []
-        for key in keys:
-            for row in index.get(key, []):
-                if row not in hits:
+        foreign = False
+        for phone in phones:
+            for row in index.get(match_key(phone), []):
+                if not _country_compatible(phone, str(row.get("jid") or "")):
+                    foreign = True
+                elif row not in hits:
                     hits.append(row)
 
         if not hits:
-            rep["no_whatsapp"] += 1
+            rep["skipped_foreign" if foreign else "no_whatsapp"] += 1
             continue
         if len(hits) > 1:
             # Better to leave it than to label the wrong person.
@@ -261,13 +295,22 @@ def apply_entries(
 
         previous = (current or row.get("whatsapp_label") or "").strip()
         aliases = [previous] if previous and previous != name else []
+        if not dry_run:
+            # The guard is re-checked under the row lock: the user may have named this
+            # contact in chat since the snapshot above was read.
+            written = upsert_whatsapp_contact(
+                row["jid"],
+                display_name=name,
+                aliases=aliases,
+                name_source=source,
+                only_if_name_source_in=(None, "agenda", "vcard"),
+            )
+            if written is False:
+                rep["protected_user"] += 1
+                continue
         rep["changed" if current else "new_names"] += 1
         if len(rep["examples"]) < 10:
             rep["examples"].append(f"{previous or row['jid']} → {name}")
-        if not dry_run:
-            upsert_whatsapp_contact(
-                row["jid"], display_name=name, aliases=aliases, name_source=source
-            )
 
     return rep
 
@@ -296,7 +339,7 @@ def import_vcard(
     report.matched = r["matched"]
     report.updated = r["new_names"] + r["changed"]
     report.unchanged = r["unchanged"]
-    report.unmatched = r["no_whatsapp"]
+    report.unmatched = r["no_whatsapp"] + r["skipped_foreign"]
     report.ambiguous = r["ambiguous"]
     report.skipped_no_phone = r["skipped_no_phone"]
     report.examples = list(r["examples"])

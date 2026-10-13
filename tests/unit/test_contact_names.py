@@ -117,6 +117,8 @@ def world(tmp_path, monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     rows: dict[str, dict] = {}
     monkeypatch.setattr(db, "init_db", lambda: None)
+    aliases: list[dict] = []
+    monkeypatch.setattr(db, "list_jid_aliases", lambda: list(aliases))
     monkeypatch.setattr(db, "list_whatsapp_contacts_db", lambda limit=500: list(rows.values()))
 
     def ignore(jid, until):
@@ -135,7 +137,7 @@ def world(tmp_path, monkeypatch):
         rows[jid] = {"jid": jid, "display_name": None, "whatsapp_label": None, "name_source": None, **row}
         _write_timeline(tmp_path, jid, entries)
 
-    return SimpleNamespace(rows=rows, add=add, root=tmp_path)
+    return SimpleNamespace(rows=rows, add=add, root=tmp_path, aliases=aliases)
 
 
 from types import SimpleNamespace  # noqa: E402
@@ -266,6 +268,7 @@ def _hint(answer, msgs=MSGS, monkeypatch=None):
     monkeypatch.setattr("services.llm_structured.run_structured", lambda task, prompt, schema, **kw: answer)
     monkeypatch.setattr(contact_names, "_contact_messages", lambda jid, days, limit: [
         (datetime.now(timezone.utc), me, t) for me, t in msgs])
+    contact_names._hint_cache.clear()
     return contact_names.suggest_name("5511@s.whatsapp.net")
 
 
@@ -322,3 +325,71 @@ def test_ignore_column_migration_and_round_trip():
     with db._conn() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM whatsapp_contacts WHERE jid = %s", (jid,))
         conn.commit()
+
+
+@pytest.fixture(autouse=True)
+def _clear_hint_cache():
+    contact_names._hint_cache.clear()
+    yield
+    contact_names._hint_cache.clear()
+
+
+def test_multiline_nomeia_is_not_claimed(world, monkeypatch):
+    world.add(PHONE_A, _CHAT)
+    _briefing_snapshot(monkeypatch, {"1": f"name_prompt:{PHONE_A}"})
+    assert contact_names.try_name_reply("nomeia 1 Pedro\nme lembra de ligar pra Ana", "telegram-1") is None
+    assert world.rows[PHONE_A]["display_name"] is None
+
+
+def test_name_on_paired_lid_counts_as_named(world):
+    world.add(PHONE_A, _CHAT)
+    world.add(LID_C, _CHAT, display_name="Hollmann", name_source="user")
+    world.aliases.append({"lid": LID_C, "phone_jid": PHONE_A})
+    assert PHONE_A not in [c["jid"] for c in contact_names.unnamed_candidates(datetime.now(timezone.utc))]
+
+
+def test_hint_name_must_be_a_whole_word_in_the_evidence(monkeypatch):
+    msgs = [(False, "comprei uma banana hoje")]
+    assert _hint({"nome": "Ana", "evidencia": "uma banana"}, msgs, monkeypatch) is None
+    msgs = [(False, "aqui é a Ana, tudo bem")]
+    assert _hint({"nome": "Ana", "evidencia": "aqui é a Ana"}, msgs, monkeypatch) is not None
+
+
+def test_sync_failure_is_logged_without_data(caplog):
+    with patch("services.contact_names.soft_fail") as sf:
+        rep, _, _ = _run({"error": "reconnect", "reason": "oauth"})
+    assert rep["status"] == "oauth" and sf.called
+
+
+def test_sync_success_logs_counts_only(caplog):
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="evi.contact_names"):
+        _run(_ENTRIES)
+    msg = " ".join(r.getMessage() for r in caplog.records)
+    assert "new_names" in msg and "Hollmann" not in msg and "4826" not in msg
+
+
+def test_hint_results_are_cached_per_jid(monkeypatch):
+    calls = []
+
+    def fake(*a, **k):
+        calls.append(1)
+        return {"nome": "Pedro", "evidencia": "sou o Pedro"}
+
+    monkeypatch.setattr("services.llm_structured.run_structured", fake)
+    monkeypatch.setattr(contact_names, "_contact_messages", lambda *a, **k: [
+        (datetime.now(timezone.utc), False, "oi, sou o Pedro")])
+    assert contact_names.suggest_name("5511@s.whatsapp.net")
+    assert contact_names.suggest_name("5511@s.whatsapp.net")
+    assert len(calls) == 1
+
+
+def test_hint_budget_skips_remaining_hints(world, monkeypatch):
+    for jid in (PHONE_A, PHONE_B, "5511911110003@s.whatsapp.net"):
+        world.add(jid, _CHAT)
+    seen = []
+    monkeypatch.setattr(contact_names, "suggest_name", lambda jid, label="": seen.append(jid))
+    monkeypatch.setenv("EVI_CONTACT_NAMES_HINT_BUDGET_SEC", "0")
+    rows = contact_names.prompt_rows(datetime.now(timezone.utc))
+    assert len(rows) == 3 and seen == []

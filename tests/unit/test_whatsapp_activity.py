@@ -107,3 +107,17 @@ def test_scn_name_04_summary_shows_phone_name_for_paired_lid():
     with patch("services.contact_identity.canonical_jid", return_value=phone):
         label, _ = resolve_chat_label("123456@lid", "~", registry, alt_jid="")
     assert label == "Hollmann"
+
+
+def test_chat_label_considers_both_rows_user_name_on_lid_wins():
+    from services.evolution_discovery import resolve_chat_label
+
+    phone = "5511948260209@s.whatsapp.net"
+    registry = {
+        phone: {"jid": phone, "display_name": None, "whatsapp_label": "PushFone"},
+        "123@lid": {"jid": "123@lid", "display_name": "Meu Nome", "whatsapp_label": "~"},
+    }
+    label, _ = resolve_chat_label("123@lid", "~", registry, alt_jid=phone)
+    assert label == "Meu Nome"
+    registry["123@lid"]["display_name"] = None
+    assert resolve_chat_label("123@lid", "~", registry, alt_jid=phone)[0] == "PushFone"

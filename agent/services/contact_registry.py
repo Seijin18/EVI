@@ -8,6 +8,9 @@ from typing import Any
 from services.contact_filesystem import phone_to_jid, update_contact_label
 
 
+_PHONE_LIKE = re.compile(r"^[\d\s+()\-.]*$")
+
+
 def _digits_only(value: str) -> str:
     return re.sub(r"\D", "", value or "")
 
@@ -36,9 +39,12 @@ def _paired_phone_label(jid: str) -> str:
         row = get_whatsapp_contact(phone)
         if not row:
             return ""
-        return (row.get("display_name") or "").strip() or (
-            row.get("whatsapp_label") or ""
-        ).strip()
+        display = (row.get("display_name") or "").strip()
+        if display:
+            return display
+        # A bare number as "label" says nothing: don't let it hide the @lid's own pushName.
+        label = (row.get("whatsapp_label") or "").strip()
+        return "" if _PHONE_LIKE.match(label) else label
     except Exception as exc:  # noqa: BLE001
         from services.soft_fail import soft_fail
 

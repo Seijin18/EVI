@@ -159,3 +159,15 @@ def test_lid_own_display_name_wins_and_failures_fall_back():
         assert effective_label(unpaired) == "Push"
     with patch("services.contact_identity.canonical_jid", return_value="123@lid"):
         assert effective_label(unpaired) == "Push"
+
+
+def test_paired_lid_keeps_own_pushname_when_phone_label_is_a_number():
+    from services.contact_registry import effective_label
+
+    lid = {"jid": "123@lid", "display_name": None, "whatsapp_label": "Ana"}
+    phone = {"jid": "5511948260209@s.whatsapp.net", "display_name": None,
+             "whatsapp_label": "+55 11 94826-0209"}
+    with patch("services.contact_identity.canonical_jid", return_value=phone["jid"]), patch(
+        "db.get_whatsapp_contact", return_value=phone
+    ):
+        assert effective_label(lid, "x") == "Ana"

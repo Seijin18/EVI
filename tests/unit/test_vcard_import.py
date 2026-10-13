@@ -287,7 +287,8 @@ def test_same_name_twice_is_not_ambiguous():
         [{"name": "A", "phones": ["11987654321"]}, {"name": "a", "phones": ["11987654321"]}],
         registry,
     )
-    assert rep["ambiguous"] == 0 and rep["matched"] == 2
+    assert rep["ambiguous"] == 0 and rep["matched"] == 1
+    assert up.call_count == 1, "duplicate entries: one write"
 
 
 def test_missing_from_entries_keeps_name_and_no_whatsapp_is_counted():
@@ -307,3 +308,28 @@ def test_apply_entries_dry_run_never_writes():
 def test_import_vcard_writes_source_vcard(vcf):
     _, up = _run(vcf, dry_run=False)
     assert up.call_args.kwargs["name_source"] == "vcard"
+
+
+def test_foreign_country_number_does_not_match_a_brazilian_jid():
+    """+49 11 98765 4321 shares DDD+8 digits with a Brazilian jid; it must not name it."""
+    registry = [{"jid": "5511987654321@s.whatsapp.net", "display_name": None}]
+    rep, up = _apply([{"name": "Tuga", "phones": ["+49 11 98765 4321"]}], registry)
+    assert rep["skipped_foreign"] == 1 and rep["matched"] == 0
+    up.assert_not_called()
+
+
+def test_brazilian_number_without_country_code_still_matches():
+    registry = [{"jid": "5511987654321@s.whatsapp.net", "display_name": None}]
+    rep, _ = _apply([{"name": "A", "phones": ["+55 11 98765-4321"]}], registry)
+    assert rep["matched"] == 1
+
+
+def test_guarded_write_refusal_counts_as_protected():
+    """The user named the contact after the snapshot: the DB guard refuses the write."""
+    registry = [{"jid": "5511987654321@s.whatsapp.net", "display_name": None, "name_source": None}]
+    with patch("db.list_whatsapp_contacts_db", return_value=registry), patch(
+        "db.upsert_whatsapp_contact", return_value=False
+    ) as up:
+        rep = apply_entries([{"name": "A", "phones": ["11987654321"]}], source="agenda", dry_run=False)
+    assert rep["protected_user"] == 1 and rep["new_names"] == 0
+    assert up.call_args.kwargs["only_if_name_source_in"] == (None, "agenda", "vcard")

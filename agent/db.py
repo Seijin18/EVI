@@ -653,14 +653,18 @@ def upsert_whatsapp_contact(
     phone: str | None = None,
     notes: str | None = None,
     name_source: str | None = None,
-) -> None:
-    """Insert or update a WhatsApp contact row.
+    only_if_name_source_in: tuple | None = None,
+) -> bool:
+    """Insert or update a WhatsApp contact row; False when a guard skipped the write.
 
     ``name_source`` (user | agenda | vcard) records who set ``display_name``; a
-    display_name written without one counts as the user's.
+    display_name written without one counts as the user's. ``only_if_name_source_in``
+    (e.g. ``(None, 'agenda', 'vcard')``) is checked under the row lock: when the stored
+    source is not in it nothing is written, so a name the user sets in chat between a
+    snapshot and this write is never overwritten.
     """
     if not jid:
-        return
+        return True
     import json
 
     with _conn() as conn:
@@ -681,6 +685,9 @@ def upsert_whatsapp_contact(
             row = cur.fetchone()
             if row:
                 wl, dn, existing_aliases, ph, nt, ns = row
+                if only_if_name_source_in is not None and (ns or None) not in only_if_name_source_in:
+                    conn.commit()
+                    return False
                 merged_ns = ns
                 if display_name is not None:
                     merged_ns = name_source or "user"
@@ -740,6 +747,7 @@ def upsert_whatsapp_contact(
                     ),
                 )
         conn.commit()
+    return True
 
 
 def get_whatsapp_contact(jid: str) -> Dict[str, Any] | None:

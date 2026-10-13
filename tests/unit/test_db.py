@@ -400,6 +400,24 @@ def test_backfill_marks_existing_names_as_user_and_is_idempotent():
     assert db.backfill_name_source() == 0
 
 
+def test_upsert_guard_refuses_to_overwrite_a_user_name_under_the_lock():
+    import db
+
+    jid = f"{_uid()}@s.whatsapp.net"
+    db.upsert_whatsapp_contact(jid, display_name="Do Usuário")  # source -> user
+    ok = db.upsert_whatsapp_contact(
+        jid, display_name="Agenda", name_source="agenda",
+        only_if_name_source_in=(None, "agenda", "vcard"),
+    )
+    assert ok is False
+    assert db.get_whatsapp_contact(jid)["display_name"] == "Do Usuário"
+    other = f"{_uid()}@s.whatsapp.net"
+    assert db.upsert_whatsapp_contact(
+        other, display_name="Agenda", name_source="agenda",
+        only_if_name_source_in=(None, "agenda", "vcard"),
+    ) is True
+
+
 def test_upsert_ignores_an_empty_jid():
     import db
 

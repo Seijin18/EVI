@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 
 
-def main(apply: bool = True) -> dict:
+def main(apply: bool = False) -> dict:
     base = os.environ.get("EVI_API_URL", "http://agent-api:8000").rstrip("/")
     api_key = os.environ.get("EVI_API_KEY", "").strip()
     headers = {"Content-Type": "application/json"}
