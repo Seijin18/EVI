@@ -53,11 +53,14 @@ EXPECT_KEYS = {
     "no_reply_window_s",
     "messages_min",
     "telegram_sent_count_matching",
+    "telegram_message",
     "contact_profile",
     "job_response_matches",
     "judge",
 }
 DEFAULT_NO_REPLY_WINDOW_S = 15
+TELEGRAM_MESSAGE_KEYS = {"parse_mode", "valid_html", "matches", "not_matches", "max_lines"}
+HTML_TAGS = ("b", "i", "code")  # the only tags a valid_html message may use
 CALENDAR_KEYS = {"created", "count"}
 TASKS_KEYS = {"created", "count"}
 GMAIL_KEYS = {"deleted_count", "deleted_ids_include", "not_deleted"}
@@ -194,6 +197,17 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
             re.compile(tm["regex"])
         except (re.error, TypeError) as exc:
             raise _err(path, f"{where}.telegram_sent_count_matching.regex", f"invalid regex: {exc}") from exc
+    if "telegram_message" in exp:
+        tg = exp["telegram_message"]
+        _check_keys(tg, TELEGRAM_MESSAGE_KEYS, path, f"{where}.telegram_message")
+        if "max_lines" in tg and (not isinstance(tg["max_lines"], int) or isinstance(tg["max_lines"], bool) or tg["max_lines"] < 1):
+            raise _err(path, f"{where}.telegram_message.max_lines", "must be a positive integer")
+        for rk in ("matches", "not_matches"):
+            if rk in tg:
+                try:
+                    re.compile(tg[rk])
+                except (re.error, TypeError) as exc:
+                    raise _err(path, f"{where}.telegram_message.{rk}", f"invalid regex: {exc}") from exc
     if "contact_profile" in exp:
         cp = exp["contact_profile"]
         _check_keys(cp, {"jid", "section", "matches", "not_matches"}, path, f"{where}.contact_profile")
@@ -454,6 +468,65 @@ def eval_contact_profile(exp: dict, text: str | None) -> list[str]:
     return fails
 
 
+_TAG_RE = re.compile(r"<(/?)([A-Za-z][A-Za-z0-9-]*)[^<>]*>")
+
+
+def html_problems(text: str) -> list[str]:
+    """Why ``text`` is not valid Telegram HTML limited to <b>/<i>/<code> ([] when valid)."""
+    problems: list[str] = []
+    stack: list[str] = []
+    pos = 0
+    for m in _TAG_RE.finditer(text):
+        plain = text[pos : m.start()]
+        pos = m.end()
+        if "<" in plain or ">" in plain:
+            problems.append("unescaped < or > in text")
+        if re.search(r"&(?!(?:amp|lt|gt|quot);)", plain):
+            problems.append("unescaped & in text")
+        closing, name = m.group(1) == "/", m.group(2).lower()
+        if name not in HTML_TAGS:
+            problems.append(f"tag <{name}> not allowed")
+        elif not closing:
+            stack.append(name)
+        elif not stack or stack.pop() != name:
+            problems.append(f"unbalanced </{name}>")
+    tail = text[pos:]
+    if "<" in tail or ">" in tail:
+        problems.append("unescaped < or > in text")
+    if re.search(r"&(?!(?:amp|lt|gt|quot);)", tail):
+        problems.append("unescaped & in text")
+    if stack:
+        problems.append(f"unclosed <{stack[-1]}>")
+    return list(dict.fromkeys(problems))
+
+
+def eval_telegram_message(exp: dict, sent: list[dict], chat_id: str | int) -> list[str]:
+    """``expect.telegram_message`` over the messages sent to the user's chat during the step.
+
+    ``parse_mode``/``valid_html``/``not_matches``/``max_lines`` (non-blank lines) must hold for every
+    message; ``matches`` for at least one."""
+    mine = [m for m in sent if str(m.get("chat_id")) == str(chat_id)]
+    if not mine:
+        return ["telegram_message: no message sent to the user in this step"]
+    fails: list[str] = []
+    for m in mine:
+        text = str(m.get("text", ""))
+        head = text[:60]
+        if "parse_mode" in exp and (m.get("params") or {}).get("parse_mode") != exp["parse_mode"]:
+            fails.append(f"telegram_message.parse_mode: expected {exp['parse_mode']!r} got {(m.get('params') or {}).get('parse_mode')!r} ({head!r})")
+        if exp.get("valid_html"):
+            fails += [f"telegram_message.valid_html: {p} ({head!r})" for p in html_problems(text)]
+        if "not_matches" in exp and re.search(exp["not_matches"], text, re.S | re.I):
+            fails.append(f"telegram_message.not_matches: /{exp['not_matches']}/ matched ({head!r})")
+        if "max_lines" in exp:
+            n = sum(1 for ln in text.splitlines() if ln.strip())
+            if n > exp["max_lines"]:
+                fails.append(f"telegram_message.max_lines: {n} non-blank lines > {exp['max_lines']} ({head!r})")
+    if "matches" in exp and not any(re.search(exp["matches"], str(m.get("text", "")), re.S | re.I) for m in mine):
+        fails.append(f"telegram_message.matches: /{exp['matches']}/ matched no message")
+    return fails
+
+
 def eval_expect(exp: dict, obs: dict) -> list[str]:
     """Pure: apply one ``expect`` block to observations; returns failure reasons.
 
@@ -519,6 +592,8 @@ def eval_expect(exp: dict, obs: dict) -> list[str]:
         )
         if n != tm["count"]:
             fails.append(f"telegram_sent_count_matching: /{tm['regex']}/ expected {tm['count']} user-bound messages got {n}")
+    if "telegram_message" in exp:
+        fails += eval_telegram_message(exp["telegram_message"], obs.get("telegram_step_sent") or [], obs.get("chat_id", ""))
     if "contact_profile" in exp:
         fails += eval_contact_profile(exp["contact_profile"], obs.get("contact_profile"))
     if "job_response_matches" in exp:

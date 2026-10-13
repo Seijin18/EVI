@@ -56,6 +56,12 @@ Google, Telegram API e Evolution API, e conduz cenários YAML contra ela.
 `./scripts/evi-sim run --tag critical --llm replay`.
 Briefing: `./scripts/evi-sim run --tag briefing --repeat 3 --llm live` (passo `job: briefing`;
 `reply_matches` do passo avalia o texto enviado ao Telegram).
+Briefing legível (SIM-UX-01..03): o briefing vai ao Telegram como HTML (`parse_mode=HTML`) sem
+marcadores `«externo`, em ≤ 25 linhas, com seções longas colapsadas em linha-resumo + comando.
+`expect.telegram_message` avalia as mensagens enviadas ao usuário no passo: `parse_mode`,
+`valid_html` (só `<b>/<i>/<code>`, balanceado, `<`/`&` escapados), `not_matches`, `max_lines`
+(linhas não vazias; vale para cada mensagem) e `matches` (ao menos uma). "respondido N" sobre o
+briefing novo é coberto pelo SIM-UX-03 (cassete gravado com `--llm record`).
 Reply debts: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (sim.env liga
 `EVI_REPLY_DEBTS_ENABLED`; `postgres` aceita `wa_conversation_state`; `reply_not_matches` exige que
 o texto enviado ao Telegram NÃO case com a regex).

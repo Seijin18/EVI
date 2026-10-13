@@ -1,0 +1,24 @@
+id: SIM-UX-03
+title: Briefing legível - "respondido 1" continua dispensando a pendência sobre o briefing HTML (SCN-UX-03)
+tags: [briefing, critical, reply-debts]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "consegue me mandar o orçamento?", jid: "5511955550203@s.whatsapp.net", push_name: "Carla Exemplo"}
+  - clock: D0 16:30  # mid-hour: the model text shows the age as floor(hours); 16:00 flaked 6 h vs 7 h
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)esperando sua resposta.*1\\. .*Carla"
+      telegram_message:
+        parse_mode: HTML
+        valid_html: true
+        not_matches: "«externo|/externo"
+        matches: "respondido 1"
+  - telegram: "respondido 1"
+    expect:
+      reply_within_s: 90
+      tools_called_any: [dismiss_reply_debt]
+      postgres:
+        - {table: wa_conversation_state, where: {acknowledged_at: null}, count: 0}
+      outbound_to_third_parties: 0

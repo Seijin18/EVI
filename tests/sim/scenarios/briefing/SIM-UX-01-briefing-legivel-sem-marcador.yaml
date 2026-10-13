@@ -1,0 +1,33 @@
+id: SIM-UX-01
+title: Briefing legível - HTML válido, sem marcador «externo, agenda + pendência + promessa (SCN-UX-02, SCN-UX-03)
+tags: [briefing, critical]
+source: synthetic
+clock: D0 09:00
+seed:
+  calendar:
+    - {summary: "Reunião de alinhamento", start: "D1 10:00", end: "D1 11:00"}
+steps:
+  - whatsapp_contact: {text: "consegue me mandar o orçamento?", jid: "5511955550201@s.whatsapp.net", push_name: "Ana Exemplo"}
+    expect:
+      outbound_to_third_parties: 0
+  - whatsapp_contact: {text: "te mando a proposta amanhã", from_me: true, jid: "5511955550202@s.whatsapp.net", push_name: "Bruno Exemplo"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {type: promise}, count: 1}
+  - clock: D1 07:00
+    expect:
+      # the promise stays hidden (needs_eval) until the background evaluation lists it
+      postgres:
+        - {table: pending_commitments, where: {type: promise, status: pending}, count: 1, within_s: 60}
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)Reunião de alinhamento.*Ana.*(Bruno|proposta)"
+      telegram_message:
+        parse_mode: HTML
+        valid_html: true
+        not_matches: "«externo|/externo"
+        matches: "<b>"
+        max_lines: 25
+      outbound_to_third_parties: 0
+      tools_not_called: [schedule_event, create_task, delete_emails, delete_emails_by_query, confirm_commitments]

@@ -41,7 +41,7 @@
 
 ## 4. Fechamento
 
-- [ ] 4.1 Cenários `SIM-UX-*` (briefing sem marcador e com HTML válido; "feito N" continua funcionando sobre o briefing novo); gates; BACKLOG + Progress
+- [x] 4.1 Cenários `SIM-UX-*` (briefing sem marcador e com HTML válido; "feito N" continua funcionando sobre o briefing novo); gates; BACKLOG + Progress
   - SCN-UX-02, SCN-UX-03
   - Files: `tests/sim/scenarios/briefing/`, `tests/sim/cassettes/`, `openspec/BACKLOG.md`, `Progress.md`
   - Verify: `./scripts/evi-sim run --tag briefing --repeat 3 --llm live` (3/3), `./scripts/evi-sim run --tag critical --repeat 3 --llm live`, `openspec validate --specs`, `ruff check agent/ --select E,W,F --ignore E501`

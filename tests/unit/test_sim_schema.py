@@ -286,3 +286,33 @@ def test_contact_profile_validation():
         parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"contact_profile": {"jid": "j"}}}]))
     with pytest.raises(ScenarioError):
         parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"contact_profile": {"jid": "j", "matches": "("}}}]))
+
+
+def test_telegram_message_validates_keys():
+    ok = {"parse_mode": "HTML", "valid_html": True, "not_matches": "«externo", "max_lines": 25}
+    parse_scenario(_scn(steps=[{"job": "briefing", "expect": {"telegram_message": ok}}]))
+    for bad in ({"nope": 1}, {"max_lines": 0}, {"max_lines": "9"}, {"not_matches": "("}):
+        with pytest.raises(ScenarioError):
+            parse_scenario(_scn(steps=[{"job": "briefing", "expect": {"telegram_message": bad}}]))
+
+
+def test_html_problems():
+    assert schema.html_problems("<b>Ana</b> — pedido &amp; <i>2d</i> <code>x</code>") == []
+    assert schema.html_problems("<b>a<i>b</b></i>")
+    assert schema.html_problems("<b>aberto")
+    assert schema.html_problems("a < b")
+    assert schema.html_problems("Tom & Jerry")
+    assert schema.html_problems("<a href='x'>l</a>")
+
+
+def test_eval_telegram_message():
+    msg = lambda text, pm="HTML", cid=1: {"chat_id": cid, "text": text, "params": {"parse_mode": pm}}  # noqa: E731
+    exp = {"telegram_message": {"parse_mode": "HTML", "valid_html": True, "not_matches": "«externo|/externo", "max_lines": 3, "matches": "Ana"}}
+    ev = lambda sent: schema.eval_expect(exp, {"telegram_step_sent": sent, "chat_id": "1"})  # noqa: E731
+    assert ev([msg("<b>Ana</b>\n\nok")]) == []
+    assert any("parse_mode" in f for f in ev([msg("<b>Ana</b>", pm=None)]))
+    assert any("valid_html" in f for f in ev([msg("<b>Ana")]))
+    assert any("not_matches" in f for f in ev([msg("<b>Ana</b> «externo")]))
+    assert any("max_lines" in f for f in ev([msg("<b>Ana</b>\na\nb\nc")]))
+    assert any("matches" in f for f in ev([msg("Bia")]))
+    assert any("no message" in f for f in ev([msg("Ana", cid=2)]))

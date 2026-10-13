@@ -1,0 +1,46 @@
+id: SIM-UX-02
+title: Briefing legível - dia pesado cabe em 25 linhas e colapsa seções com o comando que lista (SCN-UX-04)
+tags: [briefing]
+source: synthetic
+clock: D0 07:00
+seed:
+  calendar:
+    - {summary: "Reunião 1", start: "D0 08:00", end: "D0 08:30"}
+    - {summary: "Reunião 2", start: "D0 09:00", end: "D0 09:30"}
+    - {summary: "Reunião 3", start: "D0 10:00", end: "D0 10:30"}
+    - {summary: "Reunião 4", start: "D0 11:00", end: "D0 11:30"}
+    - {summary: "Reunião 5", start: "D0 12:00", end: "D0 12:30"}
+    - {summary: "Reunião 6", start: "D0 13:00", end: "D0 13:30"}
+    - {summary: "Reunião 7", start: "D0 14:00", end: "D0 14:30"}
+    - {summary: "Reunião 8", start: "D0 15:00", end: "D0 15:30"}
+    - {summary: "Reunião 9", start: "D0 16:00", end: "D0 16:30"}
+    - {summary: "Reunião 10", start: "D0 17:00", end: "D0 17:30"}
+  tasks:
+    - {title: "Tarefa 1", due: "D0"}
+    - {title: "Tarefa 2", due: "D0"}
+    - {title: "Tarefa 3", due: "D0"}
+    - {title: "Tarefa 4", due: "D0"}
+    - {title: "Tarefa 5", due: "D0"}
+    - {title: "Tarefa 6", due: "D0"}
+    - {title: "Tarefa 7", due: "D0"}
+    - {title: "Tarefa 8", due: "D0"}
+  gmail:
+    - {id: mail-u1, from: "Ana Exemplo <ana@exemplo.test>", subject: "Assunto 1", snippet: "Texto", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+    - {id: mail-u2, from: "Bia Exemplo <bia@exemplo.test>", subject: "Assunto 2", snippet: "Texto", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+    - {id: mail-u3, from: "Caio Exemplo <caio@exemplo.test>", subject: "Assunto 3", snippet: "Texto", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+    - {id: mail-u4, from: "Dani Exemplo <dani@exemplo.test>", subject: "Assunto 4", snippet: "Texto", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+    - {id: mail-u5, from: "Edu Exemplo <edu@exemplo.test>", subject: "Assunto 5", snippet: "Texto", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+    - {id: mail-u6, from: "Fabi Exemplo <fabi@exemplo.test>", subject: "Assunto 6", snippet: "Texto", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+steps:
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      telegram_message:
+        parse_mode: HTML
+        valid_html: true
+        not_matches: "«externo|/externo"
+        # collapsed section: "<n> <items> — peça "<request that lists them>""
+        matches: "\\d+ (e-mails|tarefas|eventos) — pe[çc]a"
+        max_lines: 25
+      outbound_to_third_parties: 0
+      tools_not_called: [schedule_event, create_task, delete_emails, delete_emails_by_query, confirm_commitments]

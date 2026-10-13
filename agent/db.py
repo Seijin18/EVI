@@ -226,7 +226,12 @@ def reset_db_init_for_tests() -> None:
 
 @contextmanager
 def _conn():
-    conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
+    try:
+        conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
+    except psycopg2.OperationalError:
+        # One retry: a connect that stalls right after Postgres/Docker is busy (cold stack,
+        # sim container swap) must not turn into a swallowed soft-fail that drops a write.
+        conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
     try:
         yield conn
     finally:

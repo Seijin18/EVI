@@ -298,6 +298,12 @@ def _telegram_replies(ctx: Ctx) -> list[str]:
     return [m.get("text", "") for m in sent if str(m.get("chat_id")) == str(ctx.chat_id)]
 
 
+def _telegram_user_sent(ctx: Ctx) -> list[dict]:
+    """Full sendMessage records (text + params) sent to the user's chat."""
+    sent = ctx.fakes("GET", "/_sim/telegram/sent") or []
+    return [m for m in sent if str(m.get("chat_id")) == str(ctx.chat_id)]
+
+
 def _control_replies(ctx: Ctx) -> list[str]:
     sent = ctx.fakes("GET", "/_sim/evolution/sent") or []
     return [m.get("text", "") for m in sent if m.get("jid") in ctx.control_jids]
@@ -356,6 +362,7 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
     if exp.get("no_reply"):
         timeout = float(exp.get("no_reply_window_s") or schema.DEFAULT_NO_REPLY_WINDOW_S)
     t0 = time.monotonic()
+    sent_base = len(_telegram_user_sent(ctx)) if "telegram_message" in exp else 0
     if step.type == "telegram":
         base = len(_telegram_replies(ctx))
         ctx.fakes("POST", "/_sim/telegram/updates", {"text": step.value})
@@ -428,6 +435,8 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
             ctx.fakes("POST", "/_sim/telegram/faults", step.value["telegram"])
     if exp:
         step_obs.update({"reply": sr.reply, "latency_s": sr.latency_s})
+        if "telegram_message" in exp:
+            step_obs["telegram_step_sent"] = _telegram_user_sent(ctx)[sent_base:]
         sr.failures = schema.eval_expect(exp, observe(ctx, step_obs, exp))
     return sr
 
