@@ -40,7 +40,22 @@ def contact_dir(jid: str) -> Path:
     return memory_root() / "contacts" / sanitize_jid(jid)
 
 
+class NotADirectContact(ValueError):
+    """ensure_contact refused a group / Channel / broadcast jid (SCN-MEM-15)."""
+
+
+def is_direct_jid(jid: str) -> bool:
+    """False for groups and one-way channels: they never get a contact directory."""
+    from services.reply_debts import is_one_way_jid
+
+    j = jid or ""
+    return not ("@g.us" in j or is_one_way_jid(j))
+
+
 def ensure_contact(jid: str, *, label: str = "") -> Path:
+    """Create the contact dir. Raises NotADirectContact for groups/channels/broadcasts."""
+    if not is_direct_jid(jid):
+        raise NotADirectContact(jid)
     root = contact_dir(jid)
     root.mkdir(parents=True, exist_ok=True)
     (root / "summaries").mkdir(exist_ok=True)
@@ -77,7 +92,7 @@ def append_timeline(
     ts: str | None = None,
     backfill: bool = False,
 ) -> bool:
-    if not memory_enabled() or not jid:
+    if not memory_enabled() or not jid or not is_direct_jid(jid):
         return False
     ensure_contact(jid, label=label)
     entry: dict[str, Any] = {
@@ -219,7 +234,7 @@ def read_summaries_since(jid: str, *, days: int = 30) -> list[tuple[str, str]]:
 
 def append_profile_section(jid: str, *, heading: str, body: str, label: str = "") -> bool:
     """Replace or append a markdown section under heading in profile.md."""
-    if not memory_enabled() or not jid or not body.strip():
+    if not memory_enabled() or not jid or not body.strip() or not is_direct_jid(jid):
         return False
     ensure_contact(jid, label=label)
     profile = contact_dir(jid) / "profile.md"
@@ -239,7 +254,7 @@ def append_profile_section(jid: str, *, heading: str, body: str, label: str = ""
 
 def update_contact_label(jid: str, label: str) -> bool:
     """Update the label field in profile.md."""
-    if not memory_enabled() or not jid or not label.strip():
+    if not memory_enabled() or not jid or not label.strip() or not is_direct_jid(jid):
         return False
     ensure_contact(jid, label=label)
     profile = contact_dir(jid) / "profile.md"

@@ -8,6 +8,7 @@ from services.write_guard import guarded_write
 from services.contact_filesystem import (
     collect_known_contacts,
     ensure_contact,
+    is_direct_jid,
     memory_enabled,
     read_profile_excerpt,
     read_timeline_tail,
@@ -157,7 +158,7 @@ def get_whatsapp_contact_info(name_or_phone: str) -> str:
         return "\n".join(lines)
 
     match = matches[0]
-    if match.get("from_evolution") and not read_timeline_tail(match["jid"], limit=1):
+    if match.get("from_evolution") and is_direct_jid(match["jid"]) and not read_timeline_tail(match["jid"], limit=1):
         ensure_contact(match["jid"], label=match.get("label") or query)
         backfill_contact_full(
             match["jid"],
@@ -247,7 +248,8 @@ def set_whatsapp_contact_name(
         aliases=aliases,
         whatsapp_label=whatsapp_label or current_label,
     )
-    ensure_contact(jid, label=display)
+    if is_direct_jid(jid):
+        ensure_contact(jid, label=display)
     title = format_contact_names(row, display)
     alias_bit = ""
     alias_list = row.get("aliases") or []

@@ -62,6 +62,10 @@ def track_conversation(messages: Iterable) -> int:
             ts = _parse_ts(msg.ts)
             if msg.from_me:
                 db.record_outbound(jid, ts)
+                # fromMe never reaches extraction; it still belongs in the timeline.
+                from services.message_timeline import record_whatsapp_message
+
+                record_whatsapp_message(msg)
             else:
                 preview = "[áudio]" if getattr(msg, "kind", "text") == "audio" else msg.text
                 db.record_inbound(jid, ts, preview, msg.id)

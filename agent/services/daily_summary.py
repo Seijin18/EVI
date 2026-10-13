@@ -9,7 +9,12 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 from typing import Any
 
-from services.contact_filesystem import ensure_contact, list_contact_dirs, memory_enabled
+from services.contact_filesystem import (
+    ensure_contact,
+    is_direct_jid,
+    list_contact_dirs,
+    memory_enabled,
+)
 
 
 def _today_str(when: date | None = None) -> str:
@@ -130,12 +135,14 @@ def run_daily_summaries(*, day: date | None = None) -> int:
     for path in list_contact_dirs():
         jid = path.name
         seen_jids.add(jid)
+        if not is_direct_jid(jid):
+            continue  # legacy group/channel dirs are left untouched
         content = build_summary_markdown(jid, day=day)
         write_summary(jid, content, day=day)
         written += 1
     for row in _scheduled_today_rows():
         jid = row.get("source_chat") or ""
-        if not jid or jid in seen_jids:
+        if not jid or jid in seen_jids or not is_direct_jid(jid):
             continue
         label = row.get("source_label") or ""
         content = build_summary_markdown(jid, day=day, label=label)

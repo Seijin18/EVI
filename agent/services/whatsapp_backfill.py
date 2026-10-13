@@ -12,6 +12,7 @@ from messaging.evolution import EvolutionClient
 from services.contact_filesystem import (
     append_timeline,
     ensure_contact,
+    is_direct_jid,
     memory_enabled,
     timeline_source_ids,
 )
@@ -85,6 +86,9 @@ def backfill_contact_messages(
 
     if not memory_enabled():
         result.error = "EVI_CONTACT_MEMORY_DIR não configurado"
+        return result
+    if not is_direct_jid(jid):
+        result.error = "contato não direto (grupo/canal): sem memória"
         return result
 
     ensure_contact(jid, label=label)
@@ -165,6 +169,9 @@ def backfill_from_evolution_log(
     log_path = log_path or Path(os.getenv("EVI_LOG_DIR", "/logs")) / "evolution_webhook.jsonl"
     if not log_path.is_file():
         result.error = f"log não encontrado: {log_path}"
+        return result
+    if not is_direct_jid(jid):
+        result.error = "contato não direto (grupo/canal): sem memória"
         return result
 
     ensure_contact(jid, label=label)

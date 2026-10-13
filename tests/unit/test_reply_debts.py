@@ -69,6 +69,32 @@ def test_from_me_records_outbound_only(fake_db):
     assert fake_db.inbound == []
 
 
+def _timeline(tmp_path, jid=DIRECT):
+    from services.contact_filesystem import read_timeline_tail
+
+    return read_timeline_tail(jid, limit=10)
+
+
+def test_scn_mem_14_from_me_direct_goes_to_timeline_once(fake_db, monkeypatch, tmp_path):
+    monkeypatch.setenv("EVI_CONTACT_MEMORY_DIR", str(tmp_path))
+    m = _msg(from_me=True, text="te mando a modelagem quando terminar", mid="me1")
+    reply_debts.track_conversation([m])
+    reply_debts.track_conversation([m])  # duplicate id recorded once
+    rows = _timeline(tmp_path)
+    assert [r["text_preview"] for r in rows] == ["[eu] te mando a modelagem quando terminar"]
+    assert fake_db.pending == [], "no commitment extracted from fromMe"
+
+
+def test_from_me_echo_group_and_newsletter_not_in_timeline(fake_db, monkeypatch, tmp_path):
+    monkeypatch.setenv("EVI_CONTACT_MEMORY_DIR", str(tmp_path))
+    reply_debts.track_conversation([
+        _msg(from_me=True, text="[EVI] já respondi", mid="e1"),
+        _msg(jid="1203630@g.us", from_me=True, mid="g1"),
+        _msg(jid="120363@newsletter", from_me=True, mid="n1"),
+    ])
+    assert not (tmp_path / "contacts").exists() or not list((tmp_path / "contacts").iterdir())
+
+
 def test_group_control_and_echo_are_skipped(fake_db, monkeypatch):
     monkeypatch.setenv("EVI_WHATSAPP_CONTROL_JIDS", "5511777@s.whatsapp.net")
     n = reply_debts.track_conversation([

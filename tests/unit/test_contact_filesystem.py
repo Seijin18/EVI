@@ -51,6 +51,27 @@ def test_append_timeline_disabled_without_env():
             os.environ["EVI_CONTACT_MEMORY_DIR"] = old
 
 
+def test_scn_mem_15_ensure_contact_refuses_non_direct(tmp_path, monkeypatch):
+    import pytest
+
+    from services.contact_filesystem import (
+        NotADirectContact,
+        list_contact_dirs,
+        update_contact_label,
+    )
+
+    monkeypatch.setenv("EVI_CONTACT_MEMORY_DIR", str(tmp_path))
+    for jid in ("1203@g.us", "1203@newsletter", "status@broadcast"):
+        with pytest.raises(NotADirectContact):
+            ensure_contact(jid)
+        assert append_timeline(jid, source_id="1", text_preview="x") is False
+        assert update_contact_label(jid, "x") is False
+    assert list_contact_dirs() == []
+    # pre-existing directories are left untouched and still listed
+    (tmp_path / "contacts" / "old@g.us").mkdir(parents=True)
+    assert [p.name for p in list_contact_dirs()] == ["old@g.us"]
+
+
 if __name__ == "__main__":
     test_sanitize_jid()
     test_ingest_commitment_writes_timeline()
