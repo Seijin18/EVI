@@ -220,3 +220,131 @@ def test_import_prior_converts_formats(tmp_path):
     assert r00["expect"] == {"store": True, "what": ["link"]}
     assert len(r00["before"]) == 1 and len(r00["after"]) == 1  # 30 min window applied at load
     assert next(c for c in cases if c["id"] == "P48")["expect"] == {"store": False}
+
+
+# ---------------------------------------------------------------- contact-knowledge evaluator
+
+from testing.llm_eval import contact_knowledge as kev  # noqa: E402
+
+
+def _kn_oracle(monkeypatch, correct: bool):
+    """Fake CONTACT_KNOWLEDGE LLM answering from YAML expectations (or breaking them)."""
+    by_prompt = {kev.build_prompt(c): c for c in kev.load_synthetic()}
+
+    def fake(task, prompt, schema, *, provider=None, models=None):
+        assert task == "CONTACT_KNOWLEDGE" and provider == "openrouter"
+        c = by_prompt[prompt]
+        exp = c["expect"]
+        day = sorted(c["dates"])[0]
+        if not correct:
+            # invent a fact for every case: breaks max_facts/forbid/expect.facts of most cases
+            return {"add": [{"fact": "deve R$ 5000 e tem reunião", "date": day}], "remove": [], "open": []}
+        add = [{"fact": g[0], "date": day} for g in exp.get("facts", [])]
+        opened = [{"item": g[0], "date": day} for g in exp.get("open", [])]
+        remove = [f"F{i}" for i in range(1, len(c["facts"]) + 1)] if exp.get("forbid_facts") else []
+        return {"add": add, "remove": remove, "open": opened}
+
+    monkeypatch.setattr(llm_structured, "run_structured", fake)
+
+
+def test_knowledge_synthetic_yaml_loads_8_cases():
+    cases = kev.load_synthetic()
+    assert len(cases) == 8
+    assert all(c["messages"] and c["expect"] is not None for c in cases)
+
+
+def test_knowledge_gate_passes_with_oracle(monkeypatch):
+    _kn_oracle(monkeypatch, correct=True)
+    out: list[str] = []
+    rc = kev.run("synthetic", "openrouter", ["m1"], out=out.append)
+    assert rc == 0, out
+    assert any(l.startswith("openrouter:m1: synthetic ok=8/8") for l in out)
+
+
+def test_knowledge_gate_fails_below_min_accuracy(monkeypatch):
+    _kn_oracle(monkeypatch, correct=False)
+    out: list[str] = []
+    assert kev.run("synthetic", "openrouter", ["m1"], out=out.append) == 1
+    assert any("GATE FAILED" in l for l in out) and any(l.lstrip().startswith("FAIL") for l in out)
+    assert kev.run("synthetic", "openrouter", ["m1"], min_accuracy=0.0, out=lambda _s: None) == 0
+
+
+def test_knowledge_invalid_answer_counts_as_failure(monkeypatch):
+    monkeypatch.setattr(llm_structured, "run_structured", lambda *a, **k: None)
+    out: list[str] = []
+    assert kev.run("synthetic", "openrouter", ["m1"], out=out.append) == 1
+    assert "json=0%" in out[0]
+
+
+def test_knowledge_report_is_per_model(monkeypatch):
+    _kn_oracle(monkeypatch, correct=True)
+    out: list[str] = []
+    kev.run("synthetic", "openrouter", ["m1", "m2"], out=out.append)
+    assert [l.split(":")[1] for l in out if l.startswith("openrouter:")] == ["m1", "m2"]
+
+
+def test_knowledge_main_exit_code_and_flags(monkeypatch):
+    _kn_oracle(monkeypatch, correct=False)
+    assert kev.main(["contact-knowledge", "--model", "a", "--min-accuracy", "0.0"]) == 0
+    assert kev.main(["contact-knowledge", "--model", "a", "--min-accuracy", "0.99"]) == 1
+
+
+def test_cli_dispatches_contact_knowledge_and_promise(monkeypatch):
+    from testing import cli
+
+    seen = []
+    monkeypatch.setattr(kev, "main", lambda argv, cwd=None: seen.append(("ck", argv)) or 0)
+    monkeypatch.setattr(ev, "main", lambda argv, cwd=None: seen.append(("promise", argv)) or 0)
+    assert cli.run_llm_eval(["contact-knowledge", "--cases", "synthetic"], ".") is True
+    assert cli.run_llm_eval(["promise"], ".") is True
+    assert [s[0] for s in seen] == ["ck", "promise"]
+
+
+def _kn_real_file(tmp_path) -> Path:
+    p = tmp_path / "real.json"
+    p.write_text(json.dumps([{"id": "R1", "contact": "Bia", "messages": [
+        {"ts": "2026-10-11T12:00:00+00:00", "me": False, "text": "moro em Recife desde 2020"},
+        {"ts": "2026-10-11T12:01:00+00:00", "me": True, "text": "legal"},
+    ]}]))
+    return p
+
+
+def test_knowledge_privacy_matrix(tmp_path):
+    p = _kn_real_file(tmp_path)
+    assert not [c for c in kev.select_cases("all", "gemini", real_path=p)[0] if c["kind"] == "real"]
+    assert not [c for c in kev.select_cases("all", "openrouter", real_path=p)[0] if c["kind"] == "real"]
+    assert [c for c in kev.select_cases("all", "openrouter", allow_cloud_real=True, real_path=p)[0] if c["kind"] == "real"]
+    assert [c for c in kev.select_cases("real", "ollama", real_path=p)[0] if c["kind"] == "real"]
+
+
+def test_knowledge_real_structural_scoring_never_echoes_content(monkeypatch, tmp_path):
+    p = _kn_real_file(tmp_path)
+    secret_fact = "Mora em Recife"
+    monkeypatch.setattr(
+        llm_structured, "run_structured",
+        lambda *a, **k: {"add": [{"fact": secret_fact, "date": "2026-10-11"},
+                                 {"fact": "Deve R$ 900 a ele", "date": "2026-10-11"},
+                                 {"fact": "sem data", "date": ""}], "remove": [], "open": []},
+    )
+    out: list[str] = []
+    rc = kev.run("real", "ollama", ["m"], out=out.append, real_path=p)
+    assert rc == 0, out  # no synthetic cases => no gate
+    text = "\n".join(out)
+    assert "real_structural_ok=1/1" in text and "dropped(no evidence)=2" in text
+    assert "Recife" not in text and "R$" not in text
+
+    monkeypatch.setattr(
+        llm_structured, "run_structured",
+        lambda *a, **k: {"add": [{"fact": "criado em 2026", "date": "2026-10-11"}], "remove": [], "open": []},
+    )
+    out.clear()
+    kev.run("real", "ollama", ["m"], out=out.append, real_path=p)
+    assert "real_structural_ok=0/1" in "\n".join(out) and "metadata" in "\n".join(out)
+
+
+def test_knowledge_import_prior(tmp_path):
+    src = _kn_real_file(tmp_path)
+    dest = tmp_path / "out" / "contact_knowledge_real.json"
+    assert kev.import_prior(src, dest) == 1
+    assert [c["id"] for c in kev.load_real(dest)] == ["R1"]
+    assert oct(dest.stat().st_mode & 0o777) == "0o600"

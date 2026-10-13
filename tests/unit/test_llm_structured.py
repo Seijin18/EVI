@@ -265,3 +265,15 @@ def test_run_structured_replay_makes_no_network_call(monkeypatch):
     monkeypatch.setattr(cs, "structured_call", fake)
     assert ls.run_structured("promise", "p", {"type": "object"}) == {"ok": True}
     assert seen == {"mode": "replay", "task": "PROMISE"}
+
+
+def test_contact_knowledge_default_and_env_override(monkeypatch):
+    for k in ("PROVIDER", "MODEL"):
+        monkeypatch.delenv(f"EVI_LLM_TASK_CONTACT_KNOWLEDGE_{k}", raising=False)
+    assert ls._resolve("CONTACT_KNOWLEDGE") == (
+        "openrouter",
+        ["qwen/qwen3.8-27b", "google/gemma-4-26b-a4b-it"],
+    )
+    monkeypatch.setenv("EVI_LLM_TASK_CONTACT_KNOWLEDGE_PROVIDER", "ollama")
+    monkeypatch.setenv("EVI_LLM_TASK_CONTACT_KNOWLEDGE_MODEL", "x:1b")
+    assert ls._resolve("CONTACT_KNOWLEDGE") == ("ollama", ["x:1b"])

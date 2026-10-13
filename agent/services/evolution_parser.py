@@ -70,6 +70,10 @@ def _records_to_messages(
     results: List[IncomingMessage] = []
     for idx, item in enumerate(messages):
         key = item.get("key") or {}
+        if key.get("remoteJidAlt"):
+            from services.contact_identity import record_alias_from_message
+
+            record_alias_from_message(item)
         msg_id = key.get("id") or item.get("id") or f"evo_{idx}"
         remote = str(
             key.get("remoteJid")

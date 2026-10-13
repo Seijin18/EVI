@@ -2,8 +2,10 @@ import json
 import os
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 _agent = Path(__file__).resolve().parents[2] / "agent"
 sys.path.insert(0, str(_agent))
@@ -94,15 +96,16 @@ def test_learn_contact_with_mock_llm():
             commitment_id=3,
             label="Leozao",
         )
-        with patch("llm.build_background_llm") as mock_llm:
-            mock_llm.return_value.invoke.return_value.content = "Leozao trabalha no projeto X."
+        today = datetime.now(ZoneInfo(os.getenv("EVI_TIMEZONE", "America/Sao_Paulo"))).strftime("%Y-%m-%d")
+        answer = {"add": [{"fact": "Leozao trabalha no projeto X", "date": today}], "remove": [], "open": []}
+        with patch("services.llm_structured.run_structured", return_value=answer):
             from services.contact_learning import learn_contact  # noqa: E402
 
             out = learn_contact("Leozao", days=30, fetch_messages=False)
         assert "Leozao" in out
-        assert "Perfil atualizado" in out
+        assert "atualizado" in out
         profile = (Path(tmp) / "contacts" / jid / "profile.md").read_text(encoding="utf-8")
-        assert "Síntese" in profile
+        assert "Síntese" not in profile
         assert "projeto x" in profile.lower()
 
 

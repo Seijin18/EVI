@@ -59,6 +59,9 @@ def track_conversation(messages: Iterable) -> int:
                 continue
             if is_evi_bot_message(msg.text):
                 continue
+            from services.contact_identity import canonical_jid
+
+            jid = canonical_jid(jid)
             ts = _parse_ts(msg.ts)
             if msg.from_me:
                 db.record_outbound(jid, ts)
@@ -121,6 +124,15 @@ def list_debts(
     hours = _min_hours() if min_hours is None else min_hours
     db.init_db()
     rows = db.list_debt_candidates(now, timedelta(hours=hours), timedelta(days=max_days))
+    # Rows keyed by an @lid that predates the migration collapse onto the phone jid.
+    from services.contact_identity import canonical_jid
+
+    latest: dict[str, dict] = {}
+    for r in rows:
+        cj = canonical_jid(r["jid"])
+        if cj not in latest or r["last_in_at"] > latest[cj]["last_in_at"]:
+            latest[cj] = {**r, "jid": cj}
+    rows = sorted(latest.values(), key=lambda r: r["last_in_at"])
     out: list[dict] = []
     for r in rows:
         preview = r.get("last_in_preview") or ""

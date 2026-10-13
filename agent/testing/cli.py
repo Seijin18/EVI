@@ -708,14 +708,19 @@ def run_contact_learning() -> bool:
         ).read_text(encoding="utf-8")
         ok = ok and (AGENT_DIR / "services" / "contact_learning.py").is_file()
         ok = ok and (AGENT_DIR / "services" / "whatsapp_backfill.py").is_file()
-        with patch(
-            "services.contact_learning._llm_synthesize",
-            return_value="Contato trabalha em projetos X.",
-        ):
+        from zoneinfo import ZoneInfo
+
+        today = datetime.now(ZoneInfo(os.getenv("EVI_TIMEZONE", "America/Sao_Paulo"))).strftime("%Y-%m-%d")
+        answer = {
+            "add": [{"fact": "Trabalha em projetos X", "date": today}],
+            "remove": [],
+            "open": [],
+        }
+        with patch("services.llm_structured.run_structured", return_value=answer):
             from services.contact_learning import learn_contact
 
             out = learn_contact("Leozao", days=7, fetch_messages=False)
-        ok = ok and "Leozao" in out and "Aprendizado" in out
+        ok = ok and "Leozao" in out and "atualizado" in out and "projetos X" in out
     return _result("contact-learning", ok, "offline learn + registry")
 
 
@@ -1356,7 +1361,11 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
 
 
 def run_llm_eval(extra: list[str], cwd: str) -> bool:
-    """``llm-eval promise [flags]`` — real-LLM benchmark (needs provider keys; see llm_eval/promise.py)."""
+    """``llm-eval promise|contact-knowledge [flags]`` — real-LLM benchmarks (needs provider keys)."""
+    if extra and extra[0] == "contact-knowledge":
+        from testing.llm_eval import contact_knowledge
+
+        return contact_knowledge.main(extra, cwd) == 0
     from testing.llm_eval import promise
 
     return promise.main(extra, cwd) == 0
@@ -1381,6 +1390,18 @@ def run_promise_reeval(extra: list[str]) -> bool:
     records = promise_context.reevaluate_pending_promises(apply=apply)
     print(promise_context.format_reeval(records))
     print(f"\n{len(records)} promise(s); {'APPLIED' if apply else 'dry-run (use --apply)'}")
+    return True
+
+
+def run_contact_identity_migrate(extra: list[str]) -> bool:
+    """``contact-identity-migrate [--apply]`` — merge @lid contact dirs into the phone's.
+
+    Dry-run by default; needs DATABASE_URL (run inside agent-api). Prints counts only.
+    """
+    from services import contact_identity
+
+    apply = "--apply" in extra
+    print(contact_identity.format_migration(contact_identity.migrate_lid_dirs(apply=apply), apply=apply))
     return True
 
 
@@ -1449,10 +1470,11 @@ def main() -> int:
         "llm-eval-collect": lambda: run_llm_eval_collect(extra, orig_cwd),
         "promise-reeval": lambda: run_promise_reeval(extra),
         "promise-sweep": run_promise_sweep,
+        "contact-identity-migrate": lambda: run_contact_identity_migrate(extra),
         "smoke": lambda: run_smoke(args.full, live_wm, args.verbose) == 0,
     }
 
-    if extra and feature not in ("llm-eval", "llm-eval-collect", "promise-reeval"):
+    if extra and feature not in ("llm-eval", "llm-eval-collect", "promise-reeval", "contact-identity-migrate"):
         parser.error(f"unrecognized arguments: {' '.join(extra)}")
 
     if feature not in runners:

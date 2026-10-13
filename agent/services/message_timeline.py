@@ -8,6 +8,7 @@ from services.contact_filesystem import (
     memory_enabled,
     timeline_source_ids,
 )
+from services.contact_identity import canonical_jid
 from services.evolution_client import is_evi_bot_message
 from services.message_sources import IncomingMessage
 
@@ -30,7 +31,7 @@ def record_whatsapp_message(msg: IncomingMessage) -> bool:
     if is_evi_bot_message(msg.text):
         return False
 
-    chat_jid = msg.sender
+    chat_jid = canonical_jid(msg.sender)
     existing = timeline_source_ids(chat_jid)
     if msg.id and msg.id in existing:
         recorded = False

@@ -37,7 +37,10 @@ def sanitize_jid(jid: str) -> str:
 
 
 def contact_dir(jid: str) -> Path:
-    return memory_root() / "contacts" / sanitize_jid(jid)
+    """Directory of the contact; an ``@lid`` with a known alias resolves to the phone's."""
+    from services.contact_identity import canonical_jid
+
+    return memory_root() / "contacts" / sanitize_jid(canonical_jid(jid))
 
 
 class NotADirectContact(ValueError):
@@ -56,6 +59,9 @@ def ensure_contact(jid: str, *, label: str = "") -> Path:
     """Create the contact dir. Raises NotADirectContact for groups/channels/broadcasts."""
     if not is_direct_jid(jid):
         raise NotADirectContact(jid)
+    from services.contact_identity import canonical_jid
+
+    jid = canonical_jid(jid)
     root = contact_dir(jid)
     root.mkdir(parents=True, exist_ok=True)
     (root / "summaries").mkdir(exist_ok=True)
@@ -157,7 +163,8 @@ def list_contact_dirs() -> list[Path]:
     base = memory_root() / "contacts"
     if not base.is_dir():
         return []
-    return sorted(p for p in base.iterdir() if p.is_dir())
+    # ``*.merged-<ts>`` are @lid dirs set aside by contact-identity-migrate.
+    return sorted(p for p in base.iterdir() if p.is_dir() and ".merged-" not in p.name)
 
 
 def read_timeline_tail(jid: str, limit: int = 5) -> list[dict[str, Any]]:

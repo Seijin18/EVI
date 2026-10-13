@@ -182,6 +182,11 @@ def _run_migrations() -> None:
                     acknowledged_at TIMESTAMPTZ,
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
                 );
+                CREATE TABLE IF NOT EXISTS wa_jid_alias (
+                    lid TEXT PRIMARY KEY,
+                    phone_jid TEXT NOT NULL,
+                    seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                );
                 """
             )
         conn.commit()
@@ -1542,6 +1547,52 @@ def list_states() -> List[Dict[str, Any]]:
             return [dict(r) for r in cur.fetchall()]
 
 
+def merge_conversation_state(src_jid: str, dst_jid: str) -> bool:
+    """Fold the ``src_jid`` row into ``dst_jid`` (later timestamps win) and drop src.
+
+    The preview/id follow whichever side has the later ``last_in_at``. Returns False
+    when there was no src row.
+    """
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM wa_conversation_state WHERE jid = %s", (src_jid,))
+            src = cur.fetchone()
+            if not src:
+                return False
+            cur.execute("SELECT * FROM wa_conversation_state WHERE jid = %s", (dst_jid,))
+            dst = cur.fetchone() or {}
+
+            def later(a, b):
+                return a if b is None or (a is not None and a >= b) else b
+
+            if src.get("last_in_at") and (
+                not dst.get("last_in_at") or src["last_in_at"] > dst["last_in_at"]
+            ):
+                last_in = (src["last_in_at"], src["last_in_preview"], src["last_in_id"])
+            else:
+                last_in = (
+                    dst.get("last_in_at"), dst.get("last_in_preview"), dst.get("last_in_id")
+                )
+            cur.execute(
+                "INSERT INTO wa_conversation_state "
+                "(jid, last_in_at, last_in_preview, last_in_id, last_out_at, acknowledged_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (jid) DO UPDATE SET last_in_at = EXCLUDED.last_in_at, "
+                "last_in_preview = EXCLUDED.last_in_preview, last_in_id = EXCLUDED.last_in_id, "
+                "last_out_at = EXCLUDED.last_out_at, "
+                "acknowledged_at = EXCLUDED.acknowledged_at, updated_at = now()",
+                (
+                    dst_jid,
+                    *last_in,
+                    later(src.get("last_out_at"), dst.get("last_out_at")),
+                    later(src.get("acknowledged_at"), dst.get("acknowledged_at")),
+                ),
+            )
+            cur.execute("DELETE FROM wa_conversation_state WHERE jid = %s", (src_jid,))
+        conn.commit()
+    return True
+
+
 def list_debt_candidates(now, min_age, max_age, limit: int = 200) -> List[Dict[str, Any]]:
     """Conversations whose last inbound is unanswered and unacknowledged, aged
     between ``min_age`` and ``max_age`` (timedeltas) relative to ``now``.
@@ -1603,3 +1654,34 @@ def action_rates_by_type(since, until, debt_hours: float) -> Dict[str, Dict[str,
             shown, acted = cur.fetchone()
             out["dated"] = {"shown": int(shown), "acted": int(acted)}
     return out
+
+
+# --- wa_jid_alias (evi-contact-knowledge §9) ---------------------------------
+# WhatsApp delivers one person as ``…@lid`` and ``…@s.whatsapp.net``; the pair
+# comes from key.remoteJidAlt. contact_identity.canonical_jid reads it.
+
+
+def upsert_jid_alias(lid: str, phone_jid: str) -> None:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO wa_jid_alias (lid, phone_jid) VALUES (%s, %s) "
+                "ON CONFLICT (lid) DO UPDATE SET phone_jid = EXCLUDED.phone_jid, seen_at = now()",
+                (lid, phone_jid),
+            )
+        conn.commit()
+
+
+def get_jid_alias(lid: str) -> str | None:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT phone_jid FROM wa_jid_alias WHERE lid = %s", (lid,))
+            row = cur.fetchone()
+    return row[0] if row else None
+
+
+def list_jid_aliases() -> List[Dict[str, Any]]:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT lid, phone_jid, seen_at FROM wa_jid_alias ORDER BY seen_at DESC")
+            return [dict(r) for r in cur.fetchall()]

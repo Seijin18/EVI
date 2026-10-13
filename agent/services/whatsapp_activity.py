@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from services.contact_identity import canonical_jid
 from services.evolution_discovery import fetch_recent_whatsapp_messages, name_query_matches
 from services.untrusted import wrap_external
 
@@ -19,7 +20,7 @@ def conversation_lines(rows: list[dict], *, text_max: int = 220, label_max: int 
     """
     groups: dict[str, list[dict]] = {}
     for r in rows:
-        key = r.get("chat_jid") or r.get("chat_label") or "?"
+        key = canonical_jid(str(r.get("chat_jid") or "")) or r.get("chat_label") or "?"
         groups.setdefault(key, []).append(r)
 
     def newest(rs: list[dict]) -> str:

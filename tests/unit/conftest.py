@@ -40,6 +40,7 @@ _SERIAL_TABLES = (
 _KEYED_TABLES = (  # (table, key columns)
     ("whatsapp_contacts", ("jid",)),
     ("wa_conversation_state", ("jid",)),
+    ("wa_jid_alias", ("lid",)),
     ("probe_notified", ("day", "check_name")),
 )
 

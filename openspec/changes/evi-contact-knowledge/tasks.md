@@ -10,14 +10,14 @@
   - Files: `agent/services/contact_filesystem.py`, `tests/unit/test_contact_filesystem.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_filesystem.py -q`
 
-- [ ] 1.3 Identidade canônica `@lid` ↔ telefone: tabela `wa_jid_alias` (webhook + descoberta via `remoteJidAlt`), `canonical_jid()`; timeline, dívidas de resposta e resumo do WhatsApp usam o canônico; migração das pastas `@lid` (dry-run/`--apply`)
+- [x] 1.3 Identidade canônica `@lid` ↔ telefone: tabela `wa_jid_alias` (webhook + descoberta via `remoteJidAlt`), `canonical_jid()`; timeline, dívidas de resposta e resumo do WhatsApp usam o canônico; migração das pastas `@lid` (dry-run/`--apply`)
   - SCN-MEM-21
   - Files: `agent/services/contact_identity.py`, `agent/db.py`, `agent/services/message_timeline.py`, `agent/services/evolution_discovery.py`, `tests/unit/test_contact_identity.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_identity.py tests/unit/test_reply_debts.py -q` e `./scripts/evi-test contact-memory`
 
 ## 2. Conhecimento estruturado
 
-- [ ] 2.0 Avaliador `./scripts/evi-test llm-eval contact-knowledge` (portar os 8 casos simulados para `tests/eval/contact_knowledge_cases.yaml`; reais só em `data/eval/`)
+- [x] 2.0 Avaliador `./scripts/evi-test llm-eval contact-knowledge` (portar os 8 casos simulados para `tests/eval/contact_knowledge_cases.yaml`; reais só em `data/eval/`)
   - SCN-LLM-EVAL-01
   - Files: `agent/testing/llm_eval/contact_knowledge.py`, `tests/eval/contact_knowledge_cases.yaml`, `tests/unit/test_llm_eval.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_llm_eval.py -q` e `./scripts/evi-test llm-eval contact-knowledge --cases synthetic`
@@ -27,7 +27,7 @@
   - Files: `agent/services/contact_knowledge.py`, `tests/unit/test_contact_knowledge.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_knowledge.py -q` — `## Notas` preservada byte a byte
 
-- [ ] 2.2 `update_contact_knowledge(jid)`: mensagens novas → `run_structured("CONTACT_KNOWLEDGE", …)` com fatos/itens numerados → validação (evidência na janela, `remove` por id, JSON inválido não escreve); `learn_contact` passa a usá-la, por jid; avaliador ≥ limiar do design
+- [x] 2.2 `update_contact_knowledge(jid)`: mensagens novas → `run_structured("CONTACT_KNOWLEDGE", …)` com fatos/itens numerados → validação (evidência na janela, `remove` por id, JSON inválido não escreve); `learn_contact` passa a usá-la, por jid; avaliador ≥ limiar do design
   - SCN-MEM-06, SCN-MEM-17, SCN-MEM-18
   - Files: `agent/services/contact_knowledge.py`, `agent/services/contact_learning.py`, `tests/unit/test_contact_knowledge.py`, `tests/unit/test_contact_learning.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_contact_knowledge.py tests/unit/test_contact_learning.py -q` e `./scripts/evi-test contact-learning`
