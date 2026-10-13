@@ -69,6 +69,12 @@ def _run_migrations() -> None:
                     ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
                 ALTER TABLE pending_commitments
                     ADD COLUMN IF NOT EXISTS confirmed_via VARCHAR(32);
+                ALTER TABLE pending_commitments
+                    ADD COLUMN IF NOT EXISTS next_eval_at TIMESTAMPTZ;
+                ALTER TABLE pending_commitments
+                    ADD COLUMN IF NOT EXISTS eval_attempts INT NOT NULL DEFAULT 0;
+                ALTER TABLE pending_commitments
+                    ADD COLUMN IF NOT EXISTS msg_ts TIMESTAMPTZ;
                 CREATE TABLE IF NOT EXISTS session_tool_snapshots (
                     id SERIAL PRIMARY KEY,
                     session_id VARCHAR(128) NOT NULL,
@@ -237,6 +243,8 @@ def insert_pending_commitment(
     source_chat: str = "",
     source_label: str = "",
     status: str = "pending",
+    next_eval_at: Any = None,
+    msg_ts: Any = None,
 ) -> int | None:
     with _conn() as conn:
         with conn.cursor() as cur:
@@ -245,8 +253,9 @@ def insert_pending_commitment(
                 INSERT INTO pending_commitments (
                     source, source_id, type, title,
                     event_date, event_time, due_date,
-                    priority, raw_text, source_chat, source_label, status
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    priority, raw_text, source_chat, source_label, status,
+                    next_eval_at, msg_ts
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source, source_id) DO NOTHING
                 RETURNING id
                 """,
@@ -263,11 +272,124 @@ def insert_pending_commitment(
                     source_chat or None,
                     source_label or None,
                     status,
+                    next_eval_at,
+                    msg_ts,
                 ),
             )
             row = cur.fetchone()
         conn.commit()
     return row[0] if row else None
+
+
+# --- promise evaluation queue (evi-promise-context): the row is the queue --------
+# status='needs_eval' rows are invisible to every listing (they filter on 'pending').
+
+def list_promises_to_evaluate(now: Any, limit: int = 10) -> List[Dict[str, Any]]:
+    """needs_eval promises whose next_eval_at is due (oldest first)."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, source_id, title, due_date::text, raw_text, source_chat,
+                       msg_ts, next_eval_at, eval_attempts, created_at
+                FROM pending_commitments
+                WHERE status = 'needs_eval' AND next_eval_at <= %s
+                ORDER BY next_eval_at ASC, id ASC
+                LIMIT %s
+                """,
+                (now, limit),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+def list_stale_needs_eval(cutoff: Any, limit: int = 100) -> List[Dict[str, Any]]:
+    """needs_eval promises whose message is older than `cutoff` (48 h fallback)."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, title, due_date::text, msg_ts, created_at
+                FROM pending_commitments
+                WHERE status = 'needs_eval' AND COALESCE(msg_ts, created_at) < %s
+                ORDER BY id ASC
+                LIMIT %s
+                """,
+                (cutoff, limit),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+def finish_promise_evaluation(
+    commitment_id: int,
+    new_status: str,
+    title: str | None = None,
+    due_date: str | None = None,
+    *,
+    clear_due: bool = False,
+    confirmed_via: str | None = None,
+) -> bool:
+    """Leave needs_eval: set the final status (+ title/due when given). Only from needs_eval.
+
+    clear_due NULLs due_date (a past due would hide the row from listings);
+    confirmed_via marks automatic outcomes (e.g. 'auto-eval' for LLM rejections).
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE pending_commitments
+                SET status = %s,
+                    title = COALESCE(%s, title),
+                    due_date = CASE WHEN %s THEN NULL ELSE COALESCE(%s, due_date) END,
+                    confirmed_via = COALESCE(%s, confirmed_via),
+                    next_eval_at = NULL
+                WHERE id = %s AND status = 'needs_eval'
+                """,
+                (new_status, title or None, clear_due, due_date or None, confirmed_via, commitment_id),
+            )
+            ok = cur.rowcount > 0
+        conn.commit()
+    return ok
+
+
+def release_needs_eval(today: str | None = None) -> int:
+    """Release every needs_eval row to 'pending' (promise context turned off).
+
+    A due_date before `today` (YYYY-MM-DD) is cleared so the row is not hidden.
+    Returns the number of rows released.
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE pending_commitments
+                SET status = 'pending', next_eval_at = NULL,
+                    due_date = CASE WHEN due_date < COALESCE(%s::date, CURRENT_DATE)
+                                    THEN NULL ELSE due_date END
+                WHERE status = 'needs_eval'
+                """,
+                (today,),
+            )
+            n = cur.rowcount
+        conn.commit()
+    return n
+
+
+def bump_promise_eval(commitment_id: int, next_eval_at: Any) -> bool:
+    """Reschedule a failed evaluation: next_eval_at set, eval_attempts + 1."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE pending_commitments
+                SET next_eval_at = %s, eval_attempts = eval_attempts + 1
+                WHERE id = %s AND status = 'needs_eval'
+                """,
+                (next_eval_at, commitment_id),
+            )
+            ok = cur.rowcount > 0
+        conn.commit()
+    return ok
 
 
 def list_pending_commitments(limit: int = 50, *, include_past: bool = False) -> List[Dict[str, Any]]:
@@ -503,6 +625,8 @@ def list_commitments_for_chat(jid: str, limit: int = 15) -> List[Dict[str, Any]]
                        source_label, created_at
                 FROM pending_commitments
                 WHERE source_chat = %s
+                  AND status <> 'needs_eval'
+                  AND confirmed_via IS DISTINCT FROM 'auto-eval'
                 ORDER BY created_at DESC
                 LIMIT %s
                 """,
@@ -528,6 +652,8 @@ def list_commitments_for_chat_since(
                        source_label, raw_text, created_at
                 FROM pending_commitments
                 WHERE source_chat = %s
+                  AND status <> 'needs_eval'
+                  AND confirmed_via IS DISTINCT FROM 'auto-eval'
                   AND created_at >= NOW() - (%s || ' days')::interval
                 ORDER BY created_at DESC
                 LIMIT %s
@@ -1354,6 +1480,7 @@ def action_rates_by_type(since, until, debt_hours: float) -> Dict[str, Dict[str,
             cur.execute(
                 "SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('done','dismissed','scheduled')) "
                 "FROM pending_commitments WHERE type = 'promise' AND source <> 'evi-test' "
+                "AND status <> 'needs_eval' AND confirmed_via IS DISTINCT FROM 'auto-eval' "
                 "AND created_at >= %s AND created_at < %s",
                 (since, until),
             )

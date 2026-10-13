@@ -34,7 +34,7 @@
   - Files: `agent/services/promise_context.py`, `tests/unit/test_promise_context.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_promise_context.py -q` e `./scripts/evi-test llm-eval promise` ≥ limiar do design
 
-- [ ] 3.2 `capture_promises` grava `needs_eval`; loop in-process avalia após `EVI_PROMISE_EVAL_DELAY_MIN`; retry 30 min; 48 h → `pending` com texto original; listagens ignoram `needs_eval`
+- [x] 3.2 `capture_promises` grava `needs_eval`; loop in-process avalia após `EVI_PROMISE_EVAL_DELAY_MIN`; retry 30 min; 48 h → `pending` com texto original; listagens ignoram `needs_eval`
   - SCN-DEBT-04, SCN-DEBT-12, SCN-DEBT-15
   - Files: `agent/services/promises.py`, `agent/services/promise_context.py`, `agent/db.py`, `tests/unit/test_promises.py`, `tests/unit/test_db.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_promises.py tests/unit/test_reply_debts.py -q` e `./scripts/evi-test smoke`

@@ -13,6 +13,17 @@ from services import llm_structured
 from testing.llm_eval import promise as ev
 
 
+@pytest.fixture(autouse=True)
+def _isolate_env(monkeypatch):
+    """The evaluator CLI loads .env into os.environ; keep that out of other tests."""
+    import os
+
+    snapshot = dict(os.environ)
+    yield
+    os.environ.clear()
+    os.environ.update(snapshot)
+
+
 def _llm(promise: bool, what: str = "", quando: str = "", done: bool = False) -> dict:
     return {"pedido": "", "usuario_se_compromete": promise, "what": what, "quando": quando, "done": done}
 

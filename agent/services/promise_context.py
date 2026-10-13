@@ -258,3 +258,91 @@ def evaluate_promise(
         "pedido": str(out.get("pedido") or "").strip(),
         "prompt_version": PROMPT_VERSION,
     }
+
+
+# --- needs_eval queue worker (the pending_commitments row is the queue) ---------
+
+EVAL_RETRY = timedelta(minutes=30)
+EVAL_GIVE_UP = timedelta(hours=48)
+
+
+def _aware(dt: datetime | None, default: datetime) -> datetime:
+    if dt is None:
+        return default
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _today_local(now: datetime) -> str:
+    return now.astimezone(_tz()).date().isoformat()
+
+
+def _expire(db: Any, row: dict, now: datetime) -> bool:
+    """48 h fallback: back to 'pending' with the original text; a past due is cleared."""
+    due = row.get("due_date")
+    return db.finish_promise_evaluation(
+        row["id"], "pending", clear_due=bool(due and str(due) < _today_local(now))
+    )
+
+
+def process_due_evaluations(now: datetime | None = None, limit: int = 10) -> dict:
+    """Evaluate due `needs_eval` promises; returns counts per outcome.
+
+    LLM calls happen outside any DB transaction (each db helper opens its own).
+    Rows older than 48 h are finalized as `pending` (original text) regardless of
+    whether the LLM answered.
+    """
+    import db
+    from services.soft_fail import soft_fail
+
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    counts = {"pending": 0, "dismissed": 0, "done": 0, "retry": 0, "expired": 0, "error": 0}
+
+    try:
+        for row in db.list_stale_needs_eval(now - EVAL_GIVE_UP):
+            try:
+                if _expire(db, row, now):
+                    counts["expired"] += 1
+            except Exception as exc:  # noqa: BLE001
+                counts["error"] += 1
+                soft_fail("promise_context.expire", exc)
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("promise_context.expire_sweep", exc)
+
+    for row in db.list_promises_to_evaluate(now, limit):
+        try:
+            msg_ts = _aware(row.get("msg_ts"), _aware(row.get("created_at"), now))
+            res = evaluate_promise(
+                jid=row.get("source_chat") or "",
+                message_text=row.get("raw_text") or row.get("title") or "",
+                message_ts=msg_ts,
+                message_id=row.get("source_id"),
+                now=now,
+            )
+            if res is None:
+                if now - msg_ts >= EVAL_GIVE_UP:
+                    _expire(db, row, now)
+                    counts["expired"] += 1
+                else:
+                    db.bump_promise_eval(row["id"], now + EVAL_RETRY)
+                    counts["retry"] += 1
+            elif not res.get("is_promise"):
+                db.finish_promise_evaluation(row["id"], "dismissed", confirmed_via="auto-eval")
+                counts["dismissed"] += 1
+            elif res.get("done"):
+                db.finish_promise_evaluation(row["id"], "done")
+                counts["done"] += 1
+            else:
+                db.finish_promise_evaluation(
+                    row["id"], "pending", title=res.get("title") or None, due_date=res.get("due") or None
+                )
+                counts["pending"] += 1
+        except Exception as exc:  # noqa: BLE001
+            counts["error"] += 1
+            soft_fail("promise_context.process_row", exc)
+            try:  # don't retry a failing row on every tick
+                db.bump_promise_eval(row["id"], now + EVAL_RETRY)
+            except Exception as exc2:  # noqa: BLE001
+                soft_fail("promise_context.bump_after_error", exc2)
+    return counts

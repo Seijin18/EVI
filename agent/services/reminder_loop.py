@@ -1,6 +1,7 @@
 """In-process reminder loop: daemon thread ticking `reminders.fire_due`.
 
-Started in the FastAPI lifespan only when EVI_REMINDERS_ENABLED is truthy. The first
+Started in the FastAPI lifespan when EVI_REMINDERS_ENABLED is truthy or promise
+context evaluation is on (it also drains the `needs_eval` promise queue, ≤1/min). The first
 tick runs immediately so reminders that fell due while the process was down are
 delivered right away. Pacing uses Event.wait (monotonic, unaffected by libfaketime);
 "now" is read inside fire_due via now_local().
@@ -11,6 +12,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 
 from services.soft_fail import soft_fail
 
@@ -18,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TICK_SEC = 30.0
 MIN_TICK_SEC = 5.0
+PROMISE_EVAL_EVERY_SEC = 60.0
+PROMISE_EVAL_BATCH = 3
 
 _thread: threading.Thread | None = None
 _stop: threading.Event | None = None
@@ -32,23 +36,65 @@ def _tick_interval() -> float:
     return max(MIN_TICK_SEC, val)
 
 
+def _promise_context_enabled() -> bool:
+    try:
+        from services.promises import promise_context_enabled
+
+        return promise_context_enabled()
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("reminder_loop.promise_flag", exc)
+        return False
+
+
+def _reminders_on() -> bool:
+    from tools.reminder_tools import _reminders_enabled
+
+    return _reminders_enabled()
+
+
+def release_stranded_promises() -> int:
+    """Promise context off: needs_eval rows would never be evaluated; make them pending."""
+    if _promise_context_enabled() or not os.getenv("DATABASE_URL"):
+        return 0
+    try:
+        import db
+        from tools.calendar_time import now_local
+
+        return db.release_needs_eval(now_local().date().isoformat())
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("reminder_loop.release_needs_eval", exc)
+        return 0
+
+
 def _run(stop: threading.Event, interval: float) -> None:
     from services import reminders
 
+    last_eval = float("-inf")
     while not stop.is_set():
-        try:
-            reminders.fire_due()
-        except Exception as exc:
-            soft_fail("reminder_loop.tick", exc)
+        if _reminders_on():
+            try:
+                reminders.fire_due()
+            except Exception as exc:
+                soft_fail("reminder_loop.tick", exc)
+        if time.monotonic() - last_eval >= PROMISE_EVAL_EVERY_SEC:
+            last_eval = time.monotonic()
+            if not _promise_context_enabled():
+                release_stranded_promises()  # flag flipped off while running
+            else:
+                try:
+                    from services import promise_context
+
+                    promise_context.process_due_evaluations(limit=PROMISE_EVAL_BATCH)
+                except Exception as exc:
+                    soft_fail("reminder_loop.promise_eval", exc)
         stop.wait(interval)
 
 
 def start_loop() -> bool:
     """Start the daemon thread if enabled and DB configured. Idempotent."""
     global _thread, _stop
-    from tools.reminder_tools import _reminders_enabled
-
-    if not _reminders_enabled():
+    release_stranded_promises()
+    if not (_reminders_on() or _promise_context_enabled()):
         return False
     if not os.getenv("DATABASE_URL"):
         logger.warning("DATABASE_URL unset; reminder loop not started")

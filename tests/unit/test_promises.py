@@ -110,6 +110,42 @@ def test_scn_debt_04_promise_with_tomorrow_date(fake_db):
     assert row["status"] == "pending"
 
 
+def test_context_flag_stores_needs_eval_with_delay(fake_db, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "true")
+    assert promises.capture_promises([_msg("te mando a proposta amanhã")]) == 1
+    row = fake_db.pending[0]
+    sent = datetime(2026, 6, 3, 10, 0, tzinfo=timezone.utc)
+    assert row["status"] == "needs_eval"
+    assert row["msg_ts"] == sent and row["next_eval_at"] == sent + timedelta(minutes=30)
+    assert row["due_date"] == "2026-06-04" and row["title"] == "te mando a proposta amanhã"
+
+
+def test_context_flag_follows_reply_debts_by_default(fake_db, monkeypatch):
+    monkeypatch.delenv("EVI_PROMISE_CONTEXT_ENABLED", raising=False)
+    monkeypatch.setenv("EVI_REPLY_DEBTS_ENABLED", "true")
+    promises.capture_promises([_msg("te mando amanhã")])
+    assert fake_db.pending[0]["status"] == "needs_eval"
+
+
+def test_context_flag_off_keeps_pending_from_pattern(fake_db, monkeypatch):
+    monkeypatch.setenv("EVI_REPLY_DEBTS_ENABLED", "true")
+    monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "false")
+    promises.capture_promises([_msg("te mando a proposta amanhã")])
+    row = fake_db.pending[0]
+    assert row["status"] == "pending" and row["due_date"] == "2026-06-04"
+    assert "next_eval_at" not in row
+
+
+def test_context_flag_idempotent(fake_db, monkeypatch):
+    monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "true")
+    m = _msg("te mando amanhã")
+    promises.capture_promises([m])
+    promises.capture_promises([m])
+    assert len(fake_db.pending) == 1
+
+
 def test_promise_date_is_local_tomorrow_at_2230_sao_paulo(fake_db, monkeypatch):
     monkeypatch.setenv("EVI_TIMEZONE", "America/Sao_Paulo")
     # 22:30 local on 06-03 == 01:30 UTC on 06-04

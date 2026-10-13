@@ -131,3 +131,130 @@ def test_knowledge_block():
     p = pc.build_promise_prompt("Ana", [], "oi", "12/10 14:00", [], REF, knowledge="Irmã do usuário")
     assert p.startswith("SOBRE Ana:\nIrmã do usuário")
     assert "(nada)" in p
+
+
+# --- process_due_evaluations (needs_eval queue worker) ---------------------------
+
+NOW = datetime(2026, 10, 12, 18, 0, tzinfo=TZ)
+
+
+class FakeQueue:
+    def __init__(self, rows):
+        self.rows = rows
+        self.finished, self.bumped, self.extra = [], [], {}
+
+    def list_stale_needs_eval(self, cutoff, limit=100):
+        return [r for r in self.rows if r["msg_ts"] < cutoff]
+
+    def list_promises_to_evaluate(self, now, limit=10):
+        return [r for r in self.rows if r["next_eval_at"] <= now][:limit]
+
+    def finish_promise_evaluation(self, rid, status, title=None, due_date=None, *, clear_due=False, confirmed_via=None):
+        self.rows[:] = [r for r in self.rows if r["id"] != rid]
+        self.finished.append((rid, status, title, due_date))
+        self.extra[rid] = (clear_due, confirmed_via)
+        return True
+
+    def bump_promise_eval(self, rid, nxt):
+        self.bumped.append((rid, nxt))
+        return True
+
+
+def qrow(rid, age_h=1.0, due=None, text="te mando a proposta amanhã", ready=True):
+    ts = NOW - timedelta(hours=age_h)
+    return {
+        "id": rid, "source_id": f"m{rid}", "source_chat": JID, "raw_text": text,
+        "msg_ts": ts, "created_at": ts, "due_date": due, "title": text,
+        "next_eval_at": NOW - timedelta(minutes=1) if ready else NOW + timedelta(hours=1),
+    }
+
+
+@pytest.fixture
+def queue(monkeypatch):
+    import sys
+
+    q = FakeQueue([])
+    monkeypatch.setitem(sys.modules, "db", q)
+    return q
+
+
+def fake_eval(monkeypatch, result):
+    def _ev(**kw):
+        r = result(kw) if callable(result) else result
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    monkeypatch.setattr(pc, "evaluate_promise", _ev)
+
+
+def test_confirmed_becomes_pending_with_title_and_due(queue, monkeypatch):
+    queue.rows[:] = [qrow(1)]
+    fake_eval(monkeypatch, {"is_promise": True, "title": "Mandar a proposta", "due": "2026-10-13", "done": False})
+    assert pc.process_due_evaluations(NOW)["pending"] == 1
+    assert queue.finished == [(1, "pending", "Mandar a proposta", "2026-10-13")]
+
+
+def test_confirmed_without_due_keeps_row_due(queue, monkeypatch):
+    queue.rows[:] = [qrow(1, due="2026-10-13")]
+    fake_eval(monkeypatch, {"is_promise": True, "title": "Mandar", "due": None, "done": False})
+    pc.process_due_evaluations(NOW)
+    assert queue.finished == [(1, "pending", "Mandar", None)]  # db keeps COALESCE(existing)
+
+
+def test_rejected_becomes_dismissed(queue, monkeypatch):
+    queue.rows[:] = [qrow(1)]
+    fake_eval(monkeypatch, {"is_promise": False, "title": "", "due": None, "done": False})
+    assert pc.process_due_evaluations(NOW)["dismissed"] == 1
+    assert queue.finished[0][:2] == (1, "dismissed")
+    assert queue.extra[1] == (False, "auto-eval")
+
+
+def test_scn_debt_15_fulfilled_becomes_done(queue, monkeypatch):
+    queue.rows[:] = [qrow(1)]
+    fake_eval(monkeypatch, {"is_promise": True, "title": "x", "due": None, "done": True})
+    assert pc.process_due_evaluations(NOW)["done"] == 1
+    assert queue.finished[0][:2] == (1, "done")
+
+
+def test_llm_none_before_48h_is_bumped_30min(queue, monkeypatch):
+    queue.rows[:] = [qrow(1, age_h=2)]
+    fake_eval(monkeypatch, None)
+    assert pc.process_due_evaluations(NOW)["retry"] == 1
+    assert queue.bumped == [(1, NOW + timedelta(minutes=30))] and queue.finished == []
+
+
+def test_scn_debt_12_llm_none_after_48h_becomes_pending_original(queue, monkeypatch):
+    queue.rows[:] = [qrow(1, age_h=49, due="2026-10-11")]
+    fake_eval(monkeypatch, None)
+    out = pc.process_due_evaluations(NOW)
+    assert out["expired"] == 1
+    assert queue.finished == [(1, "pending", None, None)]  # title untouched = original
+    assert queue.extra[1] == (True, None)  # past due cleared so the row is listed
+
+
+def test_stale_rows_finalized_even_when_not_due_for_eval(queue, monkeypatch):
+    queue.rows[:] = [qrow(1, age_h=50, ready=False)]
+    fake_eval(monkeypatch, AssertionError("llm must not be called"))
+    assert pc.process_due_evaluations(NOW)["expired"] == 1
+    assert queue.finished == [(1, "pending", None, None)]
+
+
+def test_not_yet_due_rows_untouched(queue, monkeypatch):
+    queue.rows[:] = [qrow(1, ready=False)]
+    fake_eval(monkeypatch, AssertionError("llm must not be called"))
+    out = pc.process_due_evaluations(NOW)
+    assert not queue.finished and not queue.bumped and out["error"] == 0
+
+
+def test_exception_in_one_row_does_not_stop_the_others(queue, monkeypatch):
+    queue.rows[:] = [qrow(1, text="boom"), qrow(2)]
+    fake_eval(
+        monkeypatch,
+        lambda kw: RuntimeError("x") if kw["message_text"] == "boom"
+        else {"is_promise": True, "title": "T", "due": None, "done": False},
+    )
+    out = pc.process_due_evaluations(NOW)
+    assert out["error"] == 1 and out["pending"] == 1
+    assert queue.bumped == [(1, NOW + timedelta(minutes=30))]  # failing row not retried every tick
+    assert queue.finished == [(2, "pending", "T", None)]

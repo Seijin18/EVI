@@ -166,6 +166,141 @@ def test_past_commitments_are_hidden_by_default():
     assert rid in ids_all
 
 
+# --- needs_eval queue (evi-promise-context) ---------------------------------
+
+
+def _needs_eval(next_eval_at=None, **kw):
+    now = dt.datetime.now(dt.timezone.utc)
+    return _insert(
+        ctype="promise",
+        event_date=None,
+        due_date="2099-01-01",
+        status="needs_eval",
+        next_eval_at=next_eval_at or now - dt.timedelta(minutes=1),
+        msg_ts=now - dt.timedelta(minutes=31),
+        **kw,
+    )
+
+
+def test_needs_eval_columns_exist_and_migration_idempotent():
+    import db
+
+    db.reset_db_init_for_tests()
+    db.init_db()
+    db.init_db()
+    with db._conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'pending_commitments'"
+        )
+        cols = {r[0] for r in cur.fetchall()}
+    assert {"next_eval_at", "eval_attempts", "msg_ts"} <= cols
+
+
+def test_scn_debt_12_needs_eval_is_never_listed():
+    import db
+
+    rid, _ = _needs_eval()
+    assert rid not in [r["id"] for r in db.list_pending_commitments(limit=500)]
+    assert rid not in [r["id"] for r in db.list_pending_commitments(limit=500, include_past=True)]
+    before = db.count_unnotified_pending()
+    _needs_eval()
+    assert db.count_unnotified_pending() == before
+
+
+def test_list_promises_to_evaluate_only_due_needs_eval():
+    import db
+
+    now = dt.datetime.now(dt.timezone.utc)
+    due, _ = _needs_eval()
+    later, _ = _needs_eval(next_eval_at=now + dt.timedelta(hours=1))
+    plain, _ = _insert()
+    ids = [r["id"] for r in db.list_promises_to_evaluate(now, 500)]
+    assert due in ids and later not in ids and plain not in ids
+
+
+def test_finish_promise_evaluation_sets_status_title_due_once():
+    import db
+
+    rid, _ = _needs_eval()
+    assert db.finish_promise_evaluation(rid, "pending", title="Mandar a proposta", due_date="2099-02-02")
+    row = next(r for r in db.list_pending_commitments(limit=500, include_past=True) if r["id"] == rid)
+    assert row["title"] == "Mandar a proposta" and row["due_date"] == "2099-02-02"
+    assert db.finish_promise_evaluation(rid, "dismissed") is False  # no longer needs_eval
+
+
+def test_finish_without_title_keeps_existing_values():
+    import db
+
+    rid, _ = _needs_eval()
+    assert db.finish_promise_evaluation(rid, "pending")
+    row = next(r for r in db.list_pending_commitments(limit=500, include_past=True) if r["id"] == rid)
+    assert row["title"] == "Reunião" and row["due_date"] == "2099-01-01"
+
+
+def test_bump_promise_eval_reschedules_and_counts_attempts():
+    import db
+
+    now = dt.datetime.now(dt.timezone.utc)
+    rid, _ = _needs_eval()
+    assert db.bump_promise_eval(rid, now + dt.timedelta(minutes=30))
+    assert rid not in [r["id"] for r in db.list_promises_to_evaluate(now, 500)]
+    with db._conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT eval_attempts FROM pending_commitments WHERE id = %s", (rid,))
+        assert cur.fetchone()[0] == 1
+
+
+def test_scn_debt_12_expired_row_with_past_due_is_listed_after_clear_due():
+    import db
+
+    rid, _ = _needs_eval(raw_text="te mando amanhã")
+    with db._conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE pending_commitments SET due_date = '2020-01-01' WHERE id = %s", (rid,))
+        conn.commit()
+    assert db.finish_promise_evaluation(rid, "pending", clear_due=True)
+    row = next(r for r in db.list_pending_commitments(limit=500) if r["id"] == rid)
+    assert row["due_date"] is None and row["raw_text"] == "te mando amanhã"
+
+
+def test_release_needs_eval_makes_rows_pending_and_clears_past_due():
+    import db
+
+    past, _ = _needs_eval()
+    future, _ = _needs_eval()
+    with db._conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE pending_commitments SET due_date = '2020-01-01' WHERE id = %s", (past,))
+        conn.commit()
+    assert db.release_needs_eval() >= 2
+    ids = {r["id"]: r for r in db.list_pending_commitments(limit=500)}
+    assert past in ids and ids[past]["due_date"] is None
+    assert future in ids and ids[future]["due_date"] == "2099-01-01"
+
+
+def test_chat_listings_hide_needs_eval_and_auto_eval_dismissed():
+    import db
+
+    chat = f"{_uid()}@s.whatsapp.net"
+    hidden, _ = _needs_eval(source_chat=chat)
+    rejected, _ = _needs_eval(source_chat=chat)
+    shown, _ = _insert(source_chat=chat)
+    assert db.finish_promise_evaluation(rejected, "dismissed", confirmed_via="auto-eval")
+    assert [r["id"] for r in db.list_commitments_for_chat(chat)] == [shown]
+    assert [r["id"] for r in db.list_commitments_for_chat_since(chat)] == [shown]
+    assert hidden not in [r["id"] for r in db.list_commitments_for_chat(chat)]
+
+
+def test_action_rates_exclude_needs_eval_and_llm_rejected_promises():
+    import db
+
+    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)
+    until = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1)
+    base = db.action_rates_by_type(since, until, 1.0)["promise"]["shown"]
+    rid, _ = _needs_eval(source="whatsapp_from_me")
+    assert db.action_rates_by_type(since, until, 1.0)["promise"]["shown"] == base  # needs_eval
+    db.finish_promise_evaluation(rid, "dismissed", confirmed_via="auto-eval")
+    out = db.action_rates_by_type(since, until, 1.0)["promise"]
+    assert out["shown"] == base  # LLM rejection: not shown, not acted
+
+
 def test_urgent_sorts_before_normal():
     import db
 

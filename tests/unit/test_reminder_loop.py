@@ -19,6 +19,9 @@ def _clean(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://x")
     monkeypatch.setenv("EVI_REMINDERS_ENABLED", "true")
     monkeypatch.delenv("EVI_REMINDERS_TICK_SEC", raising=False)
+    monkeypatch.delenv("EVI_PROMISE_CONTEXT_ENABLED", raising=False)
+    monkeypatch.delenv("EVI_REPLY_DEBTS_ENABLED", raising=False)
+    monkeypatch.setattr(reminder_loop, "release_stranded_promises", lambda: 0)
     reminder_loop.stop_loop()
     yield
     reminder_loop.stop_loop()
@@ -144,3 +147,27 @@ def test_restart_uses_fresh_event():
         assert first.is_set()
         reminder_loop.start_loop()
         assert reminder_loop._stop is not first and not reminder_loop._stop.is_set()
+
+
+def test_promise_context_alone_starts_loop_without_firing_reminders(monkeypatch):
+    monkeypatch.setenv("EVI_REMINDERS_ENABLED", "false")
+    monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "true")
+    done = threading.Event()
+    with patch("services.reminders.fire_due") as fd, patch(
+        "services.promise_context.process_due_evaluations", side_effect=lambda **kw: done.set()
+    ) as pe:
+        assert reminder_loop.start_loop() is True
+        assert done.wait(2)
+        assert fd.call_count == 0 and pe.call_count == 1
+
+
+def test_start_loop_releases_stranded_promises_when_context_disabled(monkeypatch):
+    monkeypatch.undo()
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    monkeypatch.setenv("EVI_REMINDERS_ENABLED", "false")
+    monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "false")
+    with patch("db.release_needs_eval", return_value=2) as rel:
+        assert reminder_loop.start_loop() is False
+        rel.assert_called_once()
+    with patch("db.release_needs_eval", side_effect=RuntimeError("down")):
+        assert reminder_loop.release_stranded_promises() == 0  # soft-fails

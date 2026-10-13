@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import re
 import unicodedata
+from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
 from services.soft_fail import soft_fail
@@ -57,6 +58,34 @@ def _short_title(text: str, limit: int = 80) -> str:
     return one_line if len(one_line) <= limit else one_line[: limit - 1].rstrip() + "…"
 
 
+def promise_context_enabled() -> bool:
+    """EVI_PROMISE_CONTEXT_ENABLED; unset follows EVI_REPLY_DEBTS_ENABLED."""
+    raw = os.getenv("EVI_PROMISE_CONTEXT_ENABLED", "").strip().lower()
+    if raw:
+        return raw in {"1", "true", "yes", "on"}
+    from services.whatsapp_processor import reply_debts_enabled
+
+    return reply_debts_enabled()
+
+
+def _eval_delay_min() -> int:
+    try:
+        return max(0, int(os.getenv("EVI_PROMISE_EVAL_DELAY_MIN", "30")))
+    except ValueError:
+        return 30
+
+
+def _msg_dt(ts: str) -> datetime:
+    """Message timestamp as an aware UTC datetime (now() when unparseable)."""
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:  # noqa: BLE001
+        return datetime.now(timezone.utc)
+
+
 def capture_promises(messages: Iterable) -> int:
     """Store a pending 'promise' per direct fromMe message that matches.
 
@@ -96,6 +125,14 @@ def capture_promises(messages: Iterable) -> int:
                 label = effective_label(db.get_whatsapp_contact(jid), fallback="")
             except Exception as exc:  # noqa: BLE001
                 soft_fail("promises.label", exc)
+            ctx_on = promise_context_enabled()
+            extra: dict = {}
+            if ctx_on:
+                msg_dt = _msg_dt(msg.ts)
+                extra = {
+                    "next_eval_at": msg_dt + timedelta(minutes=_eval_delay_min()),
+                    "msg_ts": msg_dt,
+                }
             row_id = db.insert_pending_commitment(
                 source=_SOURCE,
                 source_id=msg.id,
@@ -106,7 +143,8 @@ def capture_promises(messages: Iterable) -> int:
                 raw_text=msg.text,
                 source_chat=jid,
                 source_label=label,
-                status="pending",
+                status="needs_eval" if ctx_on else "pending",
+                **extra,
             )
             if row_id:
                 stored += 1
