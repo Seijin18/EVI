@@ -51,7 +51,7 @@
 
 ## 4. Simulação e fechamento
 
-- [ ] 4.1 Cenários `SIM-DEBT-07` (pedido + "Pode deixar" → promessa com objeto e data), `SIM-DEBT-08` (agradecimento + "Pode deixar" → nada), `SIM-DEBT-09` (prometeu e mandou 5 min depois → nada); cassettes; `docs/testing.md`
+- [x] 4.1 Cenários `SIM-DEBT-07` (pedido + "Pode deixar" → promessa com objeto e data), `SIM-DEBT-08` (agradecimento + "Pode deixar" → nada), `SIM-DEBT-09` (prometeu e mandou 5 min depois → nada); cassettes; `docs/testing.md`
   - SCN-DEBT-10, SCN-DEBT-11, SCN-DEBT-15
   - Files: `tests/sim/scenarios/reply-debts/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --repeat 3 --llm live`

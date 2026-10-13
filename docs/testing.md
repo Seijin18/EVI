@@ -59,6 +59,16 @@ Briefing: `./scripts/evi-sim run --tag briefing --repeat 3 --llm live` (passo `j
 Reply debts: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (sim.env liga
 `EVI_REPLY_DEBTS_ENABLED`; `postgres` aceita `wa_conversation_state`; `reply_not_matches` exige que
 o texto enviado ao Telegram NÃO case com a regex).
+Promessas com contexto: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (SIM-DEBT-07/08/09;
+sim.env liga `EVI_PROMISE_CONTEXT_ENABLED`, atraso de 10 min do relógio simulado e varredura a cada 5 s).
+A avaliação não tem passo próprio: o cenário avança o relógio (`clock: +11m`) e o loop em processo
+avalia a fila `needs_eval`; `postgres` aceita `within_s` (espera até N s pela contagem) e, em `where`,
+`{contains: "texto"}` (ILIKE) e `{weekday: 1-7}` (dia ISO de uma coluna de data). O runner devolve ao
+`findMessages` do fake Evolution cada `whatsapp_contact` enviado (contato e `from_me`), com timestamp do
+relógio simulado. A chamada `run_structured("promise")` vai ao OpenRouter real (ZDR, teto
+`EVI_LLM_TASK_DAILY_USD=0.50`) com a chave de `OPENROUTER_API_KEY` do `.env` (ou
+`EVI_SIM_OPENROUTER_API_KEY`); em `record`/`replay` é gravada/servida no mesmo cassete do cenário
+(chave `structured:<sha256>` de task+prompt+schema, com data/dia da semana/horários normalizados).
 Lembretes: `./scripts/evi-sim run --tag reminders --repeat 3 --llm live` (o loop roda dentro do
 `agent-api` com `EVI_REMINDERS_TICK_SEC=5` e lê o relógio libfaketime). Um passo `clock` aceita
 `expect: {reply_within_s, reply_matches, no_reply}`: captura as mensagens enviadas ao Telegram

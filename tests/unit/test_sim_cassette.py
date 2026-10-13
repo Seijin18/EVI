@@ -187,3 +187,42 @@ def test_sim_providers_active_with_evi_sim(monkeypatch):
     assert llm.background_provider() == "sim-replay"
     assert isinstance(llm.build_llm(provider="sim-replay"), cs.SimCassetteChatModel)
     assert llm.extract_llm_text([{"type": "text", "text": " oi "}], provider="sim-replay") == "oi"
+
+
+# ------------------------------------------------------------ structured (run_structured) calls
+_SCHEMA = {"type": "object", "properties": {"x": {"type": "string"}}, "required": ["x"]}
+
+
+def _structured_prompt(d: date, weekday: str, hhmm: str) -> str:
+    return (
+        f"Hoje é {weekday}, {d.isoformat()}.\n[{hhmm}] Ana: me manda o orçamento até sexta?\n"
+        f"MENSAGEM AVALIADA ({d.day:02d}/{d.month:02d} {hhmm}):\nVocê: Pode deixar"
+    )
+
+
+def test_structured_key_stable_across_days_but_not_chat_text():
+    d0, d1 = date(2026, 10, 10), date(2026, 10, 14)
+    k0 = cs.structured_key("PROMISE", _structured_prompt(d0, "sábado", "09:00"), _SCHEMA, d0)
+    assert k0 == cs.structured_key("PROMISE", _structured_prompt(d1, "quarta", "09:01"), _SCHEMA, d1)
+    changed = _structured_prompt(d0, "sábado", "09:00").replace("até sexta", "até quinta")
+    assert k0 != cs.structured_key("PROMISE", changed, _SCHEMA, d0)
+    assert k0 != cs.structured_key("OTHER", _structured_prompt(d0, "sábado", "09:00"), _SCHEMA, d0)
+
+
+def test_structured_record_then_replay_offline(sim_dir):
+    prompt = _structured_prompt(date(2026, 10, 10), "sábado", "09:00")
+    _announce(sim_dir)
+    calls = []
+    out = cs.structured_call("record", "PROMISE", prompt, _SCHEMA, lambda: calls.append(1) or {"x": "ok"})
+    assert out == {"x": "ok"} and calls == [1]
+    _announce(sim_dir, nonce="n2")  # new attempt: replay reads the recorded file, no provider call
+    boom = pytest.fail
+    assert cs.structured_call("replay", "PROMISE", prompt, _SCHEMA, boom) == {"x": "ok"}
+    with pytest.raises(cs.CassetteStale, match="regrave com --llm record"):
+        cs.structured_call("replay", "PROMISE", prompt + " mudou", _SCHEMA, boom)
+
+
+def test_structured_failure_is_not_recorded(sim_dir):
+    _announce(sim_dir)
+    assert cs.structured_call("record", "PROMISE", "p", _SCHEMA, lambda: None) is None
+    assert not (sim_dir / "SIM-X.jsonl").exists()

@@ -10,6 +10,7 @@ Routing:
 * ``/_sim/...``                   runner controls (never used by the agent):
     POST /_sim/seed               google seed, or {"google": {...}, "evolution": {...}}
     POST /_sim/evolution/seed     contacts/chats/messages/profiles
+    POST /_sim/evolution/message  one webhook-shaped message record appended to findMessages
     POST /_sim/telegram/updates   {"text", "chat_id"?} -> {"update_id"}
     GET  /_sim/telegram/sent      captured sendMessage calls
     POST /_sim/telegram/voice     {"audio_b64", "duration_s"?, "file_size"?, "chat_id"?} -> {"update_id"}
@@ -95,6 +96,10 @@ def build_app(
 
     async def evolution_seed(req: Request):
         e.seed(await _json_body(req))
+        return JSONResponse({"ok": True})
+
+    async def evolution_message(req: Request):
+        e.record_message(await _json_body(req))
         return JSONResponse({"ok": True})
 
     async def telegram_updates(req: Request):
@@ -184,6 +189,7 @@ def build_app(
             Route("/_sim/state", state, methods=["GET"]),
             Route("/_sim/reset", reset, methods=["POST"]),
             Route("/_sim/evolution/seed", evolution_seed, methods=["POST"]),
+            Route("/_sim/evolution/message", evolution_message, methods=["POST"]),
             Route("/_sim/evolution/sent", evolution_sent, methods=["GET"]),
             Route("/_sim/telegram/updates", telegram_updates, methods=["POST"]),
             Route("/_sim/telegram/voice", telegram_voice, methods=["POST"]),

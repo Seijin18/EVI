@@ -10,6 +10,10 @@ steps:
         - {table: pending_commitments, where: {type: promise}, count: 1}
       outbound_to_third_parties: 0
   - clock: D1 07:00
+    expect:
+      # the promise is hidden (needs_eval) until the background evaluation lists it
+      postgres:
+        - {table: pending_commitments, where: {type: promise, status: pending}, count: 1, within_s: 60}
   - job: briefing
     expect:
       reply_within_s: 60

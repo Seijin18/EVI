@@ -198,3 +198,14 @@ def test_maybe_sweep_disabled_flag_and_failure_is_soft(monkeypatch):
     monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "true")
     with patch("services.promise_context.sweep_fulfilled", side_effect=RuntimeError("x")):
         assert reminder_loop._maybe_sweep(d) is True  # soft-fails, no raise
+
+
+def test_promise_eval_interval_env_override(monkeypatch):
+    monkeypatch.delenv("EVI_PROMISE_EVAL_TICK_SEC", raising=False)
+    assert reminder_loop._promise_eval_interval() == reminder_loop.PROMISE_EVAL_EVERY_SEC
+    monkeypatch.setenv("EVI_PROMISE_EVAL_TICK_SEC", "5")
+    assert reminder_loop._promise_eval_interval() == 5.0
+    monkeypatch.setenv("EVI_PROMISE_EVAL_TICK_SEC", "1")
+    assert reminder_loop._promise_eval_interval() == reminder_loop.MIN_TICK_SEC
+    monkeypatch.setenv("EVI_PROMISE_EVAL_TICK_SEC", "abc")
+    assert reminder_loop._promise_eval_interval() == reminder_loop.PROMISE_EVAL_EVERY_SEC

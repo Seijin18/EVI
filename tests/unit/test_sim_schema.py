@@ -239,3 +239,23 @@ def test_telegram_sent_count_matching_counts_only_user_bound_messages():
     assert schema.eval_expect(exp, {"telegram_sent": sent, "chat_id": "1"}) == []
     exp["telegram_sent_count_matching"]["count"] = 2
     assert "telegram_sent_count_matching" in schema.eval_expect(exp, {"telegram_sent": sent, "chat_id": 1})[0]
+
+
+def test_postgres_where_operators_and_within_s():
+    s = parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"postgres": [
+        {"table": "pending_commitments", "where": {"title": {"contains": "orçamento"}, "due_date": {"weekday": 5}}, "count": 1, "within_s": 90},
+    ]}}]))
+    assert s.steps[0].expect["postgres"][0]["within_s"] == 90
+
+
+@pytest.mark.parametrize(
+    "row,needle",
+    [
+        ({"table": "messages", "where": {"c": {"like": "x"}}, "count": 1}, "mapping value"),
+        ({"table": "messages", "where": {"c": {"weekday": 9}}, "count": 1}, "weekday"),
+        ({"table": "messages", "count": 1, "within_s": -1}, "within_s"),
+    ],
+)
+def test_postgres_bad_operator_rejected(row, needle):
+    with pytest.raises(ScenarioError, match=needle):
+        parse_scenario(_scn(steps=[{"telegram": "a", "expect": {"postgres": [row]}}]))

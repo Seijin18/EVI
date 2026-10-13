@@ -200,7 +200,7 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
         except (re.error, TypeError) as exc:
             raise _err(path, f"{where}.reply_not_matches", f"invalid regex: {exc}") from exc
     for i, row in enumerate(exp.get("postgres") or []):
-        _check_keys(row, {"table", "where", "count"}, path, f"{where}.postgres[{i}]")
+        _check_keys(row, {"table", "where", "count", "within_s"}, path, f"{where}.postgres[{i}]")
         if row.get("table") not in PG_TABLES:
             raise _err(path, f"{where}.postgres[{i}].table", f"not in allowlist {PG_TABLES}")
         if "count" not in row:
@@ -208,6 +208,13 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
         w = row.get("where") or {}
         if not isinstance(w, dict) or not all(re.fullmatch(r"[a-z_]+", str(k)) for k in w):
             raise _err(path, f"{where}.postgres[{i}].where", "must map column names to values")
+        for col, val in w.items():
+            if isinstance(val, dict) and not (len(val) == 1 and ("contains" in val or "weekday" in val)):
+                raise _err(path, f"{where}.postgres[{i}].where.{col}", "mapping value must be {contains: str} or {weekday: 1-7}")
+            if isinstance(val, dict) and "weekday" in val and val["weekday"] not in range(1, 8):
+                raise _err(path, f"{where}.postgres[{i}].where.{col}", "weekday must be 1-7 (ISO)")
+        if "within_s" in row and (isinstance(row["within_s"], bool) or not isinstance(row["within_s"], (int, float)) or row["within_s"] < 0):
+            raise _err(path, f"{where}.postgres[{i}].within_s", "must be a non-negative number of seconds")
     for key, rows in (("calendar", "created"), ("tasks", "created")):
         for j, item in enumerate((exp.get(key) or {}).get(rows) or []):
             allowed = {"summary_contains", "start", "end"} if key == "calendar" else {"title_contains", "due"}

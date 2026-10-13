@@ -1,0 +1,18 @@
+id: SIM-DEBT-07
+title: Reply debts - "pode deixar" a um pedido com prazo vira promessa com título e prazo do contexto (SCN-DEBT-10)
+tags: [reply-debts]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "consegue me mandar o orçamento até sexta?", from_me: false, jid: "5511955550201@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - whatsapp_contact: {text: "Pode deixar", from_me: true, jid: "5511955550201@s.whatsapp.net", push_name: "Ana Exemplo"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {type: promise, status: needs_eval}, count: 1}
+        - {table: pending_commitments, where: {type: promise, status: pending}, count: 0}
+  - clock: D0 09:11
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {type: promise, status: pending, title: {contains: "orçamento"}, due_date: {weekday: 5}}, count: 1, within_s: 90}
+        - {table: pending_commitments, where: {type: promise, status: needs_eval}, count: 0}
+      outbound_to_third_parties: 0

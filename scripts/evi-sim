@@ -26,6 +26,22 @@ _load_gemini_key() {
   fi
 }
 
+_load_openrouter_key() {
+  if [[ -n "${EVI_SIM_OPENROUTER_API_KEY:-}" ]]; then
+    return
+  fi
+  local line=""
+  [[ -f "${ROOT}/.env" ]] && line="$(grep -m1 '^OPENROUTER_API_KEY=' "${ROOT}/.env" || true)"
+  line="${line#OPENROUTER_API_KEY=}"
+  line="${line%\"}"; line="${line#\"}"; line="${line%\'}"; line="${line#\'}"
+  if [[ -n "$line" ]]; then
+    echo "evi-sim: using production OPENROUTER_API_KEY (EVI_SIM_OPENROUTER_API_KEY not set)" >&2
+    export EVI_SIM_OPENROUTER_API_KEY="$line"
+  else
+    echo "evi-sim: no OpenRouter key found; promise-context scenarios will fail in live/record" >&2
+  fi
+}
+
 _wait_healthy() {
   local deadline=$((SECONDS + 120)) svc
   for svc in postgres fakes agent-api; do
@@ -53,7 +69,7 @@ done
 case "$LLM_MODE" in
   live) export EVI_SIM_LLM_PROVIDER=gemini ;;
   record) export EVI_SIM_LLM_PROVIDER=sim-record ;;
-  replay) export EVI_SIM_LLM_PROVIDER=sim-replay; unset EVI_SIM_GEMINI_API_KEY ;;
+  replay) export EVI_SIM_LLM_PROVIDER=sim-replay; unset EVI_SIM_GEMINI_API_KEY EVI_SIM_OPENROUTER_API_KEY ;;
   *) echo "evi-sim: --llm must be live|record|replay" >&2; exit 64 ;;
 esac
 
@@ -65,7 +81,7 @@ case "$cmd" in
     ;;
   up)
     _guard
-    [[ "$LLM_MODE" == replay ]] || _load_gemini_key
+    if [[ "$LLM_MODE" != replay ]]; then _load_gemini_key; _load_openrouter_key; fi
     if ! docker image inspect evi-agent-api:latest >/dev/null 2>&1; then
       echo "evi-sim: base image evi-agent-api:latest missing, building it" >&2
       docker build -t evi-agent-api:latest "${ROOT}/agent"

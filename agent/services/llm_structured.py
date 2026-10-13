@@ -373,6 +373,13 @@ def _attempt(
     return data, False
 
 
+def _sim_cassette_mode() -> str | None:
+    """"record" / "replay" under evi-sim (EVI_SIM=1 and EVI_LLM_PROVIDER=sim-record|sim-replay)."""
+    if os.getenv("EVI_SIM", "").strip() != "1":
+        return None
+    return {"sim-record": "record", "sim-replay": "replay"}.get(os.getenv("EVI_LLM_PROVIDER", "").strip().lower())
+
+
 def run_structured(
     task: str,
     prompt: str,
@@ -387,6 +394,19 @@ def run_structured(
     compare models); with an override the opt-in fallback is not tried.
     """
     t = (task or "").strip().upper()
+    sim = _sim_cassette_mode()
+    if sim:  # evi-sim only: deterministic record/replay of structured calls
+        from testing.sim.cassette import structured_call
+
+        return structured_call(
+            sim, t, prompt, schema, lambda: _run_structured(t, prompt, schema, provider=provider, models=models)
+        )
+    return _run_structured(t, prompt, schema, provider=provider, models=models)
+
+
+def _run_structured(
+    t: str, prompt: str, schema: dict, *, provider: str | None = None, models: list[str] | None = None
+) -> dict | None:
     if provider is not None:
         return _attempt(t, provider.lower(), list(models or []), prompt, schema)[0]
     prov, mods = _resolve(t)

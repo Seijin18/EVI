@@ -236,3 +236,32 @@ def test_mem_fallback_added_to_db_total(monkeypatch):
 def test_strictify_keeps_field_named_properties():
     s = ls.strictify({"type": "object", "properties": {"properties": {"type": "string"}}})
     assert s["properties"]["properties"] == {"type": "string"}
+
+
+def test_sim_cassette_mode_only_under_evi_sim(monkeypatch):
+    monkeypatch.setenv("EVI_LLM_PROVIDER", "sim-replay")
+    monkeypatch.delenv("EVI_SIM", raising=False)
+    assert ls._sim_cassette_mode() is None
+    monkeypatch.setenv("EVI_SIM", "1")
+    assert ls._sim_cassette_mode() == "replay"
+    monkeypatch.setenv("EVI_LLM_PROVIDER", "sim-record")
+    assert ls._sim_cassette_mode() == "record"
+    monkeypatch.setenv("EVI_LLM_PROVIDER", "gemini")
+    assert ls._sim_cassette_mode() is None
+
+
+def test_run_structured_replay_makes_no_network_call(monkeypatch):
+    from testing.sim import cassette as cs
+
+    monkeypatch.setenv("EVI_SIM", "1")
+    monkeypatch.setenv("EVI_LLM_PROVIDER", "sim-replay")
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: pytest.fail("network call in replay"))
+    seen = {}
+
+    def fake(mode, task, prompt, schema, call):
+        seen.update(mode=mode, task=task)
+        return {"ok": True}
+
+    monkeypatch.setattr(cs, "structured_call", fake)
+    assert ls.run_structured("promise", "p", {"type": "object"}) == {"ok": True}
+    assert seen == {"mode": "replay", "task": "PROMISE"}

@@ -228,12 +228,22 @@ def pg_count(ctx: Ctx, row: dict) -> int:
             clauses.append(f"{col} IS NULL")
         elif isinstance(val, bool):
             clauses.append(f"{col} = {'TRUE' if val else 'FALSE'}")
+        elif isinstance(val, dict) and "contains" in val:  # case-insensitive substring
+            pat = str(val["contains"]).replace(chr(39), chr(39) * 2)
+            clauses.append(f"{col}::text ILIKE '%{pat}%'")
+        elif isinstance(val, dict) and "weekday" in val:  # ISO weekday of a date column (1=Mon .. 7=Sun)
+            clauses.append(f"EXTRACT(ISODOW FROM {col}) = {int(val['weekday'])}")
         elif isinstance(val, (int, float)):
             clauses.append(f"{col} = {val}")
         else:
             clauses.append(f"{col}::text = '{str(val).replace(chr(39), chr(39) * 2)}'")
     sql = f"SELECT count(*) FROM {table}" + (" WHERE " + " AND ".join(clauses) if clauses else "")
-    return int(ctx.psql(sql).strip() or 0)
+    deadline = time.monotonic() + float(row.get("within_s") or 0)
+    while True:
+        got = int(ctx.psql(sql).strip() or 0)
+        if got == row.get("count") or time.monotonic() >= deadline:
+            return got
+        time.sleep(1)
 
 
 def observe(ctx: Ctx, step_obs: dict, exp: dict) -> dict:
@@ -360,7 +370,11 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
             jid, text = v.get("jid", DEFAULT_CONTACT_JID), v["text"]
             kw = {"from_me": bool(v.get("from_me")), "group": bool(v.get("group")), "push_name": v.get("push_name", "Sim")}
         base = len(_control_replies(ctx))
-        ctx.agent("POST", "/webhooks/evolution", build_webhook_payload(text, jid, ts=ctx.sim_now().timestamp(), **kw))
+        payload = build_webhook_payload(text, jid, ts=ctx.sim_now().timestamp(), **kw)
+        ctx.agent("POST", "/webhooks/evolution", payload)
+        if step.type == "whatsapp_contact" and not kw["group"]:
+            # the conversation history the agent can fetch back (findMessages) includes this message
+            ctx.fakes("POST", "/_sim/evolution/message", payload["data"]["messages"][0])
         if step.type == "whatsapp_control" and ("reply_within_s" in exp or exp.get("no_reply")):
             sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _control_replies(ctx), base, timeout)
         else:
@@ -379,7 +393,8 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
             sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _telegram_replies(ctx), base, timeout)
     elif step.type == "job":
         base = len(_telegram_replies(ctx))
-        ctx.agent("POST", f"/jobs/{step.value}", {})
+        # briefing runs in the background unless ?wait=true: without it the delivered text is read too early
+        ctx.agent("POST", f"/jobs/{step.value}" + ("?wait=true" if step.value == "briefing" else ""), {})
         sr.latency_s = time.monotonic() - t0
         # a job's observable output is what it sent to the user's Telegram chat
         # (so reply_matches/reply_within_s can assert the delivered text)

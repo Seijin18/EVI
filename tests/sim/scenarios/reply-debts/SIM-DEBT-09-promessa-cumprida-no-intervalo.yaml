@@ -1,0 +1,16 @@
+id: SIM-DEBT-09
+title: Reply debts - "já te passo" cumprido 5 min depois não vira pendência (SCN-DEBT-15)
+tags: [reply-debts]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "me passa o contato do eletricista?", from_me: false, jid: "5511955550203@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - whatsapp_contact: {text: "Já te passo", from_me: true, jid: "5511955550203@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - clock: D0 09:05
+  - whatsapp_contact: {text: "Seu Jorge eletricista 11 98888-7777", from_me: true, jid: "5511955550203@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - clock: D0 09:11
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {type: promise, status: needs_eval}, count: 0, within_s: 90}
+        - {table: pending_commitments, where: {type: promise, status: pending}, count: 0}
+      outbound_to_third_parties: 0

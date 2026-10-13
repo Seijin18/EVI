@@ -1,0 +1,18 @@
+id: SIM-DEBT-08
+title: Reply debts - agradecimento do contato + "pode deixar, qualquer coisa te aviso" não gera promessa (SCN-DEBT-11)
+tags: [reply-debts]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "valeu pela ajuda ontem!", from_me: false, jid: "5511955550202@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - whatsapp_contact: {text: "Pode deixar, qualquer coisa te aviso", from_me: true, jid: "5511955550202@s.whatsapp.net", push_name: "Ana Exemplo"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {type: promise, status: needs_eval}, count: 1}
+  - clock: D0 09:11
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {type: promise, status: dismissed}, count: 1, within_s: 90}
+        - {table: pending_commitments, where: {type: promise, status: pending}, count: 0}
+        - {table: pending_commitments, where: {type: promise, status: needs_eval}, count: 0}
+      outbound_to_third_parties: 0

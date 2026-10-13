@@ -64,6 +64,13 @@ class FakeEvolution:
         self._messages = {k: [dict(m) for m in v] for k, v in (data.get("messages") or {}).items()}
         self._profiles = {str(k): dict(v) for k, v in (data.get("profiles") or {}).items()}
 
+    def record_message(self, record: dict) -> None:
+        """Append a message the runner just delivered by webhook, so findMessages serves it
+        back (same record shape as the webhook: key / messageTimestamp / message / pushName)."""
+        jid = str((record.get("key") or {}).get("remoteJid") or "")
+        if jid:
+            self._messages.setdefault(jid, []).append(copy.deepcopy(record))
+
     def state(self) -> dict:
         return copy.deepcopy(
             {

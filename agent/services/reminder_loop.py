@@ -39,6 +39,15 @@ def _tick_interval() -> float:
     return max(MIN_TICK_SEC, val)
 
 
+def _promise_eval_interval() -> float:
+    """Seconds between needs_eval sweeps (EVI_PROMISE_EVAL_TICK_SEC, min 5; the sim lowers it)."""
+    try:
+        val = float(os.getenv("EVI_PROMISE_EVAL_TICK_SEC", "").strip() or PROMISE_EVAL_EVERY_SEC)
+    except ValueError:
+        val = PROMISE_EVAL_EVERY_SEC
+    return max(MIN_TICK_SEC, val)
+
+
 def _promise_context_enabled() -> bool:
     try:
         from services.promises import promise_context_enabled
@@ -101,7 +110,7 @@ def _run(stop: threading.Event, interval: float) -> None:
                 reminders.fire_due()
             except Exception as exc:
                 soft_fail("reminder_loop.tick", exc)
-        if time.monotonic() - last_eval >= PROMISE_EVAL_EVERY_SEC:
+        if time.monotonic() - last_eval >= _promise_eval_interval():
             last_eval = time.monotonic()
             if not _promise_context_enabled():
                 release_stranded_promises()  # flag flipped off while running

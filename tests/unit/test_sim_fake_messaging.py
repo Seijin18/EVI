@@ -348,3 +348,16 @@ def test_evolution_media_served_by_message_id_and_logged(client):
     client.post("/_sim/reset")
     assert client.get("/_sim/state").json()["media_requests"] == []
     assert client.post("/chat/getBase64FromMediaMessage/sim", json={"message": {"key": key}}).status_code == 404
+
+
+def test_evolution_recorded_message_served_by_find_messages(evo):
+    jid = "5511900000001@s.whatsapp.net"
+    rec = {"key": {"id": "A1", "remoteJid": jid, "fromMe": True}, "messageTimestamp": 1760000000, "message": {"conversation": "Pode deixar"}}
+    assert evo.post("/_sim/evolution/message", json=rec).json() == {"ok": True}
+    body = {"where": {"key": {"remoteJid": jid}}}
+    got = evo.post("/chat/findMessages/sim", json=body, headers=EVO).json()["messages"]["records"]
+    assert got == [rec]
+    other = evo.post("/chat/findMessages/sim", json={"where": {"key": {"remoteJid": "x@s.whatsapp.net"}}}, headers=EVO).json()
+    assert other["messages"]["records"] == []
+    evo.post("/_sim/reset")
+    assert evo.post("/chat/findMessages/sim", json=body, headers=EVO).json()["messages"]["records"] == []

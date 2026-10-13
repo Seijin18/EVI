@@ -288,6 +288,32 @@ class SimCassetteChatModel(BaseChatModel):
         return ChatResult(generations=[ChatGeneration(message=msg)])
 
 
+_CLOCK_STAMP = re.compile(r"\b\d{1,2}:\d{2}\b")
+_TODAY_LINE = re.compile(r"Hoje é [^,\n]+,")
+_DAY_MONTH = re.compile(r"\b\d{1,2}/\d{1,2}\b")
+
+
+def structured_key(task: str, prompt: str, schema: dict, base: date) -> str:
+    """Key of a ``llm_structured.run_structured`` call. Like chat requests, the day-dependent
+    parts of the prompt are normalized (ISO dates -> offsets, weekday names, ``dd/mm`` and
+    ``HH:MM`` stamps; only the "Hoje é <weekday>," header, never the chat text) so a cassette recorded on one day replays on any other."""
+    text = _CLOCK_STAMP.sub("<T>", _DAY_MONTH.sub("<DM>", _TODAY_LINE.sub("Hoje é <WD>,", normalize_text(prompt, base))))
+    blob = json.dumps({"task": task, "prompt": text, "schema": schema}, sort_keys=True, ensure_ascii=False)
+    return "structured:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def structured_call(mode: str, task: str, prompt: str, schema: dict, call) -> dict | None:  # noqa: ANN001
+    """Record (``call()`` is the real provider call) or replay one structured answer."""
+    key = structured_key(task, prompt, schema, _today())
+    st = _state()
+    if mode == "replay":
+        return st.lookup(key, prompt[-200:])
+    out = call()
+    if isinstance(out, dict):  # failures are not recorded: a replay then reports it stale
+        st.append(key, prompt[-200:], out)
+    return out
+
+
 def build_sim_llm(provider: str, *, temperature: float | None = None):
     """Factory used by ``llm.build_llm`` (only reachable with EVI_SIM=1)."""
     if provider == "sim-record":
