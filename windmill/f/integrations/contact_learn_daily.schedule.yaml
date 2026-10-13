@@ -1,0 +1,7 @@
+summary: Atualiza o conhecimento dos contatos com mensagens novas (03:30)
+schedule: '0 30 3 * * *'
+timezone: America/Sao_Paulo
+script_path: f/integrations/contact_learn
+is_flow: false
+args: {}
+enabled: true

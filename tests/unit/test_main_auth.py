@@ -52,3 +52,14 @@ def test_metrics_with_key_labels_by_route_template(client, monkeypatch):
     assert r.status_code == 200
     assert "12345" not in r.text, "raw URL path must not become a label"
     assert 'path="unmatched"' in r.text
+
+
+def test_contact_learn_job_runs_in_background_unless_wait(client, monkeypatch):
+    import services.contact_learn_cron as cron
+
+    monkeypatch.setattr(cron, "run_contact_learn_batch", lambda: {"ok": True, "updated": 3})
+    hdr = {"X-Api-Key": _KEY}
+    accepted = client.post("/jobs/contact-learn", headers=hdr)
+    assert accepted.status_code == 200 and accepted.json()["status"] in {"accepted", "already_running"}
+    inline = client.post("/jobs/contact-learn?wait=true", headers=hdr)
+    assert inline.json() in ({"ok": True, "updated": 3}, {"status": "already_running", "job": "contact-learn"})

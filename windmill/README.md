@@ -248,6 +248,7 @@ Os schedules vivem no Windmill (não no repo). Valores recomendados (hora local)
 | `f/integrations/probe` | `30 6 * * *` | probe diário |
 | `f/integrations/usage_signals` | `0 3 * * *` | sinais de uso diários |
 | `f/integrations/usage_report` | `30 0 * * 1` | segunda 00:30; reporta a semana ISO que acabou de fechar |
+| `f/integrations/contact_learn` | `30 3 * * *` | conhecimento dos contatos (até 15/dia, com mensagens novas); `contact_learn_daily.schedule.yaml` |
 | `f/integrations/heartbeat` | conforme configurado no Windmill | POST `/jobs/heartbeat`; com o briefing ligado, apenas registra achados em log em vez de notificar |
 
 - `briefing` aceita `kind` (`morning`|`evening`) e `force` (reenvia mesmo já enviado no dia).

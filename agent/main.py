@@ -850,11 +850,18 @@ def import_contacts_job(
 
 
 @app.post("/jobs/contact-learn")
-def contact_learn_job(_: None = Depends(verify_api_key)):
-    """Windmill cron target: re-synthesize active contacts (no Evolution backfill)."""
+def contact_learn_job(wait: bool = False, _: None = Depends(verify_api_key)):
+    """Windmill cron target: update the knowledge of contacts with new messages (no backfill).
+
+    Up to 15 LLM calls, so it runs in the background and returns `{"status": "accepted"}`
+    at once (Windmill has a single worker); `?wait=true` runs inline and returns the counts.
+    """
+    from services.background_jobs import run_in_background, run_inline
     from services.contact_learn_cron import run_contact_learn_batch
 
-    return run_contact_learn_batch()
+    if wait:
+        return run_inline("contact-learn", run_contact_learn_batch)
+    return run_in_background("contact-learn", run_contact_learn_batch)
 
 
 @app.post("/run-task")
