@@ -1,23 +1,23 @@
 ## 1. Revisão
 
-- [ ] 1.1 `docs/ux/review-2026-10.md`: amostras reais por superfície (briefing manhã/noite, listas, respostas de comando, lembretes, erros, `/ajuda`) + checklist + achados priorizados; revisão com o usuário
+- [x] 1.1 (documento escrito; revisão do usuário assíncrona — pendência) `docs/ux/review-2026-10.md`: amostras reais por superfície (briefing manhã/noite, listas, respostas de comando, lembretes, erros, `/ajuda`) + checklist + achados priorizados; revisão com o usuário
   - SCN-UX-01
   - Files: `docs/ux/review-2026-10.md`
   - Verify: documento aprovado pelo usuário no chat
 
 ## 2. Briefing
 
-- [ ] 2.1 Duas renderizações (`text_user` limpo/escapado, `text_model` marcado); envio usa `text_user`, sessão grava `text_model`; guarda no `telegram_notify` contra marcador residual
+- [x] 2.1 Duas renderizações (`text_user` limpo/escapado, `text_model` marcado); envio usa `text_user`, sessão grava `text_model`; guarda no `telegram_notify` contra marcador residual
   - SCN-UX-02, SCN-BRIEF-01
   - Files: `agent/services/briefing.py`, `agent/services/telegram_notify.py`, `agent/services/untrusted.py`, `tests/unit/test_briefing.py`, `tests/unit/test_telegram_notify.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_telegram_notify.py -q` e `./scripts/evi-test briefing`
 
-- [ ] 2.2 Formato HTML do Telegram (quem em negrito, uma linha por item, idade/prazo curtos, `+N` com comando, rodapé de comandos), fallback para texto puro se o Telegram recusar o HTML
+- [x] 2.2 Formato HTML do Telegram (quem em negrito, uma linha por item, idade/prazo curtos, `+N` com comando, rodapé de comandos), fallback para texto puro se o Telegram recusar o HTML
   - SCN-UX-03
   - Files: `agent/services/briefing.py`, `agent/services/telegram_notify.py`, `tests/unit/test_briefing.py`, `tests/fixtures/briefing/`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py -q` e `./scripts/evi-test briefing`
 
-- [ ] 2.3 Regra de volume (≤ ~25 linhas; seções excedentes viram linha-resumo com comando)
+- [x] 2.3 Regra de volume (≤ ~25 linhas; seções excedentes viram linha-resumo com comando)
   - SCN-UX-04
   - Files: `agent/services/briefing.py`, `tests/unit/test_briefing.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py -q`

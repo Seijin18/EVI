@@ -1,0 +1,24 @@
+Bom dia! Terça, 13/10
+
+Agenda
+1. 09:00–09:45 «externo:agenda» Entrega lote 2 <Isla> & Cia «/externo»
+2. 14:00–14:45 «externo:agenda» Monitoria lab «/externo»
+
+Tarefas
+3. «externo:tarefa» Pagar boleto «/externo» (venceu 11/10)
+
+E-mail
+4. «externo:email» Re: contrato do MEI «/externo» — «externo:email» Beatriz Lemos <bia@exemplo.com> «/externo»
+5. «externo:email» Novo login detectado «/externo» — «externo:email» suporte@exemplo.com «/externo»
+
+WhatsApp
+Esperando sua resposta:
+6. «externo:whatsapp» Davi Exemplo «/externo» — há 5 d: «externo:whatsapp» entrou? <urgente> & agora «/externo»
+7. «externo:whatsapp» Marina Teste «/externo» — há 30 h: «externo:whatsapp» consegue me mandar o orçamento? «/externo»
+Suas promessas:
+8. «externo:whatsapp» Mandar a modelagem «/externo» — «externo:whatsapp» Eliana «/externo» (16/10)
+9. «externo:whatsapp» Preencher o contrato «/externo» — «externo:whatsapp» Fernando «/externo»
+10. «externo:whatsapp» Ligar para a clínica «/externo» — «externo:whatsapp» 999000111@lid «/externo»
++1
+Combinados:
+11. «externo:whatsapp» Vôlei «/externo» — «externo:whatsapp» Grupo do vôlei «/externo» (14/10)

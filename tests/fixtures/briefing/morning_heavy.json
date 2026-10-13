@@ -1,0 +1,285 @@
+{
+ "_note": "Dados FICTÍCIOS. Dia carregado: 8 eventos, 5 tarefas, 9 e-mails, 15 itens de WhatsApp (SCN-UX-04).",
+ "now": "2026-10-13T07:00:00-03:00",
+ "events": [
+  {
+   "summary": "Evento 0",
+   "id": "e0",
+   "start_iso": "2026-10-13T08:00:00-03:00",
+   "end_iso": "2026-10-13T08:45:00-03:00"
+  },
+  {
+   "summary": "Evento 1",
+   "id": "e1",
+   "start_iso": "2026-10-13T09:00:00-03:00",
+   "end_iso": "2026-10-13T09:45:00-03:00"
+  },
+  {
+   "summary": "Evento 2",
+   "id": "e2",
+   "start_iso": "2026-10-13T10:00:00-03:00",
+   "end_iso": "2026-10-13T10:45:00-03:00"
+  },
+  {
+   "summary": "Evento 3",
+   "id": "e3",
+   "start_iso": "2026-10-13T11:00:00-03:00",
+   "end_iso": "2026-10-13T11:45:00-03:00"
+  },
+  {
+   "summary": "Evento 4",
+   "id": "e4",
+   "start_iso": "2026-10-13T12:00:00-03:00",
+   "end_iso": "2026-10-13T12:45:00-03:00"
+  },
+  {
+   "summary": "Evento 5",
+   "id": "e5",
+   "start_iso": "2026-10-13T13:00:00-03:00",
+   "end_iso": "2026-10-13T13:45:00-03:00"
+  },
+  {
+   "summary": "Evento 6",
+   "id": "e6",
+   "start_iso": "2026-10-13T14:00:00-03:00",
+   "end_iso": "2026-10-13T14:45:00-03:00"
+  },
+  {
+   "summary": "Evento 7",
+   "id": "e7",
+   "start_iso": "2026-10-13T15:00:00-03:00",
+   "end_iso": "2026-10-13T15:45:00-03:00"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "t0",
+   "title": "Tarefa 0",
+   "due": "2026-10-13",
+   "status": "needsAction"
+  },
+  {
+   "id": "t1",
+   "title": "Tarefa 1",
+   "due": "2026-10-13",
+   "status": "needsAction"
+  },
+  {
+   "id": "t2",
+   "title": "Tarefa 2",
+   "due": "2026-10-13",
+   "status": "needsAction"
+  },
+  {
+   "id": "t3",
+   "title": "Tarefa 3",
+   "due": "2026-10-13",
+   "status": "needsAction"
+  },
+  {
+   "id": "t4",
+   "title": "Tarefa 4",
+   "due": "2026-10-13",
+   "status": "needsAction"
+  }
+ ],
+ "emails": [
+  {
+   "id": "m0",
+   "from": "Pessoa 0 <p0@exemplo.com>",
+   "subject": "Assunto 0",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T00:00:00Z"
+  },
+  {
+   "id": "m1",
+   "from": "Pessoa 1 <p1@exemplo.com>",
+   "subject": "Assunto 1",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T01:00:00Z"
+  },
+  {
+   "id": "m2",
+   "from": "Pessoa 2 <p2@exemplo.com>",
+   "subject": "Assunto 2",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T02:00:00Z"
+  },
+  {
+   "id": "m3",
+   "from": "Pessoa 3 <p3@exemplo.com>",
+   "subject": "Assunto 3",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T03:00:00Z"
+  },
+  {
+   "id": "m4",
+   "from": "Pessoa 4 <p4@exemplo.com>",
+   "subject": "Assunto 4",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T04:00:00Z"
+  },
+  {
+   "id": "m5",
+   "from": "Pessoa 5 <p5@exemplo.com>",
+   "subject": "Assunto 5",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T05:00:00Z"
+  },
+  {
+   "id": "m6",
+   "from": "Pessoa 6 <p6@exemplo.com>",
+   "subject": "Assunto 6",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T06:00:00Z"
+  },
+  {
+   "id": "m7",
+   "from": "Pessoa 7 <p7@exemplo.com>",
+   "subject": "Assunto 7",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T07:00:00Z"
+  },
+  {
+   "id": "m8",
+   "from": "Pessoa 8 <p8@exemplo.com>",
+   "subject": "Assunto 8",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T08:00:00Z"
+  }
+ ],
+ "commitments": [
+  {
+   "id": 100,
+   "type": "promise",
+   "title": "Promessa 0",
+   "source_label": "Contato 0",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 101,
+   "type": "promise",
+   "title": "Promessa 1",
+   "source_label": "Contato 1",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 102,
+   "type": "promise",
+   "title": "Promessa 2",
+   "source_label": "Contato 2",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 103,
+   "type": "promise",
+   "title": "Promessa 3",
+   "source_label": "Contato 3",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 104,
+   "type": "promise",
+   "title": "Promessa 4",
+   "source_label": "Contato 4",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 105,
+   "type": "promise",
+   "title": "Promessa 5",
+   "source_label": "Contato 5",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 106,
+   "type": "promise",
+   "title": "Promessa 6",
+   "source_label": "Contato 6",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 107,
+   "type": "promise",
+   "title": "Promessa 7",
+   "source_label": "Contato 7",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 108,
+   "type": "event",
+   "title": "Promessa 8",
+   "source_label": "Contato 8",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 109,
+   "type": "event",
+   "title": "Promessa 9",
+   "source_label": "Contato 9",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 110,
+   "type": "event",
+   "title": "Promessa 10",
+   "source_label": "Contato 10",
+   "event_date": null,
+   "raw_text": "x"
+  }
+ ],
+ "debts": [
+  {
+   "jid": "5511900000020@s.whatsapp.net",
+   "name": "Pessoa 0",
+   "age_h": 6,
+   "preview": "oi"
+  },
+  {
+   "jid": "5511900000021@s.whatsapp.net",
+   "name": "Pessoa 1",
+   "age_h": 7,
+   "preview": "oi"
+  },
+  {
+   "jid": "5511900000022@s.whatsapp.net",
+   "name": "Pessoa 2",
+   "age_h": 8,
+   "preview": "oi"
+  },
+  {
+   "jid": "5511900000023@s.whatsapp.net",
+   "name": "Pessoa 3",
+   "age_h": 9,
+   "preview": "oi"
+  }
+ ]
+}

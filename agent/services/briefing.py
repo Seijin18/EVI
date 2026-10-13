@@ -5,12 +5,15 @@ uma vira ``Section(error=...)`` e as demais seguem. Os itens são numerados de
 forma contínua (1..N) entre seções, para que "confirma 4" possa ser resolvido
 pelo snapshot ``morning_briefing`` (entrega/snapshot ficam em outra task).
 
-Conteúdo de terceiros (assunto/remetente, texto de compromisso, nome de evento)
-passa por ``wrap_external`` — nenhum LLM é construído aqui.
+Duas renderizações do mesmo conteúdo: ``Briefing.text`` (= ``text_model``) guarda
+o texto de terceiros delimitado por ``wrap_external`` — é o que vai para a memória da
+sessão/LLM; ``Briefing.text_user`` é o que o usuário lê no Telegram (HTML do Telegram,
+sem marcadores, todo texto dinâmico escapado). Nenhum LLM é construído aqui.
 """
 
 from __future__ import annotations
 
+import html
 import os
 import re
 import time
@@ -18,7 +21,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
-from typing import Any, Callable
+from email.utils import parseaddr
+from typing import Any, Callable, NamedTuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import db
@@ -26,11 +30,14 @@ from integrations.factory import get_integration
 from services.probe import _resource
 from services.soft_fail import soft_fail
 from services.tool_result import OAUTH, ToolResult, parse_windmill_result
-from services.untrusted import wrap_external
+from services.untrusted import plain_external, strip_markers, wrap_external
 from tools.calendar_time import evi_timezone, now_local
 
 MAX_CHARS = 4000
 LIMITS = {"calendar": 8, "tasks": 5, "email": 3, "whatsapp": 5, "names": 3}
+MAX_LINES = 25  # orçamento de linhas do texto do usuário (SCN-UX-04)
+# Seções que viram linha-resumo primeiro (menor prioridade primeiro); a ordem de exibição não muda.
+COLLAPSE_ORDER = ("email", "tasks", "calendar", "names", "whatsapp")
 _EMAIL_FETCH = 15
 _EMAIL_DROP_LABELS = frozenset({"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES"})
 _NOREPLY_RE = re.compile(r"no-?reply", re.IGNORECASE)
@@ -46,6 +53,7 @@ class BriefItem:
     text: str  # linha já formatada; campos de terceiros já delimitados
     ref: dict  # {"kind": "commitment", "id": 12} | {"kind": "email", "id": "18f…"} | …
     group: str = ""  # sub-rótulo dentro da seção (WhatsApp com reply-debts); "" = sem grupo
+    user: str = ""  # linha para o usuário (HTML do Telegram, escapada); "" = derivar de ``text``
 
 
 @dataclass(frozen=True)
@@ -56,19 +64,118 @@ class Section:
     error: str = ""  # motivo legível quando a fonte falhou
     more: int = 0  # itens omitidos pelo limite da seção ("+N")
     group_more: dict = field(default_factory=dict)  # grupo -> omitidos ("+N" por grupo)
+    collapsed: bool = False  # regra de volume: a seção vira uma linha-resumo
+    total: int = 0  # itens da seção antes de colapsar (só vale com ``collapsed``)
+
+    def count(self) -> int:
+        """Todos os itens da seção, visíveis ou não."""
+        if self.collapsed:
+            return self.total
+        return len(self.items) + self.more + sum(self.group_more.values())
 
 
 @dataclass(frozen=True)
 class Briefing:
-    text: str
+    text: str  # = text_model: texto de terceiros delimitado (memória da sessão/LLM)
     sections: list[Section]
     items: list[BriefItem]
+    text_user: str = ""  # HTML do Telegram, sem marcadores; "" = derivar de ``text``
+
+    @property
+    def text_model(self) -> str:
+        return self.text
 
 
 _TITLES = {
     "calendar": "Agenda", "tasks": "Tarefas", "email": "E-mail", "whatsapp": "WhatsApp",
     "names": 'Conversas sem nome (responda "nomeia N <nome>" ou "ignora N")',
 }
+
+
+class Row(NamedTuple):
+    """Uma linha coletada: ``text`` marcado (modelo) e ``user`` limpo (HTML do Telegram)."""
+
+    text: str
+    ref: dict
+    user: str = ""
+    group: str = ""
+
+
+_WD_ABBR = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
+
+def _esc(text: str) -> str:
+    return html.escape(text, quote=False)
+
+
+def _bold(text: str) -> str:
+    return f"<b>{_esc(text)}</b>"
+
+
+def _clean(text: str | None, max_chars: int = _FIELD_MAX) -> str:
+    """Texto de terceiros para o usuário, escapado (nunca vira formatação)."""
+    return _esc(plain_external(text, max_chars))
+
+
+def _user_from_model(text: str, bold_head: bool = False) -> str:
+    """Linha do usuário derivada da marcada (fontes que só entregam ``text``)."""
+    flat = " ".join(strip_markers(text).split())
+    if bold_head and " — " in flat:
+        head, _, rest = flat.partition(" — ")
+        return f"{_bold(head)} · {_esc(rest)}"
+    return _esc(flat)
+
+
+def _as_row(raw: tuple, key: str) -> Row:
+    if isinstance(raw, Row):
+        return raw
+    group = raw[2] if len(raw) > 2 else ""
+    return Row(raw[0], raw[1], _user_from_model(raw[0], bold_head=key == "names"), group)
+
+
+def _short_due(d: date, today: date) -> str:
+    delta = (d - today).days
+    if delta < 0:
+        return f"venceu {d.strftime('%d/%m')}"
+    if delta == 0:
+        return "até hoje"
+    if delta == 1:
+        return "até amanhã"
+    if delta < 7:
+        return f"até {_WD_ABBR[d.weekday()]}"
+    return f"até {d.strftime('%d/%m')}"
+
+
+def _short_day(d: date, today: date) -> str:
+    delta = (d - today).days
+    if delta == 0:
+        return "hoje"
+    if delta == 1:
+        return "amanhã"
+    if 1 < delta < 7:
+        return _WD_ABBR[d.weekday()]
+    return d.strftime("%d/%m")
+
+
+def _short_age(hours: float) -> str:
+    if hours < 1:
+        return "agora"
+    if hours < 24:
+        return f"{int(hours)} h"
+    if hours < 48:
+        return "ontem"
+    return f"{int(hours // 24)} d"
+
+
+def _who_label(name: str) -> str:
+    """Nome para o usuário: JID/@lid cru nunca aparece."""
+    name = (name or "").strip()
+    if "@" not in name:
+        return name
+    digits = re.sub(r"\D", "", name.partition("@")[0])
+    if name.endswith("@s.whatsapp.net") and digits:
+        return f"+{digits}"
+    return "contato sem nome"
 
 
 def _tz() -> ZoneInfo:
@@ -129,7 +236,7 @@ def _parse_iso(value: str, tz: ZoneInfo) -> datetime | None:
     return dt.astimezone(tz) if dt.tzinfo else dt.replace(tzinfo=tz)
 
 
-def _collect_calendar(day: date) -> list[tuple[str, dict]]:
+def _collect_calendar(day: date) -> list[Row]:
     payload = {
         "gcal": _resource("calendar"),
         "calendar_id": os.getenv("WINDMILL_CALENDAR_ID", "primary").strip() or "primary",
@@ -168,12 +275,13 @@ def _collect_calendar(day: date) -> list[tuple[str, dict]]:
         else:
             when = "dia todo"
         name = wrap_external(ev.get("summary") or "(sem título)", "agenda", _FIELD_MAX)
-        line = f"{when} {name}" + (" ⚠ conflito de horário" if i in conflicts else "")
-        rows.append((line, {"kind": "event", "id": ev.get("id") or ""}))
+        flag = " ⚠ conflito de horário" if i in conflicts else ""
+        user = f"{_esc(when)} {_clean(ev.get('summary') or '(sem título)')}{flag}"
+        rows.append(Row(f"{when} {name}{flag}", {"kind": "event", "id": ev.get("id") or ""}, user))
     return rows
 
 
-def _collect_tasks(day: date, overdue: bool) -> list[tuple[str, dict]]:
+def _collect_tasks(day: date, overdue: bool) -> list[Row]:
     payload = {"gtasks": _resource("tasks"), "max_results": 100, "show_completed": False}
     blob = _call(
         "list_tasks", payload, action="listar tarefas",
@@ -192,9 +300,10 @@ def _collect_tasks(day: date, overdue: bool) -> list[tuple[str, dict]]:
             continue
         title = wrap_external(t.get("title") or "(sem título)", "tarefa", _FIELD_MAX)
         tag = f" (venceu {due_d.strftime('%d/%m')})" if due_d < day else ""
-        rows.append((f"{title}{tag}", {"kind": "task", "id": t.get("id") or ""}, due_d))
-    rows.sort(key=lambda r: r[2])
-    return [(text, ref) for text, ref, _ in rows]
+        user = _clean(t.get("title") or "(sem título)") + (f" · venceu {due_d.strftime('%d/%m')}" if tag else "")
+        rows.append((Row(f"{title}{tag}", {"kind": "task", "id": t.get("id") or ""}, user), due_d))
+    rows.sort(key=lambda r: r[1])
+    return [row for row, _ in rows]
 
 
 def _msg_time(msg: dict) -> datetime | None:
@@ -232,7 +341,12 @@ def select_emails(messages: list[dict]) -> list[dict]:
     return kept  # sem datas: ordem da API (Gmail lista do mais recente ao mais antigo)
 
 
-def _collect_email() -> list[tuple[str, dict]]:
+def _sender_name(raw: str) -> str:
+    name, addr = parseaddr(raw or "")
+    return (name or addr or "").strip()
+
+
+def _collect_email() -> list[Row]:
     payload = {"max_messages": _EMAIL_FETCH, "gmail": _resource("gmail")}
     blob = _call(
         "summarize_inbox", payload, action="acessar o Gmail",
@@ -242,7 +356,10 @@ def _collect_email() -> list[tuple[str, dict]]:
     for m in select_emails(list(blob.get("messages") or [])):
         subj = wrap_external(m.get("subject") or "(sem assunto)", "email", _FIELD_MAX)
         sender = wrap_external(m.get("from") or "", "email", _FIELD_MAX)
-        rows.append((f"{subj} — {sender}", {"kind": "email", "id": m.get("id") or ""}))
+        who = _clean(_sender_name(str(m.get("from") or "")), 40)
+        what = _clean(m.get("subject") or "(sem assunto)", 70)
+        user = f"<b>{who}</b> · {what}" if who else what
+        rows.append(Row(f"{subj} — {sender}", {"kind": "email", "id": m.get("id") or ""}, user))
     return rows
 
 
@@ -252,14 +369,14 @@ GROUP_COMMITMENTS = "Combinados"
 GROUP_LIMIT = 3
 
 
-def _commitment_when(c: dict) -> str:
+def _commitment_date(c: dict) -> date | None:
     when = c.get("event_date") or c.get("due_date") or ""
     if when:
         try:
-            return date.fromisoformat(str(when)[:10]).strftime("%d/%m")
+            return date.fromisoformat(str(when)[:10])
         except ValueError:
-            return ""
-    return ""
+            return None
+    return None
 
 
 def _debt_age(hours: float) -> str:
@@ -268,29 +385,39 @@ def _debt_age(hours: float) -> str:
     return f"há {int(hours // 24)} d"
 
 
-def _collect_whatsapp() -> list[tuple]:
+def _collect_whatsapp(today: date | None = None) -> list[Row]:
     from services.whatsapp_processor import reply_debts_enabled
 
+    today = today or now_local().date()
     grouped = reply_debts_enabled()
-    rows: list[tuple] = []
-    debts: list[tuple] = []
-    promises: list[tuple] = []
+    rows: list[Row] = []
+    debts: list[Row] = []
+    promises: list[Row] = []
     for c in db.list_pending_commitments(limit=50):
         text = wrap_external(c.get("title") or c.get("raw_text") or "", "whatsapp", _FIELD_MAX)
         who = c.get("source_label") or c.get("source_chat") or ""
-        when = _commitment_when(c)
+        when_d = _commitment_date(c)
         line = text
         if who:
             line += f" — {wrap_external(who, 'whatsapp', 60)}"
-        if when:
-            line += f" ({when})"
+        if when_d:
+            line += f" ({when_d.strftime('%d/%m')})"
         ref = {"kind": "commitment", "id": c.get("id")}
+        is_promise = c.get("type") == "promise"
+        who_user = _who_label(who)
+        parts = []
+        if who_user:
+            parts.append(_bold(plain_external(who_user, 40)))
+        parts.append(_clean(c.get("title") or c.get("raw_text") or "", 60))
+        if when_d:
+            parts.append(_short_due(when_d, today) if is_promise else _short_day(when_d, today))
+        user = " · ".join(p for p in parts if p)
         if not grouped:
-            rows.append((line, ref))
-        elif c.get("type") == "promise":
-            promises.append((line, ref, GROUP_PROMISES))
+            rows.append(Row(line, ref, user))
+        elif is_promise:
+            promises.append(Row(line, ref, user, GROUP_PROMISES))
         else:
-            rows.append((line, ref, GROUP_COMMITMENTS))
+            rows.append(Row(line, ref, user, GROUP_COMMITMENTS))
     if not grouped:
         return rows
     from services.reply_debts import list_debts
@@ -300,7 +427,12 @@ def _collect_whatsapp() -> list[tuple]:
             f"{wrap_external(d.get('name') or d['jid'], 'whatsapp', 60)} — "
             f"{_debt_age(d['age_h'])}: {wrap_external(d.get('preview') or '', 'whatsapp', _FIELD_MAX)}"
         )
-        debts.append((line, {"kind": "reply_debt", "id": d["jid"]}, GROUP_DEBTS))
+        who_user = _who_label(d.get("name") or d["jid"]) or "contato sem nome"
+        preview = plain_external(d.get("preview") or "", 60)
+        user = f"{_bold(plain_external(who_user, 40))} · {_short_age(d['age_h'])}"
+        if preview:
+            user += f' · "{_esc(preview)}"'
+        debts.append(Row(line, {"kind": "reply_debt", "id": d["jid"]}, user, GROUP_DEBTS))
     return debts + promises + rows
 
 
@@ -313,37 +445,42 @@ def _collect_names(now: datetime) -> list[tuple[str, dict]]:
 # ---------------------------------------------------------------- assembly
 
 
-def _run_source(key: str, fn: Callable[[], list[tuple]]) -> Section:
+def _run_source(key: str, fn: Callable[[], list]) -> Section:
     title = _TITLES[key]
     try:
-        rows = fn()
+        rows = [_as_row(r, key) for r in fn()]
     except _SourceError as exc:
         return Section(key, title, error=str(exc))
     except Exception as exc:  # isolada: nunca derruba as outras fontes
         soft_fail(f"briefing.{key}", exc)
         return Section(key, title, error=f"falha inesperada ({str(exc)[:100]})")
-    if rows and len(rows[0]) == 3:  # grupos rotulados: teto e "+N" por grupo
+    if rows and rows[0].group:  # grupos rotulados: teto e "+N" por grupo
         items: list[BriefItem] = []
         group_more: dict = {}
         counts: dict = {}
-        for text, ref, group in rows:
-            counts[group] = counts.get(group, 0) + 1
-            if counts[group] <= GROUP_LIMIT:
-                items.append(BriefItem(0, text, ref, group))
+        for row in rows:
+            counts[row.group] = counts.get(row.group, 0) + 1
+            if counts[row.group] <= GROUP_LIMIT:
+                items.append(BriefItem(0, row.text, row.ref, row.group, row.user))
         for group, total in counts.items():
             if total > GROUP_LIMIT:
                 group_more[group] = total - GROUP_LIMIT
         return Section(key, title, items=items, group_more=group_more)
     limit = _email_max() if key == "email" else LIMITS[key]
-    items = [BriefItem(0, text, ref) for text, ref in rows[:limit]]
+    items = [BriefItem(0, r.text, r.ref, "", r.user) for r in rows[:limit]]
     return Section(key, title, items=items, more=max(0, len(rows) - limit))
 
 
-def _header(now: datetime, day: date, kind: str) -> str:
+def _header_parts(day: date, kind: str) -> tuple[str, str]:
     stamp = f"{_WEEKDAYS[day.weekday()]}, {day.strftime('%d/%m')}"
     if kind == "evening":
-        return f"Boa noite! Amanhã: {stamp}"
-    return f"Bom dia! {stamp}"
+        return "Boa noite!", f"Amanhã: {stamp}"
+    return "Bom dia!", stamp
+
+
+def _header(now: datetime, day: date, kind: str) -> str:
+    greeting, rest = _header_parts(day, kind)
+    return f"{greeting} {rest}"
 
 
 def _truncate(text: str) -> str:
@@ -354,39 +491,115 @@ def _truncate(text: str) -> str:
     return cut.rstrip() + "\n" + _TRUNC
 
 
-def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Briefing:
-    """Monta o briefing sem LLM. ``kind="evening"`` é a prévia de amanhã."""
-    now = now or now_local()
-    evening = kind == "evening"
-    day = now.date() + timedelta(days=1) if evening else now.date()
-    sources: list[tuple[str, Callable[[], list[tuple]]]] = [
-        ("calendar", lambda: _collect_calendar(day)),
-        ("tasks", lambda: _collect_tasks(day, overdue=not evening)),
-        ("email", _collect_email),
-        ("whatsapp", _collect_whatsapp),
-    ]
-    if kind == "morning" and now.weekday() == 0:  # weekly "Conversas sem nome" (SCN-NAME-05)
-        sources.append(("names", lambda: _collect_names(now)))
-    with ThreadPoolExecutor(max_workers=len(sources)) as pool:
-        futures = [pool.submit(_run_source, key, fn) for key, fn in sources]
-        raw_sections = [f.result() for f in futures]
+# Rótulos do texto do usuário. ``_NOUNS``: (singular, plural, pedido que lista tudo) — o
+# pedido é uma frase que o agente já entende (tools de listar), não um comando novo.
+_PLAIN_TITLES = {"calendar": "Agenda", "tasks": "Tarefas", "email": "E-mail",
+                 "whatsapp": "WhatsApp", "names": "Conversas sem nome"}
+_USER_TITLES = {"calendar": "📅 Agenda", "tasks": "✅ Tarefas", "email": "✉️ E-mail",
+                "whatsapp": "💬 WhatsApp", "names": "🏷 Conversas sem nome"}
+_GROUP_TITLES = {GROUP_DEBTS: "💬 Esperando sua resposta", GROUP_PROMISES: "🤝 Suas promessas",
+                 GROUP_COMMITMENTS: "📌 Combinados"}
+_NOUNS = {
+    "calendar": ("evento", "eventos", "minha agenda"),
+    "tasks": ("tarefa", "tarefas", "minhas tarefas"),
+    "email": ("e-mail", "e-mails", "resumo dos e-mails"),
+    "whatsapp": ("pendência do WhatsApp", "pendências do WhatsApp", "pendências do WhatsApp"),
+    "names": ("conversa sem nome", "conversas sem nome", "conversas sem nome"),
+    GROUP_DEBTS: ("conversa", "conversas", "quem está esperando minha resposta"),
+    GROUP_PROMISES: ("promessa", "promessas", "minhas promessas"),
+    GROUP_COMMITMENTS: ("combinado", "combinados", "meus compromissos"),
+}
 
-    n = 0
-    sections: list[Section] = []
-    for sec in raw_sections:
-        numbered = []
-        for it in sec.items:
-            n += 1
-            numbered.append(replace(it, n=n))
-        sections.append(replace(sec, items=numbered))
-    items = [it for sec in sections for it in sec.items]
 
-    lines = [_header(now, day, kind)]
-    if not items and not any(s.error for s in sections):
+def _more_text(n: int, key: str) -> str:
+    sing, plur, ask = _NOUNS[key]
+    return f'+{n} {sing if n == 1 else plur} — peça "{ask}"'
+
+
+def _summary_text(sec: Section) -> str:
+    """Linha-resumo de uma seção colapsada pela regra de volume."""
+    sing, plur, ask = _NOUNS[sec.key]
+    n = sec.count()
+    return f'{n} {sing if n == 1 else plur} — peça "{ask}"'
+
+
+def _item_user_line(it: BriefItem) -> str:
+    return f"{it.n}. {it.user or _user_from_model(it.text)}"
+
+
+def _user_section_lines(sec: Section) -> list[str]:
+    """Linhas do usuário (HTML do Telegram) de uma seção; [] se vazia."""
+    if sec.error:
+        return [f"⚠ {_esc(_PLAIN_TITLES[sec.key])} indisponível — {_esc(strip_markers(sec.error))}"]
+    if sec.collapsed:
+        emoji = _USER_TITLES[sec.key].split(" ", 1)[0]
+        return [f"{emoji} {_esc(_summary_text(sec))}"]
+    if not sec.items:
+        return []
+    grouped = any(it.group for it in sec.items)
+    lines = [] if grouped else [_bold(_USER_TITLES[sec.key])]
+    cur = None
+    for i, it in enumerate(sec.items):
+        if it.group and it.group != cur:
+            if cur is not None:
+                lines.append("")
+            cur = it.group
+            lines.append(_bold(_GROUP_TITLES.get(cur, cur)))
+        lines.append(_item_user_line(it))
+        nxt = sec.items[i + 1].group if i + 1 < len(sec.items) else None
+        if it.group and nxt != it.group and sec.group_more.get(it.group):
+            lines.append(_esc(_more_text(sec.group_more[it.group], it.group)))
+    if sec.more:
+        lines.append(_esc(_more_text(sec.more, sec.key)))
+    return lines
+
+
+def volume_lines(sections: list[Section]) -> int:
+    """Linhas não vazias do texto do usuário (cabeçalho + seções + rodapé)."""
+    body = sum(1 for s in sections for ln in _user_section_lines(s) if ln)
+    has_items = any(s.items for s in sections)
+    return 1 + body + (1 if has_items else 0)
+
+
+def fit_volume(sections: list[Section], budget: int = MAX_LINES) -> list[Section]:
+    """Regra de volume (SCN-UX-04): acima de ~``budget`` linhas, seções de menor prioridade
+    viram uma linha-resumo com o pedido que as lista. Pura; mantém ordem e itens das demais."""
+    out = list(sections)
+    for key in COLLAPSE_ORDER:
+        if volume_lines(out) <= budget:
+            break
+        for i, sec in enumerate(out):
+            if sec.key == key and sec.items and not sec.error and not sec.collapsed:
+                out[i] = replace(sec, items=[], more=0, group_more={}, collapsed=True, total=sec.count())
+    return out
+
+
+def _footer(items: list[BriefItem]) -> str:
+    """Comandos de resposta válidos para os tipos de item mostrados (um número de exemplo cada)."""
+    first: dict = {}
+    for it in items:
+        first.setdefault(it.ref.get("kind"), it.n)
+    parts: list[str] = []
+    if "commitment" in first:
+        parts += [f"confirma {first['commitment']}", f"dispensa {first['commitment']}"]
+    if "reply_debt" in first:
+        parts.append(f"respondido {first['reply_debt']}")
+    if "name_prompt" in first:
+        parts += [f"nomeia {first['name_prompt']} Nome", f"ignora {first['name_prompt']}"]
+    return f"<i>Responda: {_esc(' · '.join(parts))}</i>" if parts else ""
+
+
+def _render_model(header: str, sections: list[Section], free_day: bool) -> str:
+    """Texto para a sessão/LLM: terceiros delimitados por ``wrap_external``."""
+    lines = [header]
+    if free_day:
         lines.append(_FREE_DAY)
     for sec in sections:
         if sec.error:
             lines.append(f"⚠ {sec.title} indisponível — {sec.error}")
+        elif sec.collapsed:
+            lines.append(f"\n{sec.title}")
+            lines.append(_summary_text(sec))
         elif sec.items:
             lines.append(f"\n{sec.title}")
             cur = None
@@ -400,7 +613,63 @@ def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Bri
                     lines.append(f"+{sec.group_more[it.group]}")
             if sec.more:
                 lines.append(f"+{sec.more}")
-    return Briefing(_truncate("\n".join(lines)), sections, items)
+    return _truncate("\n".join(lines))
+
+
+def _render_user(day: date, kind: str, sections: list[Section], items: list[BriefItem],
+                 free_day: bool) -> str:
+    """Texto para o usuário: HTML do Telegram, sem marcadores, dinâmico escapado."""
+    greeting, rest = _header_parts(day, kind)
+    lines = [f"{_bold(greeting)} {_esc(rest)}"]
+    if free_day:
+        lines.append(_esc(_FREE_DAY))
+    prev_short = False  # avisos e resumos de uma linha ficam colados, sem linha em branco
+    for sec in sections:
+        sec_lines = _user_section_lines(sec)
+        short = bool(sec.error or sec.collapsed)
+        if sec_lines and not (short and prev_short) and not sec.error:
+            lines.append("")
+        if sec_lines:
+            prev_short = short
+        lines.extend(sec_lines)
+    footer = _footer(items)
+    if footer:
+        lines += ["", footer]
+    return _truncate("\n".join(lines))
+
+
+def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Briefing:
+    """Monta o briefing sem LLM. ``kind="evening"`` é a prévia de amanhã."""
+    now = now or now_local()
+    evening = kind == "evening"
+    day = now.date() + timedelta(days=1) if evening else now.date()
+    sources: list[tuple[str, Callable[[], list]]] = [
+        ("calendar", lambda: _collect_calendar(day)),
+        ("tasks", lambda: _collect_tasks(day, overdue=not evening)),
+        ("email", _collect_email),
+        ("whatsapp", lambda: _collect_whatsapp(now.date())),
+    ]
+    if kind == "morning" and now.weekday() == 0:  # weekly "Conversas sem nome" (SCN-NAME-05)
+        sources.append(("names", lambda: _collect_names(now)))
+    with ThreadPoolExecutor(max_workers=len(sources)) as pool:
+        futures = [pool.submit(_run_source, key, fn) for key, fn in sources]
+        raw_sections = [f.result() for f in futures]
+
+    free_day = not any(s.items for s in raw_sections) and not any(s.error for s in raw_sections)
+    fitted = fit_volume(raw_sections)  # antes de numerar: só o que aparece recebe número
+    n = 0
+    sections: list[Section] = []
+    for sec in fitted:
+        numbered = []
+        for it in sec.items:
+            n += 1
+            numbered.append(replace(it, n=n))
+        sections.append(replace(sec, items=numbered))
+    items = [it for sec in sections for it in sec.items]
+
+    text_model = _render_model(_header(now, day, kind), sections, free_day)
+    text_user = _render_user(day, kind, sections, items, free_day)
+    return Briefing(text_model, sections, items, text_user)
 
 
 REPLY_WINDOW = timedelta(hours=3)
@@ -499,7 +768,11 @@ def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime |
     brief = assemble_briefing(kind, now)
     sections = {s.key: {"count": len(s.items), "error": s.error} for s in brief.sections}
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-    result = send_telegram_message(brief.text, chat_id or None)
+    # O usuário recebe o texto limpo (HTML); a memória/LLM guarda a versão marcada.
+    if brief.text_user:
+        result = send_telegram_message(brief.text_user, chat_id or None, parse_mode="HTML")
+    else:
+        result = send_telegram_message(strip_markers(brief.text), chat_id or None)
 
     ok = bool(result)
     try:
@@ -521,14 +794,14 @@ def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime |
 
         from services.session_memory import get_session_memory
 
-        get_session_memory(session_id).add(AIMessage(content=brief.text))
+        get_session_memory(session_id).add(AIMessage(content=brief.text_model))
     except Exception as exc:
         soft_fail("briefing.deliver.memory", exc)
     if os.getenv("DATABASE_URL"):
         # main._hydrate_memory recarrega a memória do Postgres a cada turno: sem isto
         # a primeira resposta apagaria o briefing do contexto.
         try:
-            db.save_message(session_id, "assistant", brief.text)
+            db.save_message(session_id, "assistant", brief.text_model)
         except Exception as exc:
             soft_fail("briefing.deliver.persist_message", exc)
     try:

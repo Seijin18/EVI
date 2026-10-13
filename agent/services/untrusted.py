@@ -22,6 +22,8 @@ _MARKER_RE = re.compile(
     r"[«<\[‹]{1,2}\s*/?\s*externo\b[^»>\]›\n]*[»>\]›]{1,2}",
     re.IGNORECASE,
 )
+# Só os marcadores que ``wrap_external`` emite («externo:fonte» / «/externo»); sem sósias ASCII.
+_WRAP_MARKER_RE = re.compile(r"«\s*/?\s*externo\b[^»\n]*»", re.IGNORECASE)
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f​-‏  ‪-‮⁠⁡⁢⁣⁤᠎﻿]")
 _SOURCE_BAD_RE = re.compile(r"[^a-z0-9_-]")
 
@@ -62,3 +64,34 @@ def wrap_external(text: str | None, source: str, max_chars: int = 500) -> str:
 
 def _sep(body: str) -> str:
     return "\n" if "\n" in body else " "
+
+
+def has_marker(text: str | None) -> bool:
+    """True se ``text`` ainda contém um marcador ``«externo:…»`` / ``«/externo»``."""
+    return bool(text) and _WRAP_MARKER_RE.search(text) is not None
+
+
+def strip_markers(text: str | None) -> str:
+    """Remove os marcadores de ``wrap_external`` e nada mais (conteúdo entre eles fica)."""
+    out = text or ""
+    for _ in range(10):  # remover um marcador pode juntar pedaços de outro
+        cleaned = _WRAP_MARKER_RE.sub("", out)
+        if cleaned == out:
+            break
+        out = cleaned
+    return out
+
+
+def plain_external(text: str | None, max_chars: int = 120) -> str:
+    """Texto de terceiros para o USUÁRIO: sem marcadores/controle, numa linha só.
+
+    Não escapa para nenhum formato (quem monta a mensagem escapa). Corta em palavra
+    com ``…`` quando passa de ``max_chars``.
+    """
+    body = " ".join(_neutralize(str(text)).split()) if text else ""
+    if max_chars > 0 and len(body) > max_chars:
+        cut = body[:max_chars]
+        if " " in cut and body[max_chars] != " ":
+            cut = cut[: cut.rfind(" ")]
+        body = cut.rstrip(" ,.;:-") + "…"
+    return body

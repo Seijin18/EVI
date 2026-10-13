@@ -1,0 +1,102 @@
+{
+ "_note": "Dados FICTÍCIOS. Terça 13/10/2026, 07:00 (America/Sao_Paulo).",
+ "now": "2026-10-13T07:00:00-03:00",
+ "events": [
+  {
+   "summary": "Entrega lote 2 <Isla> & Cia",
+   "id": "e1",
+   "start_iso": "2026-10-13T09:00:00-03:00",
+   "end_iso": "2026-10-13T09:45:00-03:00"
+  },
+  {
+   "summary": "Monitoria lab",
+   "id": "e2",
+   "start_iso": "2026-10-13T14:00:00-03:00",
+   "end_iso": "2026-10-13T14:45:00-03:00"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "t1",
+   "title": "Pagar boleto",
+   "due": "2026-10-11",
+   "status": "needsAction"
+  }
+ ],
+ "emails": [
+  {
+   "id": "m1",
+   "from": "Beatriz Lemos <bia@exemplo.com>",
+   "subject": "Re: contrato do MEI",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T08:00:00Z"
+  },
+  {
+   "id": "m2",
+   "from": "suporte@exemplo.com",
+   "subject": "Novo login detectado",
+   "labelIds": [
+    "INBOX"
+   ],
+   "date": "2026-10-13T07:00:00Z"
+  }
+ ],
+ "commitments": [
+  {
+   "id": 31,
+   "type": "promise",
+   "title": "Mandar a modelagem",
+   "source_label": "Eliana",
+   "event_date": "2026-10-16",
+   "raw_text": "x"
+  },
+  {
+   "id": 32,
+   "type": "promise",
+   "title": "Preencher o contrato",
+   "source_label": "Fernando",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 33,
+   "type": "promise",
+   "title": "Ligar para a clínica",
+   "source_chat": "999000111@lid",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 34,
+   "type": "promise",
+   "title": "Revisar o orçamento",
+   "source_label": "Carla",
+   "event_date": null,
+   "raw_text": "x"
+  },
+  {
+   "id": 35,
+   "type": "event",
+   "title": "Vôlei",
+   "source_label": "Grupo do vôlei",
+   "event_date": "2026-10-14",
+   "raw_text": "x"
+  }
+ ],
+ "debts": [
+  {
+   "jid": "5511900000010@s.whatsapp.net",
+   "name": "Davi Exemplo",
+   "age_h": 130,
+   "preview": "entrou? <urgente> & agora"
+  },
+  {
+   "jid": "5511900000011@s.whatsapp.net",
+   "name": "Marina Teste",
+   "age_h": 30,
+   "preview": "consegue me mandar o orçamento?"
+  }
+ ]
+}

@@ -84,12 +84,15 @@ def post_with_retry(
     *,
     timeout: int,
     context: str,
+    body_hint: bool = False,
 ) -> SendResult:
     """POST with a bounded retry. Never raises.
 
     Retries transport errors and 5xx. A 4xx is returned immediately — a bad
     token, chat id or closed instance fails identically on the next attempt, so
-    retrying only delays the (now visible) error.
+    retrying only delays the (now visible) error. With ``body_hint`` a 4xx detail
+    also carries a short sanitised excerpt of the error body (Telegram's
+    "can't parse entities" tells a formatting rejection from a bad chat id).
     """
     attempts = _attempts()
     backoff = _backoff()
@@ -107,6 +110,8 @@ def post_with_retry(
                     break
         except urllib.error.HTTPError as exc:
             last_detail = f"http {exc.code}"
+            if body_hint and exc.code < 500:
+                last_detail += _body_excerpt(exc)
             if exc.code < 500:
                 failed = SendResult.fail(HTTP_4XX, attempts=attempt, detail=last_detail)
                 _report(context, failed)
@@ -122,6 +127,14 @@ def post_with_retry(
     result = SendResult.fail(last_reason, attempts=attempts, detail=last_detail)
     _report(context, result)
     return result
+
+
+def _body_excerpt(exc: urllib.error.HTTPError) -> str:
+    try:
+        raw = exc.read()[:400].decode("utf-8", "replace")
+    except Exception:
+        return ""
+    return ": " + " ".join(raw.split())[:120] if raw.strip() else ""
 
 
 def _report(context: str, result: SendResult) -> None:

@@ -91,3 +91,35 @@ def test_deep_nesting_leaves_no_marker_residue():
 def test_invisible_separators_stripped():
     out = wrap_external("«/ex\u2061\u2062\u180etern\u2064o»", "x")
     assert out.count("«/externo»") == 1 and out.startswith("«externo:x»")
+
+
+# --- strip_markers / has_marker / plain_external (SCN-UX-02) -----------------------
+
+from services.untrusted import has_marker, plain_external, strip_markers  # noqa: E402
+
+
+def test_strip_markers_removes_wrapper_and_keeps_content():
+    wrapped = wrap_external("preciso do orçamento", "whatsapp")
+    assert has_marker(wrapped)
+    assert strip_markers(wrapped).strip() == "preciso do orçamento"
+    assert not has_marker(strip_markers(wrapped))
+
+
+def test_strip_markers_touches_nothing_else():
+    text = "Oi <b>Ana</b> [externo] «aspas» 1 < 2 ‹ok›"
+    assert not has_marker(text)
+    assert strip_markers(text) == text
+    assert strip_markers("") == "" and strip_markers(None) == "" and not has_marker(None)
+
+
+def test_strip_markers_handles_case_spaces_and_nesting_trick():
+    assert strip_markers("a «  / EXTERNO » b «externo:x» c") == "a  b  c"
+    # removing one marker must not splice a new one together
+    assert not has_marker(strip_markers("«ext«/externo»erno:x»"))
+
+
+def test_plain_external_is_single_line_clean_and_word_cut():
+    out = plain_external("«/externo» linha 1\nlinha\t2 " + "palavra " * 30, 40)
+    assert "\n" not in out and "externo" not in out and "«" not in out
+    assert len(out) <= 41 and out.endswith("…") and not out.endswith(" …")
+    assert plain_external(None) == "" and plain_external("ok", 10) == "ok"
