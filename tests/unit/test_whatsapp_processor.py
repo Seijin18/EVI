@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 import uuid
@@ -5,7 +6,7 @@ import uuid
 import pytest
 
 from services.message_sources import IncomingMessage
-from services.whatsapp_processor import Commitment, commitment_status_for, _resolve_date, _resolve_time, extract_commitment, process_fixture_file
+from services.whatsapp_processor import Commitment, commitment_status_for, _resolve_date, _resolve_time, extract_commitment, resolve_due, process_fixture_file
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests" / "fixtures" / "whatsapp" / "messages.jsonl"
@@ -53,6 +54,34 @@ def test_fixture_pipeline_matches_golden():
 def _ref():
     from datetime import datetime
     return datetime(2026, 6, 3, 9, 0, 0)  # Wednesday
+
+
+_DUE_REF = datetime(2026, 10, 12, 14, 0)  # Monday
+
+
+@pytest.mark.parametrize("expr,ref,expected", [
+    ("te entrego até dia 20", _DUE_REF, "2026-10-20"),
+    ("dia 5", _DUE_REF, "2026-11-05"),
+    ("dia 31", datetime(2026, 11, 12, 14, 0), None),  # Nov has 30 days
+    ("dia 31", datetime(2026, 12, 15, 14, 0), "2026-12-31"),
+    ("dia 5", datetime(2026, 12, 15, 14, 0), "2027-01-05"),
+    ("fim de semana", _DUE_REF, "2026-10-17"),
+    ("final de semana", datetime(2026, 10, 17, 9, 0), "2026-10-17"),
+    ("semana que vem", _DUE_REF, "2026-10-19"),
+    ("próxima semana", _DUE_REF, "2026-10-19"),
+    ("às 19h", _DUE_REF, "2026-10-12"),
+    ("as 19:30", _DUE_REF, "2026-10-12"),
+    ("mais tarde", _DUE_REF, "2026-10-12"),
+    ("à noite", _DUE_REF, "2026-10-12"),
+    ("amanhã", _DUE_REF, "2026-10-13"),
+    ("sexta", _DUE_REF, "2026-10-16"),
+    ("até sexta", _DUE_REF, "2026-10-16"),
+    ("dia 15/11", _DUE_REF, "2026-11-15"),
+    ("", _DUE_REF, None),
+    ("qualquer hora", _DUE_REF, None),
+])
+def test_resolve_due(expr, ref, expected):
+    assert resolve_due(expr, ref) == expected
 
 
 def test_resolve_date_hoje():

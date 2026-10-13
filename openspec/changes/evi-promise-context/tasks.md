@@ -22,7 +22,7 @@
   - Files: `agent/services/llm_structured.py`, `tests/unit/test_llm_structured.py`, `.env.example`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_llm_structured.py -q`
 
-- [ ] 2.2 `resolve_due(expr, ref)`: "dia 20", "fim de semana", "semana que vem", "às 19h" (hoje), além do que `_resolve_date` já cobre
+- [x] 2.2 `resolve_due(expr, ref)`: "dia 20", "fim de semana", "semana que vem", "às 19h" (hoje), além do que `_resolve_date` já cobre
   - SCN-DEBT-04, SCN-DEBT-14
   - Files: `agent/services/whatsapp_processor.py`, `tests/unit/test_whatsapp_processor.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_whatsapp_processor.py -q`

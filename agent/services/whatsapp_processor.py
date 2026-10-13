@@ -150,6 +150,52 @@ def _resolve_date(text: str, ref: datetime) -> Optional[str]:
     return None
 
 
+def _fold(text: str) -> str:
+    """Lowercase and strip accents."""
+    import unicodedata
+
+    nfd = unicodedata.normalize("NFD", text.lower())
+    return "".join(c for c in nfd if unicodedata.category(c) != "Mn")
+
+
+_DUE_DAY_N_RE = re.compile(r"\bdia\s+(\d{1,2})\b(?!\s+de\b)")
+_DUE_SLASH_RE = re.compile(r"\d{1,2}/\d{1,2}")
+_DUE_TODAY_RE = re.compile(r"\b(?:as|a)\s+\d{1,2}\s*(?:h|:)|\bmais tarde\b|\bhoje\b|\ba noite\b")
+
+
+def resolve_due(expr: str, ref: datetime) -> Optional[str]:
+    """ISO date (YYYY-MM-DD) for a spoken due expression, or None.
+
+    Extends _resolve_date with "dia N", "fim de semana", "semana que vem" and
+    same-day hints ("às 19h", "mais tarde", "à noite").
+    """
+    if not expr or not expr.strip():
+        return None
+    e = _fold(expr)
+    m = _DUE_DAY_N_RE.search(e)
+    if m and not _DUE_SLASH_RE.search(e):
+        day, year, month = int(m.group(1)), ref.year, ref.month
+        if day < ref.day:
+            month += 1
+            if month == 13:
+                year, month = year + 1, 1
+        try:
+            from datetime import date as _date
+            return _date(year, month, day).isoformat()
+        except ValueError:
+            return None
+    if "semana que vem" in e or "proxima semana" in e:
+        return (ref + timedelta(days=7 - ref.weekday())).date().isoformat()
+    if "fim de semana" in e or "final de semana" in e:
+        return (ref + timedelta(days=(5 - ref.weekday()) % 7)).date().isoformat()
+    resolved = _resolve_date(expr, ref)
+    if resolved:
+        return resolved
+    if _DUE_TODAY_RE.search(e):
+        return ref.date().isoformat()
+    return None
+
+
 def _resolve_time(text: str) -> Optional[str]:
     """Return HH:MM from explicit time or period-of-day, or None."""
     m = _TIME_RE.search(text)
