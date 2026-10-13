@@ -17,7 +17,7 @@
   - Files: `docs/security/threat-model.md`
   - Verify: revisão com o usuário (documento aprovado no chat)
 
-- [ ] 2.2 `scripts/evi-security-scan` (pip-audit, segredos no histórico, `ruff --select S`, binds, permissões, rotas sem auth) e primeira execução
+- [x] 2.2 `scripts/evi-security-scan` (pip-audit, segredos no histórico, `ruff --select S`, binds, permissões, rotas sem auth) e primeira execução
   - SCN-SEC-03
   - Files: `scripts/evi-security-scan`, `agent/testing/security_scan.py`, `tests/unit/test_security_scan.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_security_scan.py -q` e `./scripts/evi-security-scan`

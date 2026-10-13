@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# EVI read-only security scan (binds, default secrets, perms, git history, ruff S,
+# pip-audit, images, unauthenticated routes). Exit 1 on any FAIL.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export PYTHONPATH="${ROOT}/agent:${PYTHONPATH:-}"
+PY="${ROOT}/.venv/bin/python"
+[ -x "$PY" ] || PY=python3
+exec "$PY" -m testing.security_scan --root "$ROOT" "$@"
