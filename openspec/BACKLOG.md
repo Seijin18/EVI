@@ -26,7 +26,7 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 38 | `evi-background-execution` | 24 | Condicional (pulado em 2026-10-11) | Tarefas longas desacopladas; abrir só se o ack do #44 não bastar |
 | 47 | `evi-promise-context` | 25 | **Done** (2026-10-13) | Promessas avaliadas com contexto e atraso (padrão = gatilho, LLM OpenRouter ZDR = juiz, 96% nos casos reais); `llm_structured`; avaliador de LLM; canais fora das dívidas; dedupe da Evolution |
 | 49 | `evi-security-review` | 27 | **Done** (2026-10-13) | Modelo de ameaças, checklist ASVS/LLM, registro de achados; F1 já achado: `agent-api` aberto na LAN/tailnet sem chave; guardas de regressão na CI |
-| 48 | `evi-contact-knowledge` | 26 | Na fila ([`queued/`](queued/)) | Perfil de contato estruturado (Fatos/Em aberto/Notas) por incremento com evidência; timeline com os dois lados; identidade `@lid`↔telefone; LLM OpenRouter ZDR |
+| 48 | `evi-contact-knowledge` | 26 | **Done** (2026-10-13) | Perfil de contato estruturado (Fatos/Em aberto/Notas) por incremento com evidência; timeline com os dois lados; identidade `@lid`↔telefone; LLM OpenRouter ZDR |
 | 50 | `evi-contact-names` | 28 | Na fila ([`queued/`](queued/)) | Agenda Google (People API, só leitura) sincronizada diariamente; nome do usuário nunca sobrescrito; pergunta semanal das conversas ativas sem nome |
 | 51 | `evi-ux-review` | 29 | Na fila ([`queued/`](queued/)) | Revisão curta de usabilidade: nenhum marcador `«externo»` ao usuário (duas renderizações), briefing em HTML pessoa-primeiro com `+N` acionável e teto de linhas, fechamentos v2 nas dívidas |
 

@@ -1578,7 +1578,7 @@ def merge_conversation_state(src_jid: str, dst_jid: str) -> bool:
                 return False
             t = "wa_conversation_state"
             cur.execute(
-                f"INSERT INTO {t} "
+                f"INSERT INTO {t} "  # noqa: S608 — `t` is the module-local constant table name; values are bound params
                 "(jid, last_in_at, last_in_preview, last_in_id, last_out_at, acknowledged_at) "
                 "VALUES (%s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (jid) DO UPDATE SET "

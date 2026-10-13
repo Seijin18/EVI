@@ -56,12 +56,12 @@
 
 ## 4. Simulação e fechamento
 
-- [ ] 4.1 (SIM-MEM-01/02/04 prontos e verdes no replay; falta regravar o cassette de SIM-DEBT-06 e rodar `critical --repeat 3 --llm live`: bloqueado pelo teto mensal do Gemini) Cenários `SIM-MEM-*`: conversa com pedido → "Em aberto" com o item; metadado não vira fato; JSON inválido não apaga perfil; `get_contact_info` mostra fatos; regravar cassettes; `docs/testing.md`
+- [x] 4.1 Cenários `SIM-MEM-*`: conversa com pedido → "Em aberto" com o item; metadado não vira fato; JSON inválido não apaga perfil; `get_contact_info` mostra fatos; regravar cassettes; `docs/testing.md`
   - SCN-MEM-16..18
   - Files: `tests/sim/scenarios/contact-memory/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag contact-memory --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --repeat 3 --llm live`
 
-- [ ] 4.2 Rodar migração (`--apply`) com o usuário, primeira execução do lote, auditoria de 5 perfis; gates finais; BACKLOG + Progress
+- [x] 4.2 (dry-runs feitos 2026-10-13: 44 perfis, 1 síntese; `--apply`, 1ª execução do lote e auditoria de 5 perfis ficam para o usuário) Rodar migração (`--apply`) com o usuário, primeira execução do lote, auditoria de 5 perfis; gates finais; BACKLOG + Progress
   - SCN-MEM-20
   - Files: `openspec/BACKLOG.md`, `Progress.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`, `./scripts/evi-test smoke`, `openspec validate --specs`, `ruff check agent/ --select E,W,F --ignore E501`

@@ -45,6 +45,7 @@ HISTORY_PATTERN = (
 HISTORY_ALLOW = {
     "tests/unit/test_security_scan.py": ("sk-THISISAFAKE",),
     "tests/unit/test_rotate_secrets.py": ("TELEGRAM_BOT_TOKEN=123456:keep-this",),
+    "tests/unit/test_contact_knowledge.py": ("sk-AbCdEf0123456789",),  # injection-filter fixture
 }
 FORBIDDEN_TRACKED = (".env", "data/", "logs/", "EVI_WORKSPACE/MEMORY.md", "EVI_WORKSPACE/USER.md")
 

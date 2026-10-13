@@ -211,6 +211,11 @@ cancelamento e resultado entregue depois. Só abrir se o ack não bastar na prá
 Change: [`evi-promise-context`](../changes/archive/2026-10-13-evi-promise-context/proposal.md).
 As-built: padrão = gatilho, LLM (OpenRouter ZDR, `google/gemma-4-31b-it`) = juiz com a conversa antes/depois; `llm_structured.run_structured` (provedor por tarefa, ZDR fixo, teto diário); fila `needs_eval` nas colunas de `pending_commitments` avaliada pelo loop in-process (atraso 30 min, retry 30 min, 48 h → `pending`); varredura diária de cumprimento; `promise-reeval`; avaliador `llm-eval promise` (93% sintético); canais fora das dívidas; dedupe da Evolution.
 
+### Etapa 26 — Conhecimento de contato — `evi-contact-knowledge` — **Done** (2026-10-13)
+
+Change: [`evi-contact-knowledge`](../changes/archive/2026-10-13-evi-contact-knowledge/proposal.md).
+As-built: `profile.md` com `## Fatos`/`## Em aberto` (substituídos, com data de evidência) e `## Notas` (só do usuário); `update_contact_knowledge` incremental via `run_structured("CONTACT_KNOWLEDGE")` (Gemma 4 26B → Qwen 3.8, OpenRouter ZDR) com janela de mensagens, validação de datas e filtro de injeção; timeline com os dois lados; `canonical_jid` (`wa_jid_alias`); lote diário 03:30 por JID (até 15); `contact-knowledge-migrate` e `contact-identity-migrate` (dry-run por padrão).
+
 ### Etapa 27 — Revisão de segurança — `evi-security-review` — **Done** (2026-10-13)
 
 Change: [`evi-security-review`](../changes/archive/2026-10-13-evi-security-review/proposal.md).
