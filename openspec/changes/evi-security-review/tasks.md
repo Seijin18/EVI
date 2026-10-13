@@ -22,14 +22,14 @@
   - Files: `scripts/evi-security-scan`, `agent/testing/security_scan.py`, `tests/unit/test_security_scan.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_security_scan.py -q` e `./scripts/evi-security-scan`
 
-- [ ] 2.3 Checklist §2.1–2.9 do design executado; `docs/security/findings.md` com todos os achados, evidência e severidade
+- [x] 2.3 Checklist §2.1–2.9 do design executado; `docs/security/findings.md` com todos os achados, evidência e severidade
   - SCN-SEC-02
   - Files: `docs/security/findings.md`, `docs/security/threat-model.md`
   - Verify: todo item do checklist tem evidência e resultado; revisão com o usuário
 
 ## 3. Correções (críticos/altos)
 
-- [ ] 3.1 Rede e Windmill: `127.0.0.1:8001` (ou Tailscale com auth), credenciais do Windmill verificadas pelo usuário, `DOCKER-USER`/firewall conforme threat model
+- [x] 3.1 (bind 127.0.0.1 feito; credenciais do Windmill = ação do usuário F12) Rede e Windmill: `127.0.0.1:8001` (ou Tailscale com auth), credenciais do Windmill verificadas pelo usuário, `DOCKER-USER`/firewall conforme threat model
   - SCN-SEC-01
   - Files: `docker-compose.yml`, `docs/security/findings.md`, `docs/remote-access.md`
   - Verify: `./scripts/evi-security-scan` (binds) e `./scripts/evi-test smoke`

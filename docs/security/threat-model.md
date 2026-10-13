@@ -84,16 +84,16 @@ instrução); **TB5** processo ↔ disco.
 | Chat de controle WhatsApp | via webhook | `parse_control_jids()` (`EVI_WHATSAPP_CONTROL_JIDS`) → `/chat` com canal `whatsapp_control` | Confiança no JID informado pela Evolution; spoofing de `fromMe`/JID: **a verificar** |
 | Ferramentas de escrita | LLM | `write_guard`: allowlist por canal (`WRITE_TOOLS` × `USER_CHANNELS`={telegram, whatsapp_control, api}); deleção em duas etapas (token, turno seguinte, confirmação literal, TTL 10 min, máx. 50) | Tools de envio de mensagem fora de `WRITE_TOOLS`? Tarefas novas (`llm_structured`) sem tools? — **a verificar** (2.6) |
 | Conteúdo de terceiros no prompt | LLM | `wrap_external` (marcadores neutralizados, NFKC, controle removido, truncado) | Cobertura em todos os caminhos (briefing, promessas, contato): **a verificar** (2.6) |
-| Windmill | **`0.0.0.0:8001`** (LAN + tailnet) | Login próprio | **F2 (alto)** aberto; credenciais/usuários/tokens: **a verificar** (2.8). `BASE_URL=http://localhost:8001` |
+| Windmill | `127.0.0.1:8001` (desde 2026-10-13) | Login próprio | F2 corrigido; credenciais/usuários/tokens: ação do usuário (F12); resource `gcloud` sem uso (F11). `BASE_URL=http://localhost:8001` |
 | Evolution API | `127.0.0.1:8082` | `AUTHENTICATION_API_KEY` | F3: default `evi-dev-key` no compose |
 | Postgres | `127.0.0.1:5433` | senha | F3: default `changeme`/`windmill` no exemplo; Windmill DB default `windmill` |
 | Qdrant | `127.0.0.1:6333` | `QDRANT__SERVICE__API_KEY` opcional | F3: sem chave hoje; F4: `latest` |
 | Neo4j | `127.0.0.1` (perfil `graph`) | senha | default `changeme` no compose |
 | Redis (EVI) | só rede Docker | nenhuma | Sem senha (aceitável sem porta) |
-| Redis de outro projeto (`whatbot-redis-1`) | **`0.0.0.0:6379`** | nenhuma (**a verificar**) | Fora do EVI mas no mesmo host/LAN — registrar |
-| Ollama (host) | **`*:11434`** (`OLLAMA_HOST=0.0.0.0`) | nenhuma | Qualquer um na LAN/tailnet usa GPU/modelos; sem dados persistentes. Necessário para a rede Docker — restringir à bridge |
-| SSH | `0.0.0.0:22` | **a verificar** (chave vs. senha) | Fora do compose; relevante para o túnel (§6) |
-| Firewall | `ufw` instalado | Docker ignora `ufw` em portas publicadas | Regras/`DOCKER-USER`: **a verificar** (2.1) |
+| Outro projeto (WhatBot) | **`0.0.0.0`**: Redis `:6379` (sem senha, confirmado), Windmill `:8000`, Evolution `:8080`, ingress `:8090` | nenhuma no Redis | F10 — fora do EVI, ação do usuário |
+| Ollama (host) | **`*:11434`** (`OLLAMA_HOST=0.0.0.0`) | nenhuma | **F5 (alto)**: responde na LAN e tailnet (pull/delete de modelos, GPU). Containers chegam por `host.docker.internal`=`172.17.0.1` → bind em `172.17.0.1:11434` (ação do usuário) |
+| SSH | `0.0.0.0:22` (`ssh.socket`) | aceita `publickey,password` | F9: desligar senha (ação do usuário); relevante para o túnel (§6) |
+| Firewall | `ufw` instalado mas `ENABLED=no` | nenhum | F9; Docker ignoraria `ufw` nas portas publicadas de qualquer forma — o controle é o bind `127.0.0.1` |
 | Logs em disco | `logs/` (775) | gitignored | `telegram.jsonl`, `evolution_webhook.jsonl` com conteúdo integral; sem retenção; permissões abertas ao grupo (spec: 700) |
 | Dados em disco | `data/`, `EVI_WORKSPACE/` (775) | gitignored | Permissões (spec: 700); backups em `data/backups/` sem cifra |
 | `.env` | 600 | gitignored | Presença no histórico git: **a verificar** (2.3) |
@@ -143,17 +143,28 @@ Revisão leve (registrar no change e atualizar §2/§5) sempre que um change:
 - passar a gravar nova categoria de dado de terceiros em disco ou log;
 - adicionar container/imagem ou integração OAuth com escopo novo.
 
-## Hipóteses a validar na revisão (2.3)
+## Hipóteses da revisão (2.3) — resultados
 
-1. Docker publica `:8001` por fora do `ufw`; `DOCKER-USER` vazio; ACLs da tailnet permitem todos os nós ao host (§2 item 1).
-2. Ollama `0.0.0.0:11434`, SSH `:22` e `whatbot-redis` `:6379` respondem da LAN/tailnet; SSH aceita senha? (§2 item 1).
-3. Nenhuma rota além de `/`, `/health` (e `/metrics`) responde sem chave; `/metrics` não expõe dado sensível (§2 item 2).
-4. `/run-task` sem turno não executa `delete_emails*` sem confirmação e não permite envio arbitrário (§2 item 2 e 6).
-5. `TELEGRAM_CHAT_ID` está definido em produção (allowlist não está em fail-open) (§2 item 2).
-6. JID de controle não pode ser forjado por mensagem de terceiro (`fromMe`/`remoteJidAlt`) (§2 item 2).
-7. `.env` nunca entrou no histórico git; nenhum segredo aparece em `logs/*.jsonl` (§2 item 3).
-8. Senhas padrão (`evi-dev-key`, `changeme`, `windmill`) seguem em uso; `logs/`, `data/`, `EVI_WORKSPACE/` estão 775 (§2 item 3).
-9. `pip-audit`/`trivy` acham CVE alto em dependências ou imagens `latest`/`main` (§2 item 4).
-10. `/jobs/import-contacts` aceita qualquer path legível no container; não há `shell=True`/SQL por string em entrada externa (§2 item 5).
-11. Todo conteúdo de terceiros que chega ao LLM passa por `wrap_external`; tarefas `llm_structured` não chamam tools; chave Gemini de produção não é tier gratuito (§2 item 6).
-12. Escopo Gmail `modify` é necessário; Windmill sem usuários/tokens sobrando; webhooks sem limite de taxa/tamanho (§2 itens 8 e 9).
+Validadas em 2026-10-13 (task 2.3); evidência detalhada em [`findings.md`](findings.md).
+
+| # | Hipótese | Resultado |
+|---|---|---|
+| 1 | Docker publica `:8001` por fora do `ufw`; `DOCKER-USER` vazio; ACLs da tailnet abertas | **Confirmada, pior**: `ufw` está desligado (`/etc/ufw/ufw.conf` `ENABLED=no`) → F9. `:8001` já em `127.0.0.1` (F2 corrigido). `DOCKER-USER` não inspecionável sem root (irrelevante com binds em loopback). Tailnet: 1 peer (nó compartilhado), sem funnel; ACLs no console → ação do usuário (F26) |
+| 2 | Ollama, SSH e `whatbot-redis` respondem da LAN/tailnet; SSH aceita senha | **Confirmada**: Ollama `*:11434` responde na LAN e na tailnet (F5, alto); SSH aceita `publickey,password` (F9); `whatbot-redis` responde `INFO` sem senha, e o WhatBot também publica Windmill `:8000`, Evolution `:8080`, ingress `:8090` (F10) |
+| 3 | Só `/`, `/health` (e `/metrics`) sem chave; `/metrics` sem dado sensível | **Confirmada**: 16 rotas com chave, `/tools` sem chave → 401. `/metrics` só tem rotas/contagens/latência (sem PII), mas rótulo `path` cru e a spec delta não lista `/metrics` como pública → F14. `/health` expõe contagem de contatos (F25, aceito) |
+| 4 | `/run-task` sem turno não apaga sem confirmação nem envia mensagens | **Confirmada**: `delete_emails*` recusam sem sessão/turno; não há tool de envio registrada. Outras escritas executam direto (por desenho; a chave é o limite) |
+| 5 | `TELEGRAM_CHAT_ID` definido em produção | **Confirmada** (definido); código segue fail-open → F16 |
+| 6 | JID de controle não forjável | **Parcial**: não forjável por terceiro, mas o JID de controle é um **grupo** e o autor não é checado — qualquer participante comandaria o agente (hoje o grupo tem só o usuário) → F7 |
+| 7 | `.env` nunca no histórico; sem segredo em `logs/*.jsonl` | **Confirmada** (único achado do scanner é a fixture `sk-THIS…FAKE`, F24) |
+| 8 | Senhas padrão em uso; diretórios 775 | **Confirmada** → F3 (3.2), F17 |
+| 9 | CVE alto em dependências/imagens | **Confirmada quanto à existência**, nenhum alcançável: 5 CVEs Python (F19, bump compatível na 3.3); CVEs de imagem são do SO base (F4) |
+| 10 | `/jobs/import-contacts` lê qualquer path; sem `shell=True`/SQL com entrada | **Confirmada** → F20 (baixo); S608 são falsos positivos (F23) |
+| 11 | `wrap_external` total; `llm_structured` sem tools; Gemini não gratuito | `llm_structured` e demais tarefas de fundo **sem tools** (só `graph.py` faz `bind_tools`); `wrap_external` com uma lacuna desligada em produção (F22); **tier Gemini não verificável daqui** e o chat principal + embeddings usam Gemini → F6 (alto provisório, ação do usuário) |
+| 12 | Gmail `modify` necessário; Windmill limpo; webhooks sem limite | `modify` **necessário** (`messages.trash`); resource `gcloud` (`cloud-platform`) configurado e sem uso → F11; usuários/tokens/senha do Windmill → ação do usuário (F12); webhooks sem limite → aceito (F28) |
+
+Pontos "a verificar" das seções acima, resolvidos: tier Gemini → F6; escopos OAuth → F11;
+ACLs Tailscale → F26; outras rotas de envio WhatsApp → nenhuma tool de envio (só resposta
+ao chat de origem); spoofing do chat de controle → F7; credenciais do Windmill → F12;
+`ufw`/`DOCKER-USER` → F9; SSH → F9; `.env` no histórico → não; limite de taxa → F28.
+Recriação da Evolution com `WEBHOOK_GLOBAL_ENABLED=false`: confirmada no container em
+execução.
