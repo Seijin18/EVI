@@ -1,0 +1,15 @@
+summary: ''
+description: ''
+lock: '!inline f/integrations/list_contacts.script.lock'
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    gcontacts:
+      type: object
+      description: ''
+      default: null
+      format: resource-Any
+  required:
+    - gcontacts

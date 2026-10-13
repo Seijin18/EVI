@@ -1,0 +1,46 @@
+{
+  "pages": [
+    {
+      "connections": [
+        {
+          "resourceName": "people/c1000001",
+          "etag": "%EgcBAgkLLjc9",
+          "metadata": {"sources": [{"type": "CONTACT", "id": "1000001"}]},
+          "names": [{"displayName": "Joana Álvares", "givenName": "Joana", "familyName": "Álvares"}],
+          "phoneNumbers": [
+            {"value": "+55 11 91234-0001", "type": "mobile"},
+            {"value": "(11) 91234-0001", "type": "home"},
+            {"value": "+55 11 91234-0001", "type": "work"}
+          ],
+          "emailAddresses": [{"value": "joana.fake@example.invalid"}],
+          "addresses": [{"formattedValue": "Rua Ficticia 1, Sao Paulo"}],
+          "photos": [{"url": "https://example.invalid/photo1.jpg"}],
+          "biographies": [{"value": "nota privada ficticia"}]
+        },
+        {
+          "resourceName": "people/c1000002",
+          "names": [{"displayName": "Sem Telefone"}],
+          "emailAddresses": [{"value": "semtel@example.invalid"}]
+        }
+      ],
+      "nextPageToken": "TOKEN_PAGE_2",
+      "totalPeople": 4
+    },
+    {
+      "connections": [
+        {
+          "resourceName": "people/c1000003",
+          "phoneNumbers": [{"value": "+55 21 98888-0003"}],
+          "photos": [{"url": "https://example.invalid/photo3.jpg"}]
+        },
+        {
+          "resourceName": "people/c1000004",
+          "names": [{"displayName": "João Conceição"}],
+          "phoneNumbers": [{"value": "+55 21 97777-0004"}],
+          "organizations": [{"name": "Empresa Ficticia"}]
+        }
+      ],
+      "totalPeople": 4
+    }
+  ]
+}

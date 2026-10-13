@@ -1,6 +1,6 @@
 ## 1. Fonte
 
-- [ ] 1.1 Script Windmill `list_contacts` (People API paginada → só nome + telefones) + fixture + passo OAuth `gcontacts` no `windmill/README.md`
+- [x] 1.1 (Verify `evi-test windmill` não existe; coberto pelo teste unitário) Script Windmill `list_contacts` (People API paginada → só nome + telefones) + fixture + passo OAuth `gcontacts` no `windmill/README.md`
   - SCN-NAME-01
   - Files: `windmill/f/integrations/list_contacts.py`, `windmill/f/integrations/list_contacts.script.yaml`, `tests/fixtures/google/people_connections.json`, `windmill/README.md`, `tests/unit/test_windmill_list_contacts.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_windmill_list_contacts.py -q` e `./scripts/evi-test windmill`

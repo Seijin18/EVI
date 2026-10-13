@@ -21,6 +21,7 @@ Create workspace `evi` in Windmill UI (http://localhost:8001) or via CLI.
 | `f/integrations/schedule_event` | Google Calendar | `WINDMILL_WEBHOOK_CALENDAR` |
 | `f/integrations/create_task` | Google Tasks | `WINDMILL_WEBHOOK_TASKS` |
 | `f/integrations/list_tasks` | List Google Tasks | `WINDMILL_WEBHOOK_LIST_TASKS` |
+| `f/integrations/list_contacts` | Google Contacts (name + phones only) | `WINDMILL_GCONTACTS_RESOURCE` |
 | `f/integrations/summarize_inbox` | Gmail summary | `WINDMILL_WEBHOOK_EMAIL` |
 | `f/integrations/delete_emails` | Gmail trash by id | `WINDMILL_WEBHOOK_EMAIL_DELETE` |
 | `f/integrations/delete_emails_by_query` | Gmail trash by search q | `WINDMILL_WEBHOOK_EMAIL_DELETE_QUERY` |
@@ -249,11 +250,25 @@ Os schedules vivem no Windmill (não no repo). Valores recomendados (hora local)
 | `f/integrations/usage_signals` | `0 3 * * *` | sinais de uso diários |
 | `f/integrations/usage_report` | `30 0 * * 1` | segunda 00:30; reporta a semana ISO que acabou de fechar |
 | `f/integrations/contact_learn` | `30 3 * * *` | conhecimento dos contatos (até 15/dia, com mensagens novas); `contact_learn_daily.schedule.yaml` |
+| `f/integrations/list_contacts` | `15 3 * * *` | agenda Google → nomes dos contatos (quando o job de sync existir) |
 | `f/integrations/heartbeat` | conforme configurado no Windmill | POST `/jobs/heartbeat`; com o briefing ligado, apenas registra achados em log em vez de notificar |
 
 - `briefing` aceita `kind` (`morning`|`evening`) e `force` (reenvia mesmo já enviado no dia).
 - O job só envia se `EVI_BRIEFING_ENABLED=true` estiver no `.env` do agent-api.
 - Depois de alterar scripts, rode `wmill sync push`.
+
+## Google Contacts (`list_contacts`)
+
+Fornece nome + telefones da agenda Google (People API, somente leitura); nada além disso sai do script. O consentimento é manual (feito pelo usuário):
+
+1. Google Cloud Console (mesmo projeto do `gcal`) → **APIs & Services → Library** → habilitar **People API**.
+2. **OAuth consent screen** → adicionar o scope `https://www.googleapis.com/auth/contacts.readonly`.
+3. Windmill **Instance settings → OAuth** → adicionar **gcontacts** (mesmo Client ID/Secret do `gcal`; redirect `http://localhost:8001/oauth/callback/gcontacts`). O Windmill está só em loopback — ver [`docs/remote-access.md`](../docs/remote-access.md) para o túnel durante o consentimento.
+4. Workspace **Resources** → conectar o resource **gcontacts** (`u/<user>/gcontacts`).
+5. `.env`: `WINDMILL_GCONTACTS_RESOURCE=u/<user>/gcontacts`.
+6. `wmill sync push` (via `../scripts/wmill-sync.sh`).
+
+Respostas de erro: `{"error": ..., "reason": "oauth"}` (401/403, reconectar o resource) ou `"upstream_error"`.
 
 ## RAM note
 
