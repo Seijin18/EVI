@@ -25,10 +25,17 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 37 | `evi-prompt-injection-model` | 23 | **Done** (2026-10-11) | Confirmação de tool destrutiva, allowlist por origem do turno, corpus adversarial |
 | 38 | `evi-background-execution` | 24 | Condicional (pulado em 2026-10-11) | Tarefas longas desacopladas; abrir só se o ack do #44 não bastar |
 | 47 | `evi-promise-context` | 25 | **Done** (2026-10-13) | Promessas avaliadas com contexto e atraso (padrão = gatilho, LLM OpenRouter ZDR = juiz, 96% nos casos reais); `llm_structured`; avaliador de LLM; canais fora das dívidas; dedupe da Evolution |
-| 49 | `evi-security-review` | 27 | Na fila ([`queued/`](queued/)) — **próximo** | Modelo de ameaças, checklist ASVS/LLM, registro de achados; F1 já achado: `agent-api` aberto na LAN/tailnet sem chave; guardas de regressão na CI |
+| 49 | `evi-security-review` | 27 | **Done** (2026-10-13) | Modelo de ameaças, checklist ASVS/LLM, registro de achados; F1 já achado: `agent-api` aberto na LAN/tailnet sem chave; guardas de regressão na CI |
 | 48 | `evi-contact-knowledge` | 26 | Na fila ([`queued/`](queued/)) | Perfil de contato estruturado (Fatos/Em aberto/Notas) por incremento com evidência; timeline com os dois lados; identidade `@lid`↔telefone; LLM OpenRouter ZDR |
 | 50 | `evi-contact-names` | 28 | Na fila ([`queued/`](queued/)) | Agenda Google (People API, só leitura) sincronizada diariamente; nome do usuário nunca sobrescrito; pergunta semanal das conversas ativas sem nome |
 | 51 | `evi-ux-review` | 29 | Na fila ([`queued/`](queued/)) | Revisão curta de usabilidade: nenhum marcador `«externo»` ao usuário (duas renderizações), briefing em HTML pessoa-primeiro com `+N` acionável e teto de linhas, fechamentos v2 nas dívidas |
+
+## Itens da revisão de segurança (2026-10-13)
+
+Do [`docs/security/findings.md`](../docs/security/findings.md); abrir como change só se/quando fizer sentido:
+F13 backup diário (`pg_dump` evi/windmill/evolution + teste de restore); F18 `agent-api` sem root;
+F20 `/jobs/import-contacts` restrito a diretórios montados; F22 `wrap_external` no resumo diário com LLM;
+F11 (Calendar) escopos mínimos. Ações do usuário abertas: F5 Ollama, F6 plano Gemini, F9–F12, F26.
 
 **Deferido / cortado:** ver [`specs/roadmap.md`](specs/roadmap.md).
 

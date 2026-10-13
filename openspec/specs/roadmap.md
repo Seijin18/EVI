@@ -211,6 +211,11 @@ cancelamento e resultado entregue depois. Só abrir se o ack não bastar na prá
 Change: [`evi-promise-context`](../changes/archive/2026-10-13-evi-promise-context/proposal.md).
 As-built: padrão = gatilho, LLM (OpenRouter ZDR, `google/gemma-4-31b-it`) = juiz com a conversa antes/depois; `llm_structured.run_structured` (provedor por tarefa, ZDR fixo, teto diário); fila `needs_eval` nas colunas de `pending_commitments` avaliada pelo loop in-process (atraso 30 min, retry 30 min, 48 h → `pending`); varredura diária de cumprimento; `promise-reeval`; avaliador `llm-eval promise` (93% sintético); canais fora das dívidas; dedupe da Evolution.
 
+### Etapa 27 — Revisão de segurança — `evi-security-review` — **Done** (2026-10-13)
+
+Change: [`evi-security-review`](../changes/archive/2026-10-13-evi-security-review/proposal.md).
+As-built: modelo de ameaças e registro de 28 achados (`docs/security/`); `agent-api`/Windmill só em `127.0.0.1`; webhook global da Evolution desligado; segredos rotacionados por `evi-rotate-secrets`; autenticação obrigatória por padrão (`/metrics` incluído); grupo de controle do WhatsApp só aceita `from_me`; CVEs corrigidos; job `security` na CI (`evi-security-scan --ci`). Abertos para o usuário: Ollama (F5), plano Gemini (F6), SSH/ufw, WhatBot, OAuth, login do Windmill.
+
 ---
 
 ## Deferido (sem data)

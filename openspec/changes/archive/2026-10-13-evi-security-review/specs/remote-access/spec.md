@@ -12,6 +12,13 @@
 - **WHEN** the agent starts
 - **THEN** startup fails with an error naming the missing key
 
+### Requirement: Data services not published to the LAN
+Compose SHALL bind every published port (Postgres, Qdrant, Evolution API, Neo4j, `agent-api` and `windmill-server`) to `127.0.0.1`, and Qdrant SHALL accept `QDRANT_API_KEY` (passed to the container as `QDRANT__SERVICE__API_KEY` and sent as the `api-key` header by `rag_tool`, the health check and the RAG harness). Postgres SHALL use host port 5433 — 5432 is taken by an unrelated container on this machine — while the compose-internal port stays 5432. Remote access SHALL go through an SSH tunnel or `tailscale serve`, never through a wider bind.
+
+#### Scenario: SCN-OPS-04
+- **WHEN** `docker compose config` is inspected
+- **THEN** every published port carries host IP `127.0.0.1`
+
 ## ADDED Requirements
 
 ### Requirement: Services are not published beyond the host by default

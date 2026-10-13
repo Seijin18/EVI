@@ -151,6 +151,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **22** | **Confiabilidade percebida** | **Done** | `evi-perceived-reliability` — watchdog, `/ajuda`, ack, OAuth no turno |
 | **23** | **Injeção (restante)** | **Done** | `evi-prompt-injection-model` — confirmação de exclusão, allowlist por origem, chat do Telegram restrito |
 | **25** | **Promessas com contexto** | **Done** | `evi-promise-context` — gatilho por padrão + juiz LLM com contexto (ZDR), fila `needs_eval`, varredura de cumprimento, `llm_structured`, avaliador |
+| **27** | **Revisão de segurança** | **Done** | `evi-security-review` — modelo de ameaças, 28 achados, Windmill/agent-api em loopback, segredos rotacionados, auth por padrão, gates de CI |
 | 24 | Background (restante) | **—** | Condicional: só se o ack do #44 não bastar |
 
 ### Série Runtime v3 (17 Jun 2026) — Done

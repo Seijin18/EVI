@@ -17,11 +17,16 @@ The system SHALL accept Telegram updates at `POST /webhooks/telegram` and route 
 - **THEN** agent replies via Telegram `sendMessage` to the update `chat.id` (`telegram_sent: true`)
 
 ### Requirement: API key
-When `EVI_API_KEY` is set, protected routes SHALL require `X-Api-Key` header.
+`EVI_API_KEY` SHALL be required: the agent SHALL refuse to start without it unless explicitly running in an offline test mode, and every route except `/` and `/health` SHALL require a matching `X-Api-Key` header.
 
 #### Scenario: SCN-AUTH-01
 - **WHEN** protected route is called without matching key
 - **THEN** HTTP 401 is returned
+
+#### Scenario: SCN-SEC-05
+- **GIVEN** `EVI_API_KEY` is empty and no offline test mode is set
+- **WHEN** the agent starts
+- **THEN** startup fails with an error naming the missing key
 
 ### Requirement: Telegram long polling
 When `TELEGRAM_MODE=polling`, agent-api SHALL poll Telegram `getUpdates` and route text messages through the same handler as the webhook.
@@ -59,11 +64,11 @@ The system SHALL support `EVI_REQUIRE_API_KEY` (default `false`). When `true` an
 - **THEN** the application refuses to start and logs the missing-key reason
 
 ### Requirement: Data services not published to the LAN
-Compose SHALL bind Postgres, Qdrant, Evolution API and Neo4j to `127.0.0.1`, and Qdrant SHALL accept `QDRANT_API_KEY` (passed to the container as `QDRANT__SERVICE__API_KEY` and sent as the `api-key` header by `rag_tool`, the health check and the RAG harness). Only `agent-api` and `windmill-server` may publish on all interfaces. Postgres SHALL use host port 5433 — 5432 is taken by an unrelated container on this machine — while the compose-internal port stays 5432.
+Compose SHALL bind every published port (Postgres, Qdrant, Evolution API, Neo4j, `agent-api` and `windmill-server`) to `127.0.0.1`, and Qdrant SHALL accept `QDRANT_API_KEY` (passed to the container as `QDRANT__SERVICE__API_KEY` and sent as the `api-key` header by `rag_tool`, the health check and the RAG harness). Postgres SHALL use host port 5433 — 5432 is taken by an unrelated container on this machine — while the compose-internal port stays 5432. Remote access SHALL go through an SSH tunnel or `tailscale serve`, never through a wider bind.
 
 #### Scenario: SCN-OPS-04
 - **WHEN** `docker compose config` is inspected
-- **THEN** postgres (5433), qdrant, evolution-api and neo4j published ports carry host IP `127.0.0.1`, and only agent-api and windmill-server publish without one
+- **THEN** every published port carries host IP `127.0.0.1`
 
 ### Requirement: Outbound replies survive a transient network failure
 Sending a reply to Telegram or WhatsApp SHALL retry transport-level failures (connection refused, network unreachable, timeout, 5xx) up to `EVI_SEND_RETRY_ATTEMPTS` (default 2) with a short backoff, and SHALL NOT retry a 4xx — a bad token, chat id or instance fails identically on the next attempt. A send SHALL never raise: a failed delivery must not turn a successful turn into an HTTP 500.
@@ -83,4 +88,18 @@ When a reply cannot be delivered, the system SHALL record the reason (`transport
 - **WHEN** `api.telegram.org` is unreachable for the whole retry budget
 - **THEN** `_reply_direct` returns `telegram_sent: false` (a plain bool) with `send_error: "transport"`, and exactly one `soft-fail` line names the failing sender, the reason and the attempt count
 - **AND** on success `send_error` is absent from the response
+
+### Requirement: Services are not published beyond the host by default
+Every port published in `docker-compose.yml` SHALL be bound to `127.0.0.1`; access from other machines SHALL go only through a path recorded in the threat model (Tailscale) and SHALL still require authentication.
+
+#### Scenario: SCN-SEC-01
+- **WHEN** another machine on the LAN connects to ports 8001 or 8002 of the host
+- **THEN** the connection is refused
+
+### Requirement: No default secrets in use
+Services SHALL NOT run with the default secrets shipped in examples (`evi-dev-key`, `changeme`, `windmill`), Qdrant SHALL require an API key, and `.env`, `data/` and `logs/` SHALL be readable only by the owner.
+
+#### Scenario: SCN-SEC-04
+- **WHEN** `./scripts/evi-security-scan` runs
+- **THEN** it reports no default secret in use and no group/world-readable secret or data path
 

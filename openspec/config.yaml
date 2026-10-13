@@ -41,6 +41,7 @@ rules:
     - "Each task MUST include SCN-* (if applicable), Files (max 5 paths), Verify (evi-test command)."
     - "Behaviour tasks include a simulation scenario (`tests/sim/scenarios/<area>/`) in Verify: `./scripts/evi-sim run --id <SIM-...> --repeat 3 --llm live`."
     - One logical deliverable per task; 5-12 tasks per change.
+    - "Change que adiciona superfície (porta, rota, tool de escrita, canal de entrada, provedor de LLM, segredo) inclui uma task de revisão leve: atualizar docs/security/threat-model.md, rodar ./scripts/evi-security-scan e registrar achados em docs/security/findings.md."
   design:
     - RAM impact for new containers; Windmill/Evolution ports.
     - Out of scope section required.

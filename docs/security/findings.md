@@ -26,7 +26,7 @@ Status: `aberto` · `corrigido (<task/data>)` · `em correção (<task>)` · `BA
 | crítico | 1 | — (F1 corrigido) |
 | alto | 3 | F5, F6 — ação do usuário (F2 corrigido) |
 | médio | 9 | ver tabela |
-| baixo | 9 | ver tabela |
+| baixo | 9 | F13, F18, F20, F22 (BACKLOG) |
 | info | 6 | ver tabela |
 
 ## Achados
@@ -35,31 +35,31 @@ Status: `aberto` · `corrigido (<task/data>)` · `em correção (<task>)` · `BA
 |---|---|---|---|---|---|
 | F1 | `agent-api` em `0.0.0.0:8002` sem `EVI_API_KEY` | crítico | corrigido (1.1, 2026-10-12) | `ss -ltn`: só `127.0.0.1:8002`; `curl localhost:8002/tools` sem chave → 401; `192.168.15.32:8002` e `100.73.36.18:8002` → recusada; container: `EVI_API_KEY` len 64 | Feito; resíduo em F8. Ação do usuário: confirmar de outra máquina |
 | F2 | Windmill em `0.0.0.0:8001` (tokens OAuth Google) | alto | corrigido (3.1, 2026-10-13) | compose `127.0.0.1:8001:8000`; LAN/tailnet → recusada | Acesso remoto em `docs/remote-access.md`; credenciais: F12 |
-| F3 | Segredos padrão; Qdrant sem chave | médio | em correção (3.2) | scan `secrets.env` FAIL (`EVOLUTION_API_KEY`, `POSTGRES_PASSWORD`, `WINDMILL_DB_PASSWORD`); fallbacks no compose; tudo em loopback/rede Docker | `scripts/evi-rotate-secrets` |
-| F4 | Imagens sem versão fixa | médio | em correção (4.2) | `qdrant:latest`, `windmill:main`; flutuantes: `redis:7-alpine`, `neo4j:5-community`, `postgres:15-alpine`. trivy (HIGH/CRITICAL): evolution C11/H253, windmill C33/H1121, neo4j C6/H548, postgres C1/H35, qdrant C7/H127, redis H4 — SO base, nada exposto fora do host | Fixar por tag/digest; SCN-SEC-06 aceita digest |
+| F3 | Segredos padrão; Qdrant sem chave | médio | corrigido (3.2, rotação aplicada 2026-10-13) | scan `secrets.env` FAIL (`EVOLUTION_API_KEY`, `POSTGRES_PASSWORD`, `WINDMILL_DB_PASSWORD`); fallbacks no compose; tudo em loopback/rede Docker | `scripts/evi-rotate-secrets` |
+| F4 | Imagens sem versão fixa | médio | corrigido (3.2/4.2: qdrant v1.18.0, windmill por digest; redis/neo4j/postgres por tag major) | `qdrant:latest`, `windmill:main`; flutuantes: `redis:7-alpine`, `neo4j:5-community`, `postgres:15-alpine`. trivy (HIGH/CRITICAL): evolution C11/H253, windmill C33/H1121, neo4j C6/H548, postgres C1/H35, qdrant C7/H127, redis H4 — SO base, nada exposto fora do host | Fixar por tag/digest; SCN-SEC-06 aceita digest |
 | F5 | Ollama em `*:11434` sem auth, LAN + tailnet | alto | aberto — ação do usuário | `OLLAMA_HOST=0.0.0.0` (override.conf do systemd); `/api/tags` responde da LAN e da tailnet; ufw desligado; API permite pull/delete e uso de GPU; EVI usa Ollama em tarefas de fundo | Bind em `172.17.0.1` (host-gateway dos containers EVI e WhatBot); sudo |
 | F6 | Chat principal + embeddings via Gemini, plano da chave não verificado | alto (provisório) | aberto — ação do usuário | `EVI_LLM_PROVIDER=gemini`, `EVI_EMBED_PROVIDER=google`; prompts com e-mail/WhatsApp de terceiros; tier gratuito pode treinar com os dados; a decisão de 2026-10-12 só aprovou nuvem via OpenRouter ZDR | Usuário verifica o plano; pago → aceito; gratuito → faturamento ou trocar provedor |
-| F7 | Chat de controle do WhatsApp é um grupo; qualquer participante comanda o agente | médio | aberto → 3.3 | `EVI_WHATSAPP_CONTROL_JIDS`: 1 JID `@g.us`; `evolution_parser.py` `sender = remoteJid`; canal `whatsapp_control` ∈ `USER_CHANNELS`; grupo hoje com 1 participante | 3.3: exigir `from_me=True` (ou participante = dono) + teste |
-| F8 | `EVI_REQUIRE_API_KEY` default `false`; `verify_api_key` é no-op sem chave | médio | em correção (4.1) | compose `EVI_REQUIRE_API_KEY` default false; `agent/auth.py` | 4.1: default true + recusa de subir sem chave |
+| F7 | Chat de controle do WhatsApp é um grupo; qualquer participante comanda o agente | médio | corrigido (3.3: só `from_me` no grupo de controle) | `EVI_WHATSAPP_CONTROL_JIDS`: 1 JID `@g.us`; `evolution_parser.py` `sender = remoteJid`; canal `whatsapp_control` ∈ `USER_CHANNELS`; grupo hoje com 1 participante | 3.3: exigir `from_me=True` (ou participante = dono) + teste |
+| F8 | `EVI_REQUIRE_API_KEY` default `false`; `verify_api_key` é no-op sem chave | médio | corrigido (4.1) | compose `EVI_REQUIRE_API_KEY` default false; `agent/auth.py` | 4.1: default true + recusa de subir sem chave |
 | F9 | SSH aceita senha; firewall do host desligado | médio | aberto — ação do usuário | `PreferredAuthentications=none` lista `publickey,password`; `ssh.socket` em `0.0.0.0:22`; sem `authorized_keys`; ufw `ENABLED=no` | Chave + `PasswordAuthentication no`; ufw (bind 127.0.0.1 segue como controle principal: Docker passa por fora do ufw) |
 | F10 | WhatBot publica portas em `0.0.0.0` no mesmo host | médio | aberto — ação do usuário (fora do EVI) | `whatbot-redis-1` 6379 sem senha, `windmill_server` 8000, `evolution_api` 8080, `whatbot_ingress` 8090 | Prefixar `127.0.0.1:` no compose do WhatBot |
 | F11 | Escopos OAuth Google além do necessário | médio | aberto — ação do usuário | resource `u/shiba144/stupendous_gcloud` (`cloud-platform`) sem uso em código; Gmail `modify` é necessário (`messages.trash`); Calendar via conector padrão (escopo amplo) | Apagar resource gcloud e variável; conferir conta Google; Calendar mínimo → BACKLOG |
 | F12 | Windmill: login/usuários/tokens não verificados | médio | aberto — ação do usuário | Windmill CE cria `admin@windmill.dev` com senha padrão; token `WINDMILL_TOKEN` amplo; rota `telegram_to_evi` sem uso (`TELEGRAM_MODE=polling`); só loopback agora | Usuário verifica; se a senha padrão valer → alto até trocar |
 | F13 | Sem backup de dados com estado; cópias antigas sem cifra | médio | BACKLOG | nenhum `pg_dump`/timer; `data/postgres.bak-20260812-*` e `data/postgres.broken-20260812` | BACKLOG: `pg_dump` diário + teste de restore; usuário decide sobre cópias antigas |
-| F14 | `/metrics` sem chave; rótulo `path` com cardinalidade ilimitada | baixo | em correção (4.1) | `curl localhost:8002/metrics` → 200; sem PII; `request.url.path` cru | 4.1: exigir chave e rotular por rota |
-| F15 | `verify_api_key` com `!=` | baixo | em correção (4.1) | `agent/auth.py` | `hmac.compare_digest` |
-| F16 | Allowlist do Telegram fail-open | baixo | em correção (4.1) | `telegram_handler.py` `_chat_allowed` aceita tudo se `TELEGRAM_CHAT_ID` vazio; em produção está definido | 4.1: fail-closed |
-| F17 | Permissões abertas em data/logs/EVI_WORKSPACE | baixo | em correção (3.2) | 775 nos diretórios; `USER.md`/`MEMORY.md` 664; `logs/*.jsonl` 644 root:root | 3.2 (+ `sudo chown` para o que é root) |
+| F14 | `/metrics` sem chave; rótulo `path` com cardinalidade ilimitada | baixo | corrigido (4.1) | `curl localhost:8002/metrics` → 200; sem PII; `request.url.path` cru | 4.1: exigir chave e rotular por rota |
+| F15 | `verify_api_key` com `!=` | baixo | corrigido (4.1) | `agent/auth.py` | `hmac.compare_digest` |
+| F16 | Allowlist do Telegram fail-open | baixo | corrigido (4.1) | `telegram_handler.py` `_chat_allowed` aceita tudo se `TELEGRAM_CHAT_ID` vazio; em produção está definido | 4.1: fail-closed |
+| F17 | Permissões abertas em data/logs/EVI_WORKSPACE | baixo | corrigido (2026-10-13: 750 nos diretórios; arquivos root-owned dentro seguem 644 — `sudo chown`) | 775 nos diretórios; `USER.md`/`MEMORY.md` 664; `logs/*.jsonl` 644 root:root | 3.2 (+ `sudo chown` para o que é root) |
 | F18 | `agent-api` roda como root | baixo | BACKLOG | `docker exec … id` → uid=0 | `user: "1000:1000"` + posse dos volumes |
-| F19 | 5 CVEs Python (pip-audit) | baixo | aberto → 3.3 | langgraph-sdk 0.4.2, multidict 6.7.1, urllib3 2.7.0 ×3; nenhuma alcançável neste uso | Bump compatível: sdk 0.4.4, multidict 6.9.1, urllib3 2.8.0 |
+| F19 | 5 CVEs Python (pip-audit) | baixo | corrigido (3.3: pins bumpados; pip-audit limpo) | langgraph-sdk 0.4.2, multidict 6.7.1, urllib3 2.7.0 ×3; nenhuma alcançável neste uso | Bump compatível: sdk 0.4.4, multidict 6.9.1, urllib3 2.8.0 |
 | F20 | `/jobs/import-contacts` lê qualquer path | baixo | BACKLOG | `vcard_import.py`; exige chave; não-vCard não devolve conteúdo | Restringir a `/workspace`, `/watched_folders` + `.vcf` |
 | F21 | Logs com conteúdo integral | baixo | aceito | `evolution_webhook.jsonl`, `telegram.jsonl`; retenção 7 d / 5000 linhas; 0 linhas com padrão de segredo | Aceito |
 | F22 | Resumo diário com LLM sem `wrap_external` | baixo | BACKLOG | `daily_summary.py`; só com `EVI_DAILY_SUMMARY_LLM=true` (desligado); sem tools | Envolver timeline |
-| F23 | ruff `S` bloqueantes = falsos positivos | info | em correção (4.2) | S608 em `db.py` (4) e `testing/cleanup.py` (4), `sim/runner.py` (2): interpolam constantes; S324 md5 de nome de arquivo | `noqa` com motivo; `usedforsecurity=False`; sem shell=True/eval/pickle/yaml.load no runtime |
-| F24 | Histórico git: 1 falso positivo | info | em correção (4.2) | fixture `sk-THIS…FAKE` em teste do scanner; `.env` nunca commitado | Allowlist no scanner |
+| F23 | ruff `S` bloqueantes = falsos positivos | info | corrigido (4.2) | S608 em `db.py` (4) e `testing/cleanup.py` (4), `sim/runner.py` (2): interpolam constantes; S324 md5 de nome de arquivo | `noqa` com motivo; `usedforsecurity=False`; sem shell=True/eval/pickle/yaml.load no runtime |
+| F24 | Histórico git: 2 falsos positivos (fixtures) | info | corrigido (4.2: allowlist) | fixture `sk-THIS…FAKE` em teste do scanner; `.env` nunca commitado | Allowlist no scanner |
 | F25 | Pequenas exposições de informação | info | aceito | `/health` público: contagem de contatos, provedores; `/run-task`/`/insight` devolvem `str(e)` | Aceito (loopback + chave) |
 | F26 | Tailscale: `serve` antigo; ACLs não verificadas | info | aberto — ação do usuário | `serve` em 443 → `:8094` (nada escuta); funnel off | Revisar/remover; ACLs no console |
-| F27 | Spec base `remote-access` contradiz o delta | info | aberto → 5.1 | SCN-OPS-04 permite agent-api/windmill sem host IP | MODIFIED no delta antes do archive |
+| F27 | Spec base `remote-access` contradiz o delta | info | corrigido (5.1: MODIFIED no delta) | SCN-OPS-04 permite agent-api/windmill sem host IP | MODIFIED no delta antes do archive |
 | F28 | Webhooks sem limite de taxa/tamanho | info | aceito | chave + só rede Docker/loopback; `MAX_PER_WEBHOOK`, dedupe, idade 2 h | Aceito |
 
 ## Checklist (design §2)
@@ -90,3 +90,13 @@ BACKLOG: F13, F18, F20, F22, F11 (Calendar).
 7. **F1/F2**: de outro dispositivo da LAN/tailnet, `curl -m3 -s -o /dev/null -w '%{http_code}\n' http://192.168.15.32:8002/health` e `:8001/` devem dar `000`.
 8. **F26**: `tailscale serve status`; se sem uso, `tailscale serve --https=443 off`; ACLs em https://login.tailscale.com/admin/acls.
 9. Definir limite de crédito na chave do OpenRouter (https://openrouter.ai/settings/keys).
+
+## Estado ao arquivar (2026-10-13)
+
+Corrigidos: F1, F2, F3, F4, F7, F8, F14–F17, F19, F23, F24, F27. BACKLOG: F13, F18, F20, F22, F11
+(Calendar mínimo). Aceitos: F21, F25, F28. **Abertos, dependem do usuário:** F5 (alto, Ollama),
+F6 (alto provisório, plano do Gemini), F9, F10, F11, F12, F26. Revisão de código adicional
+(Opus) em 3.2 (2 rodadas) e 3.3/4.1; a revisão leve passa a ser regra em `openspec/config.yaml`.
+Notas das revisões: um contato 1:1 que seja o JID de controle ainda comanda o agente (por
+desenho — o JID de controle é confiável), e texto encaminhado dentro de uma mensagem `from_me`
+é tratado como comando.

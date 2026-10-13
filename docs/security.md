@@ -118,9 +118,10 @@ O modo `--ci` ignora o que depende do `.env`, do host ou do docker (`secrets.env
 
 ## Pendências conhecidas
 
+Registro completo em [`docs/security/findings.md`](security/findings.md). Em aberto, dependem do usuário:
+
 | Item | Onde |
 |---|---|
-| Webhook **global** da Evolution não manda cabeçalho e recebe 401 (eventos de contato/presença, não usados); desligar exige recriar o container da Evolution | `evi-security-review` task 1.2 |
-| Windmill publicado em `0.0.0.0:8001` (guarda tokens OAuth de Gmail/Calendar/Tasks) | `evi-security-review` |
-| Segredos padrão: `EVOLUTION_API_KEY`, `POSTGRES_PASSWORD`, `WINDMILL_DB_PASSWORD`; Qdrant sem chave | `evi-security-review` |
-| Imagens sem versão fixa (`qdrant:latest`, `windmill:main`) | `evi-security-review` |
+| Ollama escuta em `0.0.0.0:11434` sem autenticação (bind em `172.17.0.1`, sudo) | F5 |
+| Plano da chave do Gemini (tier gratuito pode treinar com os dados) | F6 |
+| SSH por senha, ufw desligado; portas do WhatBot em `0.0.0.0`; escopos OAuth; login do Windmill; Tailscale serve antigo | F9–F12, F26 |

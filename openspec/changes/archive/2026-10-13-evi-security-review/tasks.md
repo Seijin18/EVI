@@ -58,7 +58,7 @@
 
 ## 5. Fechamento
 
-- [ ] 5.1 Rotina de revisão leve por change no `openspec/config.yaml`; gates finais; BACKLOG + Progress
+- [x] 5.1 Rotina de revisão leve por change no `openspec/config.yaml`; gates finais; BACKLOG + Progress
   - SCN-SEC-02
   - Files: `openspec/config.yaml`, `openspec/BACKLOG.md`, `Progress.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`, `./scripts/evi-test smoke`, `./scripts/evi-sim run --tag critical --llm replay`, `openspec validate --specs`, `ruff check agent/ --select E,W,F --ignore E501`
