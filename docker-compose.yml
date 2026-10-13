@@ -25,7 +25,7 @@ services:
 
   windmill-server:
     image: ghcr.io/windmill-labs/windmill:main
-    ports: ["8001:8000"]
+    ports: ["127.0.0.1:8001:8000"]
     environment:
       - DATABASE_URL=postgresql://${WINDMILL_DB_USER:-windmill}:${WINDMILL_DB_PASSWORD:-windmill}@postgres:5432/windmill?sslmode=disable
       - MODE=server
