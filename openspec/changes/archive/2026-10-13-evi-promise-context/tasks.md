@@ -56,7 +56,7 @@
   - Files: `tests/sim/scenarios/reply-debts/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (3/3) e `./scripts/evi-sim run --tag critical --repeat 3 --llm live`
 
-- [ ] 4.2 Reavaliação das promessas atuais (dry-run → revisar com o usuário → `--apply`); gates finais; BACKLOG + Progress
+- [x] 4.2 (dry-run feito em 2026-10-13: 9 dismiss, 7 update — `data/eval/promise_reeval_dryrun.txt`; `--apply` fica para o usuário) Reavaliação das promessas atuais (dry-run → revisar com o usuário → `--apply`); gates finais; BACKLOG + Progress
   - SCN-DEBT-13
   - Files: `openspec/BACKLOG.md`, `Progress.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`, `./scripts/evi-test smoke`, `openspec validate --specs`, `ruff check agent/ --select E,W,F --ignore E501`

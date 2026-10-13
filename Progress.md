@@ -26,7 +26,7 @@
 
 **Foco atual:** fila de 10 Out 2026 concluída; ativação em produção pendente (ver `openspec/queue-run.md`). Arquivados em 2026-10-10: #45
 `evi-sim-harness` (V1), #46 `evi-usage-validation` (V2), #40 `evi-morning-briefing` (18),
-#41 `evi-reminders` (19), #42 `evi-reply-debts` (20), #43 `evi-voice-input` (21), #44 `evi-perceived-reliability` (22), #37 `evi-prompt-injection-model` (23, em 11 Out). Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
+#41 `evi-reminders` (19), #42 `evi-reply-debts` (20), #43 `evi-voice-input` (21), #44 `evi-perceived-reliability` (22), #37 `evi-prompt-injection-model` (23, em 11 Out), #47 `evi-promise-context` (25, em 13 Out). Fila completa em [`openspec/BACKLOG.md`](openspec/BACKLOG.md);
 porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 
 > **Revisão de produto de 2026-10-10** ([`docs/ux-review-2026-10.md`](docs/ux-review-2026-10.md)).
@@ -97,7 +97,7 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 | Validação em uso real (L4): `turn_log`, `/bom` `/ruim`, relatório semanal, sonda | `test_turn_log.py`, `test_usage_report.py`, `test_probe.py` · SIM-USE-01/02 · `testing` SCN-USE-01..08 |
 | Briefing matinal no Telegram + guarda `wrap_external` | `./scripts/evi-test briefing` · SIM-BRIEF-01..04 · `proactive` |
 | Lembretes que disparam (loop in-process) | `test_reminders.py`, `test_reminder_loop.py` · SIM-REM-01..05 · `proactive` |
-| Pendências de resposta, promessas e combinados com data | `test_reply_debts.py`, `test_promises.py` · SIM-DEBT-01..06 · `messaging-whatsapp` |
+| Pendências de resposta, promessas e combinados com data | `test_reply_debts.py`, `test_promises.py`, `test_promise_context.py`, `test_llm_structured.py` · SIM-DEBT-01..09 · `messaging-whatsapp` |
 | Mensagens de voz (Telegram + controle WhatsApp) | `test_transcribe.py` · SIM-VOICE-01..05 · `agent-api` |
 | Confiabilidade percebida (watchdog, `/ajuda`, ack, OAuth no turno) | `test_watchdog.py`, `test_slow_ack.py` · SIM-REL-02..04 · `agent-api` |
 | Defesa contra injeção (Telegram restrito, exclusão em 2 passos, guarda de escrita) | `./scripts/evi-test injection` · SIM-ADV-01..05 · `agent-api` |
@@ -150,6 +150,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **21** | **Voz** | **Done** | `evi-voice-input` — Telegram + controle WhatsApp via Gemini |
 | **22** | **Confiabilidade percebida** | **Done** | `evi-perceived-reliability` — watchdog, `/ajuda`, ack, OAuth no turno |
 | **23** | **Injeção (restante)** | **Done** | `evi-prompt-injection-model` — confirmação de exclusão, allowlist por origem, chat do Telegram restrito |
+| **25** | **Promessas com contexto** | **Done** | `evi-promise-context` — gatilho por padrão + juiz LLM com contexto (ZDR), fila `needs_eval`, varredura de cumprimento, `llm_structured`, avaliador |
 | 24 | Background (restante) | **—** | Condicional: só se o ack do #44 não bastar |
 
 ### Série Runtime v3 (17 Jun 2026) — Done

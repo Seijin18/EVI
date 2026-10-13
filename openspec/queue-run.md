@@ -1,8 +1,8 @@
 # Execução da fila — iniciada 2026-10-12 (2ª rodada)
 ## Estado
-- Change atual: evi-promise-context (fase: implementar) — tasks 2.0, 2.1, 2.2, 3.1, 3.2 fechadas; próximas 3.3, 3.4, 4.1, 4.2
+- Change atual: evi-security-review (fase: implementar) — task 1.1 (já aplicada) / 1.2
 - Ordem: evi-promise-context → evi-security-review → evi-contact-knowledge → evi-contact-names → evi-ux-review
-- Concluídos: —
+- Concluídos: evi-promise-context (arquivado 2026-10-13, commits 8d6472f..8c5b4c8 + archive)
 - Pulados: evi-background-execution (#38) — condicional (inalterado)
 ## Decisões do usuário no preflight (2026-10-12)
 - Windmill só em `127.0.0.1:8001` (acesso remoto por túnel SSH / `tailscale serve`).
@@ -15,6 +15,9 @@
 - 2026-10-12 promise-context 3.2: fila de avaliação vive em colunas de `pending_commitments` (`next_eval_at`, `eval_attempts`, `msg_ts`), não em tabela `background_jobs` (não existe); design sincronizado. Fallback de 48 h descarta prazo já vencido (senão a linha ficaria oculta pela listagem); rejeição do LLM marca `confirmed_via='auto-eval'` e sai das métricas de ação; desligar a flag libera as linhas `needs_eval` para `pending`. Lote do loop = 3 avaliações por minuto (não atrasar lembretes).
 - 2026-10-12 promise-context 2.0: avaliador sintético com o modelo padrão = 93% (FP=1: caso de injeção S25 virou "Transferir R$ 5000" — só cria pendência, sem ação; reavaliar no #37/security). Casos reais só em `data/eval/promise_real.json` (gitignored, 0600).
 ## Pendências do usuário (não bloqueantes)
+- [ ] Revisar a reavaliação das promessas atuais e aplicar: abrir `data/eval/promise_reeval_dryrun.txt` (9 a descartar, 7 a atualizar) e, se estiver de acordo, `./scripts/evi-test promise-reeval --apply` — muda dados reais (não feito pela fila)
+- [ ] Avaliar em 2026-10-20 a validação das promessas com contexto: taxa de ação ≥ 30%, ≤ 1 promessa/dia sem objeto no briefing — relatório semanal (tipo `promise`)
+- [ ] Definir teto mensal de gasto na conta OpenRouter (a trava no código é US$ 0,10/dia) — openrouter.ai → Settings → Limits
 ## Bloqueios
 
 ---

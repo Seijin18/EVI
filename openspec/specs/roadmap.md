@@ -206,6 +206,11 @@ A parte mínima (delimitação) entra na Etapa 18. Fica aqui:
 Depois do ack imediato (Etapa 22): tarefas longas desacopladas do turno, com
 cancelamento e resultado entregue depois. Só abrir se o ack não bastar na prática.
 
+### Etapa 25 — Promessas com contexto — `evi-promise-context` — **Done** (2026-10-13)
+
+Change: [`evi-promise-context`](../changes/archive/2026-10-13-evi-promise-context/proposal.md).
+As-built: padrão = gatilho, LLM (OpenRouter ZDR, `google/gemma-4-31b-it`) = juiz com a conversa antes/depois; `llm_structured.run_structured` (provedor por tarefa, ZDR fixo, teto diário); fila `needs_eval` nas colunas de `pending_commitments` avaliada pelo loop in-process (atraso 30 min, retry 30 min, 48 h → `pending`); varredura diária de cumprimento; `promise-reeval`; avaliador `llm-eval promise` (93% sintético); canais fora das dívidas; dedupe da Evolution.
+
 ---
 
 ## Deferido (sem data)
