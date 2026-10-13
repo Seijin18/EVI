@@ -17,7 +17,7 @@
   - Files: `agent/testing/llm_eval/__init__.py`, `agent/testing/llm_eval/promise.py`, `agent/testing/cli.py`, `tests/eval/promise_cases.yaml`, `tests/unit/test_llm_eval.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_llm_eval.py -q` e `./scripts/evi-test llm-eval promise --cases synthetic`
 
-- [ ] 2.1 `llm_structured.run_structured(task, prompt, schema)`: Ollama `format`/`think`, Gemini `responseSchema`/`propertyOrdering`, validação, `None` em falha, fallback só por opt-in; variáveis no `.env.example`
+- [x] 2.1 `llm_structured.run_structured(task, prompt, schema)`: Ollama `format`/`think`, Gemini `responseSchema`/`propertyOrdering`, validação, `None` em falha, fallback só por opt-in; variáveis no `.env.example`
   - SCN-LLM-TASK-01, SCN-LLM-TASK-02
   - Files: `agent/services/llm_structured.py`, `tests/unit/test_llm_structured.py`, `.env.example`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_llm_structured.py -q`
