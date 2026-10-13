@@ -1,8 +1,8 @@
 # Execução da fila — iniciada 2026-10-12 (2ª rodada)
 ## Estado
-- Change atual: evi-contact-knowledge (fase: implementar) — tasks 1.1–3.3 fechadas; 4.1 quase (bloqueada), 4.2 pendente
+- Change atual: evi-contact-names (fase: implementar) — task 1.1
 - Ordem: evi-promise-context → evi-security-review → evi-contact-knowledge → evi-contact-names → evi-ux-review
-- Concluídos: evi-promise-context (arquivado 2026-10-13, commits 8d6472f..8c5b4c8 + archive), evi-security-review (arquivado 2026-10-13, commits e58da95..4ab5471 + archive)
+- Concluídos: evi-promise-context (arquivado 2026-10-13, commits 8d6472f..8c5b4c8 + archive), evi-security-review (arquivado 2026-10-13, commits e58da95..4ab5471 + archive), evi-contact-knowledge (arquivado 2026-10-13, commits 5b2ef99..4de7e01 + archive)
 - Pulados: evi-background-execution (#38) — condicional (inalterado)
 ## Decisões do usuário no preflight (2026-10-12)
 - Windmill só em `127.0.0.1:8001` (acesso remoto por túnel SSH / `tailscale serve`).
@@ -27,8 +27,12 @@
 - [ ] Apagar os backups de rotação quando não precisar mais deles: `data/backups/env-pre-rotate-*` e `pre-rotate-*.sql` (guardam segredos/dados antigos)
 - [ ] Limite de crédito mensal na chave do OpenRouter — https://openrouter.ai/settings/keys
 - [ ] Publicar o schedule diário das 03:30 do conhecimento de contatos: `cd windmill && wmill sync push` (cria `f/integrations/contact_learn_daily`; confirmar `enabled` na UI) — evi-contact-knowledge 3.2
+- [ ] Contact-knowledge: aplicar as migrações de dados reais — `./scripts/evi-test contact-knowledge-migrate` (dry-run: 44 perfis, 1 síntese a mover) e depois `--apply`; `./scripts/evi-test contact-identity-migrate` (dry-run hoje: 0 pastas @lid com alias conhecido; os aliases se acumulam com o tráfego — repetir em alguns dias)
+- [ ] Contact-knowledge: primeira execução do lote com você (`curl -X POST -H "X-Api-Key: $EVI_API_KEY" "localhost:8002/jobs/contact-learn?wait=true"`; envia até 60 mensagens × 15 contatos para o OpenRouter ZDR, aprovado em 2026-10-12) e auditoria de 5 perfis (nenhum fato sem evidência, nenhum fato de metadado)
+- [ ] Avaliar em 2026-10-20 a validação do conhecimento de contato: ≥ 80% dos contatos ativos com Fatos/Em aberto atualizados na semana; auditoria de 10 perfis; títulos de promessa com objeto+pessoa ≥ 70%
+- [ ] Teste instável observado uma vez (suíte completa 1 falha, 3 reexecuções verdes) após os últimos commits — identificar na próxima falha com `pytest tests/unit -q -x`
 ## Bloqueios
-- 2026-10-13 evi-contact-knowledge 4.1: o Gemini devolve `429 RESOURCE_EXHAUSTED: Your project has exceeded its monthly spending cap`. Impacto: (a) o chat de produção também usa essa chave — os logs do agent-api mostram 16 ocorrências de 429 nas últimas 12 h; (b) não dá para regravar o cassette de SIM-DEBT-06 (replay do tag `reply-debts` fica vermelho nesse cenário) nem rodar `critical --repeat 3 --llm live`. Tentado: 2 gravações (429 nas duas); espera não resolve (teto mensal). Precisa do usuário: aumentar/zerar o teto do projeto Gemini (https://aistudio.google.com/ → Spend / Billing). Depois: `./scripts/evi-sim run --id SIM-DEBT-06 --llm record`, `--id SIM-DEBT-06 --repeat 3 --llm live`, `./scripts/evi-sim run --tag reply-debts --llm replay`, `./scripts/evi-sim run --tag critical --repeat 3 --llm live`, e então a task 4.2. A fila retoma de 4.2 (migração `--apply` com você, primeira execução do lote, auditoria de 5 perfis).
+- (resolvido 2026-10-13 — usuário ajustou o teto do Gemini; SIM-DEBT-06 regravado, critical live 27/27) evi-contact-knowledge 4.1: o Gemini devolve `429 RESOURCE_EXHAUSTED: Your project has exceeded its monthly spending cap`. Impacto: (a) o chat de produção também usa essa chave — os logs do agent-api mostram 16 ocorrências de 429 nas últimas 12 h; (b) não dá para regravar o cassette de SIM-DEBT-06 (replay do tag `reply-debts` fica vermelho nesse cenário) nem rodar `critical --repeat 3 --llm live`. Tentado: 2 gravações (429 nas duas); espera não resolve (teto mensal). Precisa do usuário: aumentar/zerar o teto do projeto Gemini (https://aistudio.google.com/ → Spend / Billing). Depois: `./scripts/evi-sim run --id SIM-DEBT-06 --llm record`, `--id SIM-DEBT-06 --repeat 3 --llm live`, `./scripts/evi-sim run --tag reply-debts --llm replay`, `./scripts/evi-sim run --tag critical --repeat 3 --llm live`, e então a task 4.2. A fila retoma de 4.2 (migração `--apply` com você, primeira execução do lote, auditoria de 5 perfis).
 
 ---
 
