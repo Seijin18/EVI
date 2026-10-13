@@ -4,7 +4,6 @@ import os
 
 from fastapi import Header, HTTPException
 
-_TRUTHY = ("1", "true", "yes")
 MIN_KEY_LENGTH = 16
 _log = logging.getLogger(__name__)
 
@@ -15,7 +14,8 @@ def api_key_expected() -> str:
 
 def api_key_required() -> bool:
     """Enforcement is ON unless EVI_REQUIRE_API_KEY is explicitly set to a falsy value."""
-    return os.getenv("EVI_REQUIRE_API_KEY", "true").strip().lower() in _TRUTHY
+    # Fail closed: only an explicit falsy value opts out (a typo or an empty line keeps it on).
+    return os.getenv("EVI_REQUIRE_API_KEY", "true").strip().lower() not in ("0", "false", "no", "off")
 
 
 def require_api_key_configured() -> None:

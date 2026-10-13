@@ -178,7 +178,9 @@ def run_sessions() -> bool:
         main.app_state.graph.invoke.side_effect = _fake_invoke
         with patch("services.context_assembly.build_context", return_value=""), patch(
             "services.session_context.persist_tool_snapshots"
-        ), patch.dict(os.environ, {"DATABASE_URL": ""}, clear=False):
+        ), patch.dict(
+            os.environ, {"DATABASE_URL": "", "EVI_REQUIRE_API_KEY": "false", "EVI_API_KEY": ""}, clear=False
+        ):
             client = TestClient(main.app)
             for msg, sid in (("sou A", "http-A"), ("sou B", "http-B")):
                 r = client.post("/chat", json={"message": msg, "session_id": sid})

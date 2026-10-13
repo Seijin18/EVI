@@ -141,3 +141,19 @@ def test_explicit_opt_out_starts_with_loud_warning(monkeypatch, caplog):
     with caplog.at_level("WARNING", logger="auth"):
         require_api_key_configured()
     assert any("UNAUTHENTICATED" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("value", ["", "ture", "on", "TRUE", "1"])
+def test_typo_or_empty_require_flag_keeps_enforcement(monkeypatch, value):
+    from auth import api_key_required
+
+    monkeypatch.setenv("EVI_REQUIRE_API_KEY", value)
+    assert api_key_required() is True
+
+
+@pytest.mark.parametrize("value", ["false", "0", "no", "OFF"])
+def test_only_explicit_falsy_opts_out(monkeypatch, value):
+    from auth import api_key_required
+
+    monkeypatch.setenv("EVI_REQUIRE_API_KEY", value)
+    assert api_key_required() is False

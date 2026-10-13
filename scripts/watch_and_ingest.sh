@@ -23,6 +23,7 @@ do
         DOCKER_PATH="${FILE/#$HOST_PREFIX/$CONTAINER_PREFIX}"
         curl -sS -X POST "$API_URL" \
             -H "Content-Type: application/json" \
+            -H "X-Api-Key: ${EVI_API_KEY:?set EVI_API_KEY (agent-api requires it)}" \
             -d "{\"task\": \"ingest_university_pdf\", \"params\": {\"file_path\": \"$DOCKER_PATH\"}}"
         echo -e "\n---"
     fi
