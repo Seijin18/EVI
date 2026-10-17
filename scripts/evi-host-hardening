@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# Endurecimento do HOST (precisa de sudo) — achados F5 e F9 de docs/security/findings.md.
+#
+#   ./scripts/evi-host-hardening           # só mostra o estado atual (não muda nada)
+#   ./scripts/evi-host-hardening ollama    # F5: Ollama só na ponte do Docker (172.17.0.1)
+#   ./scripts/evi-host-hardening ssh       # F9: desliga login SSH por senha (exige chave instalada)
+#   ./scripts/evi-host-hardening ufw       # F9: firewall do host (opt-in; leia o aviso)
+#
+# Cada passo pede confirmação, mostra o que vai mudar e como desfazer. Nada aqui roda sozinho.
+set -euo pipefail
+
+BRIDGE_IP="${EVI_DOCKER_BRIDGE_IP:-172.17.0.1}"
+LAN_CIDR="${EVI_LAN_CIDR:-192.168.15.0/24}"
+
+say()  { printf '\n==> %s\n' "$*"; }
+ask()  { local a; read -r -p "$1 [s/N] " a; [[ "$a" =~ ^[sSyY]$ ]]; }
+
+status() {
+  say "Estado atual (somente leitura)"
+  echo "-- escutando em 11434 (Ollama) e 22 (SSH):"
+  ss -ltnH | grep -E ':11434|:22 ' || echo "(nada)"
+  echo "-- ponte do Docker:"
+  ip -4 -o addr show docker0 2>/dev/null | awk '{print $4}' || true
+  echo "-- SSH aceita senha?"
+  sudo sshd -T 2>/dev/null | grep -iE '^(passwordauthentication|pubkeyauthentication)' || echo "(rode com sudo para ver)"
+  echo "-- chaves autorizadas para $USER:"
+  [[ -s "$HOME/.ssh/authorized_keys" ]] && wc -l < "$HOME/.ssh/authorized_keys" || echo "NENHUMA (~/.ssh/authorized_keys não existe)"
+  echo "-- ufw:"
+  sudo ufw status 2>/dev/null | head -3 || true
+}
+
+ollama() {
+  say "F5 — Ollama deixa de escutar na LAN/tailnet"
+  cat <<EOF
+Hoje: OLLAMA_HOST=0.0.0.0:11434 (qualquer máquina da rede usa sua GPU e seus modelos, sem autenticação).
+Depois: OLLAMA_HOST=$BRIDGE_IP:11434 — só a ponte do Docker. Os containers do EVI (e do WhatBot) alcançam
+via host.docker.internal; o host passa a usar OLLAMA_HOST=$BRIDGE_IP:11434 no CLI.
+Desfazer: sudo rm /etc/systemd/system/ollama.service.d/20-evi-bind.conf && sudo systemctl daemon-reload && sudo systemctl restart ollama
+EOF
+  ip -4 -o addr show docker0 >/dev/null 2>&1 || { echo "docker0 não existe — suba o Docker antes."; exit 1; }
+  ask "Aplicar?" || { echo "cancelado"; return; }
+  sudo install -d /etc/systemd/system/ollama.service.d
+  sudo tee /etc/systemd/system/ollama.service.d/20-evi-bind.conf >/dev/null <<EOF
+[Unit]
+After=docker.service
+Wants=docker.service
+[Service]
+Environment="OLLAMA_HOST=$BRIDGE_IP:11434"
+EOF
+  sudo systemctl daemon-reload
+  sudo systemctl restart ollama
+  sleep 3
+  echo "-- agora escutando:"; ss -ltnH | grep ':11434' || echo "ATENÇÃO: nada escutando"
+  echo "-- de dentro do container do EVI:"
+  docker exec evi-agent-api-1 python3 -c "import urllib.request;print(urllib.request.urlopen('http://host.docker.internal:11434/api/version',timeout=5).status)" || echo "FALHOU"
+  echo "-- da LAN (deve falhar):"
+  curl -s -m 3 -o /dev/null -w '%{http_code}\n' "http://$(hostname -I | awk '{print $1}'):11434/api/version" || true
+  echo 'Para o CLI no host: export OLLAMA_HOST='"$BRIDGE_IP"':11434  (ponha no ~/.bashrc)'
+}
+
+ssh_pw() {
+  say "F9 — SSH sem senha"
+  if [[ ! -s "$HOME/.ssh/authorized_keys" ]]; then
+    cat <<EOF
+PARE: este usuário não tem nenhuma chave em ~/.ssh/authorized_keys. Desligar a senha agora TRANCARIA você fora.
+Primeiro, na máquina de onde você conecta:
+    ssh-keygen -t ed25519            # se ainda não tiver chave
+    ssh-copy-id $USER@$(hostname -I | awk '{print $1}')
+Teste o login por chave em outra janela e só então rode este passo de novo.
+EOF
+    exit 1
+  fi
+  echo "Vai criar /etc/ssh/sshd_config.d/10-evi-hardening.conf com PasswordAuthentication no."
+  echo "Desfazer: sudo rm /etc/ssh/sshd_config.d/10-evi-hardening.conf && sudo systemctl restart ssh.socket"
+  echo "MANTENHA uma sessão SSH aberta enquanto testa o login por chave em outra."
+  ask "Aplicar?" || { echo "cancelado"; return; }
+  echo 'PasswordAuthentication no' | sudo tee /etc/ssh/sshd_config.d/10-evi-hardening.conf >/dev/null
+  sudo sshd -t
+  sudo systemctl restart ssh.socket 2>/dev/null || sudo systemctl restart ssh
+  sudo sshd -T | grep -i '^passwordauthentication'
+}
+
+ufw_setup() {
+  say "F9 — firewall do host (ufw)"
+  cat <<EOF
+AVISO: o Docker publica portas por fora do ufw, então o controle principal do EVI continua sendo o bind em
+127.0.0.1 (já feito). O ufw protege o resto do host (SSH, Ollama na ponte).
+Regras: negar entrada por padrão; SSH só da LAN ($LAN_CIDR) e da interface tailscale0; Ollama só das redes do Docker.
+Risco: se você está conectado por SSH de outra rede, a sessão pode cair. Faça isso no console local ou com a regra do seu IP.
+Desfazer: sudo ufw disable
+EOF
+  ask "Aplicar?" || { echo "cancelado"; return; }
+  sudo ufw default deny incoming
+  sudo ufw default allow outgoing
+  sudo ufw allow from "$LAN_CIDR" to any port 22 proto tcp
+  sudo ufw allow in on tailscale0 to any port 22 proto tcp
+  sudo ufw allow from 172.16.0.0/12 to any port 11434 proto tcp
+  sudo ufw --force enable
+  sudo ufw status verbose
+}
+
+case "${1:-status}" in
+  status) status ;;
+  ollama) ollama ;;
+  ssh)    ssh_pw ;;
+  ufw)    ufw_setup ;;
+  *) sed -n '2,10p' "$0"; exit 2 ;;
+esac

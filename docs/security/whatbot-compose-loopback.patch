@@ -1,0 +1,55 @@
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -8,7 +8,7 @@
+     volumes:
+       - db_data:/var/lib/postgresql/data
+     ports:
+-      - "5432:5432"
++      - "127.0.0.1:5432:5432"
+     healthcheck:
+       test: ["CMD-SHELL", "pg_isready -U whatbot"]
+       interval: 10s
+@@ -36,14 +36,14 @@
+       - redis_data:/data
+     command: redis-server --appendonly yes
+     ports:
+-      - "6379:6379"
++      - "127.0.0.1:6379:6379"
+ 
+   evolution-api:
+     container_name: evolution_api
+     image: evoapicloud/evolution-api:v2.3.7
+     restart: always
+     ports:
+-      - "8080:8080"
++      - "127.0.0.1:8080:8080"
+     env_file:
+       - .env
+     environment:
+@@ -95,7 +95,7 @@
+     env_file:
+       - .env
+     ports:
+-      - "${IG_INGRESS_PORT:-8090}:${IG_INGRESS_PORT:-8090}"
++      - "127.0.0.1:${IG_INGRESS_PORT:-8090}:${IG_INGRESS_PORT:-8090}"
+     volumes:
+       - ./:/app
+     environment:
+@@ -131,7 +131,7 @@
+     image: ghcr.io/windmill-labs/windmill:main
+     restart: unless-stopped
+     ports:
+-      - "8000:8000"
++      - "127.0.0.1:8000:8000"
+     environment:
+       DATABASE_URL: postgres://postgres:changeme@windmill-db:5432/windmill?sslmode=disable
+       MODE: server
+@@ -205,7 +205,7 @@
+     image: ollama/ollama:latest
+     restart: unless-stopped
+     ports:
+-      - "11434:11434"
++      - "127.0.0.1:11434:11434"
+     volumes:
+       - ollama_data:/root/.ollama
+ 
