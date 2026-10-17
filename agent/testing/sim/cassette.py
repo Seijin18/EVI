@@ -92,23 +92,63 @@ class CassetteStale(RuntimeError):
     pass
 
 
+# ISO dates are turned into offsets from the sim day only inside this window. Anything farther
+# is a literal in the prompt (e.g. the hard-coded example "2026-06-10T09:00:00" in graph.py's
+# rules) and must stay as is: as an offset it would change every real day and make every
+# recorded cassette stale the next morning.
+_OFFSET_WINDOW = (-45, 120)
+
+
 def _iso_to_offset(text: str, base: date, fmt: str) -> str:
     def sub(m: re.Match) -> str:
         try:
             d = date(int(m[1]), int(m[2]), int(m[3]))
         except ValueError:
             return m[0]
-        return fmt.format((d - base).days)
+        off = (d - base).days
+        if not _OFFSET_WINDOW[0] <= off <= _OFFSET_WINDOW[1]:
+            return m[0]
+        return fmt.format(off)
 
     return _ISO_DATE.sub(sub, text)
 
 
-def normalize_text(text: str, base: date) -> str:
-    """Stable form of a prompt string (see module docstring)."""
+# User-facing dd/mm dates ("Bom dia! Sábado, 17/10", "(18/10)", "18/10 10:00") carried in the chat
+# history and in tool results. They move with the real day, so they become offsets too (nearest
+# year to ``base``), but only inside a short window to leave fractions like "1/2" alone.
+_DM = re.compile(r"(?<![\d/.])(\d{1,2})/(\d{1,2})(?![\d/])")
+_DM_WINDOW = (-10, 45)
+_WD_BEFORE_DM = re.compile(
+    r"\b(?:" + _WEEKDAY.pattern[3:-3] + r"|dom|seg|ter|qua|qui|sex|s[aá]b)\b\.?(?=,? \d{1,2}/\d{1,2}\b)", re.IGNORECASE
+)
+
+
+def _dm_to_offset(text: str, base: date) -> str:
+    def sub(m: re.Match) -> str:
+        best = None
+        for year in (base.year - 1, base.year, base.year + 1):
+            try:
+                off = (date(year, int(m[2]), int(m[1])) - base).days
+            except ValueError:
+                return m[0]
+            if best is None or abs(off) < abs(best):
+                best = off
+        if best is None or not _DM_WINDOW[0] <= best <= _DM_WINDOW[1]:
+            return m[0]
+        return f"D{best:+d}"
+
+    return _DM.sub(sub, _WD_BEFORE_DM.sub("<WD>", text))
+
+
+def normalize_text(text: str, base: date, dm: bool = False) -> str:
+    """Stable form of a prompt string (see module docstring). ``dm`` also turns user-facing
+    ``dd/mm`` dates into offsets (chat requests; structured keys handle ``dd/mm`` themselves)."""
     text = _UUID.sub("<UUID>", text)
     text = _PENDING_TOKEN.sub("(token: <TOKEN>)", text)
     text = _PENDING_JSON.sub(r"\1<TOKEN>\3<T>\4<T>", text)
     text = _iso_to_offset(text, base, "D{:+d}")
+    if dm:
+        text = _dm_to_offset(text, base)
     out = []
     for line in text.split("\n"):
         if _VOLATILE_LINE.match(line):
@@ -119,7 +159,7 @@ def normalize_text(text: str, base: date) -> str:
 
 def _norm(obj: Any, base: date) -> Any:
     if isinstance(obj, str):
-        return normalize_text(obj, base)
+        return normalize_text(obj, base, dm=True)
     if isinstance(obj, list):
         return [_norm(x, base) for x in obj]
     if isinstance(obj, dict):
@@ -279,6 +319,14 @@ class SimCassetteChatModel(BaseChatModel):
         base = _today()
         key = request_key(messages, tools, base)
         st = _state()
+        if os.getenv("EVI_SIM_DUMP_STRUCTURED", "").strip() == "1":  # debug: normalized chat request per call, to diff stale keys
+            try:
+                payload = request_payload(messages, tools, base)
+                payload.pop("tools", None)
+                (CASSETTE_DIR / f"dumpchat-{key[:12]}-{'rec' if self.inner is not None else 'rep'}.json").write_text(
+                    json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+            except OSError:
+                pass
         if self.inner is None:
             msg = decode_response(st.lookup(key, _preview(messages)), base, _last_token(messages))
         else:
@@ -312,11 +360,22 @@ def structured_call(mode: str, task: str, prompt: str, schema: dict, call) -> di
         except OSError:
             pass
     if mode == "replay":
-        return st.lookup(key, prompt[-200:])
+        return _decode_dates(st.lookup(key, prompt[-200:]), _today())
     out = call()
     if isinstance(out, dict):  # failures are not recorded: a replay then reports it stale
-        st.append(key, prompt[-200:], out)
+        st.append(key, prompt[-200:], _encode_dates(out, _today()))
     return out
+
+
+def _encode_dates(out: dict, base: date) -> dict:
+    """Dates near the sim day are stored as ``@@D+n@@`` so a replay on another day gets fresh ones
+    (a recorded literal ``2026-10-13`` would age past the memory's "open item" window)."""
+    return json.loads(_iso_to_offset(json.dumps(out, ensure_ascii=False), base, "@@D{:+d}@@"))
+
+
+def _decode_dates(out: dict, base: date) -> dict:
+    blob = _TOKEN.sub(lambda m: (base + timedelta(days=int(m[1]))).isoformat(), json.dumps(out, ensure_ascii=False))
+    return json.loads(blob)
 
 
 def build_sim_llm(provider: str, *, temperature: float | None = None):

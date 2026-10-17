@@ -226,3 +226,47 @@ def test_structured_failure_is_not_recorded(sim_dir):
     _announce(sim_dir)
     assert cs.structured_call("record", "PROMISE", "p", _SCHEMA, lambda: None) is None
     assert not (sim_dir / "SIM-X.jsonl").exists()
+
+
+def test_hardcoded_example_date_does_not_move_the_key():
+    """A far-away literal date in a rule ("use 2026-06-10T09:00:00 for 9h") is not a relative
+    offset: the key must not change with the real day (root cause of cassettes going stale)."""
+    def key(d: date):
+        msgs = [SystemMessage(content="Use `2026-06-10T09:00:00` for 9h.\n" + _prompt(d)[0].content), _prompt(d)[1]]
+        return cs.request_key(msgs, [schedule_event], d)
+
+    assert key(date(2026, 10, 13)) == key(date(2026, 10, 16)) == key(date(2026, 11, 2))
+
+
+def test_near_dates_still_become_offsets():
+    assert cs.normalize_text("vence 2026-10-15", date(2026, 10, 13)) == "vence D+2"
+    assert cs.normalize_text("vence 2026-10-18", date(2026, 10, 16)) == "vence D+2"
+
+
+def test_dd_mm_dates_in_history_do_not_move_the_key():
+    """Briefing/tool text such as "Bom dia! Sábado, 17/10" and "(18/10)" is relative to the sim day."""
+    def key(d: date):
+        nxt = d + timedelta(1)
+        msgs = [
+            SystemMessage(content=f"Today is Monday, {d.isoformat()}. Current time: 09:00"),
+            AIMessage(content=f"Bom dia! {['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'][d.weekday()]}, {d:%d/%m}"),
+            HumanMessage(content=f"Vôlei ({nxt:%d/%m}) às 9h"),
+        ]
+        return cs.request_key(msgs, [schedule_event], d)
+
+    assert key(date(2026, 10, 16)) == key(date(2026, 10, 17)) == key(date(2026, 12, 31))
+    assert cs.normalize_text("sobra 1/2 pizza", date(2026, 10, 13)) == "sobra 1/2 pizza"
+
+
+def test_abbreviated_weekday_before_dd_mm():
+    a = cs.normalize_text("Lembrete para qui 22/10 às 18:00", date(2026, 10, 22), dm=True)
+    b = cs.normalize_text("Lembrete para sáb 17/10 às 18:00", date(2026, 10, 17), dm=True)
+    assert a == b
+
+
+def test_structured_response_dates_follow_the_sim_day():
+    """A recorded structured answer ("date": today) replays with the replay day's date."""
+    out = {"open": [{"item": "x", "date": "2026-10-13"}]}
+    enc = cs._encode_dates(out, date(2026, 10, 13))
+    assert enc["open"][0]["date"] == "@@D+0@@"
+    assert cs._decode_dates(enc, date(2026, 10, 20))["open"][0]["date"] == "2026-10-20"

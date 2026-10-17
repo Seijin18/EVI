@@ -8,6 +8,7 @@ reply text is only checked through an explicit ``reply_matches`` regex.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -77,6 +78,12 @@ class ScenarioError(ValueError):
 # --------------------------------------------------------------------------- dates
 def is_relative(value: Any) -> bool:
     return isinstance(value, str) and bool(_REL_RE.match(value))
+
+
+def sim_base_date() -> date | None:
+    """``EVI_SIM_BASE_DATE`` (YYYY-MM-DD) pins the sim calendar; unset -> the real day."""
+    raw = os.getenv("EVI_SIM_BASE_DATE")
+    return date.fromisoformat(raw) if raw else None
 
 
 def parse_relative(value: str, base: date, tz: str | ZoneInfo = DEFAULT_TZ) -> datetime:

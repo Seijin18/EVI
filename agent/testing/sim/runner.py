@@ -97,7 +97,9 @@ class Ctx:
         return {j.strip() for j in self.env.get("EVI_WHATSAPP_CONTROL_JIDS", "").split(",") if j.strip()}
 
     def today(self) -> "datetime.date":
-        return datetime.now(ZoneInfo(self.tz)).date()
+        # EVI_SIM_BASE_DATE (debug) pins the calendar to emulate running on another day; the
+        # Postgres clock is always the real one, so DB-time-sensitive scenarios need the default.
+        return schema.sim_base_date() or datetime.now(ZoneInfo(self.tz)).date()
 
     # ------------------------------------------------------------------ http
     def _http(self, method: str, url: str, body: dict | None = None, timeout: float = 30):
