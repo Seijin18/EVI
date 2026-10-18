@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from typing import Any, Callable, Dict
 
 from llm import extract_llm_text
@@ -190,6 +191,8 @@ def _voice_turn(
 _CB_ERROR = "Não consegui; responda 'respondido N'."
 _CB_OLD = "Esse briefing é antigo — use o de hoje."
 _CB_DONE = "Já estava feito."
+_CB_RESOLVED = "Já estava resolvido."
+_BUTTON_LOCK = threading.Lock()
 _CB_KINDS = {"reply_debt": ("ok", "no"), "commitment": ("ok", "no"), "name_prompt": ("no",)}
 
 
@@ -226,17 +229,21 @@ def handle_briefing_callback(cq: Dict[str, Any]) -> Dict[str, Any]:
 
     if parsed is None:
         return reply(_CB_ERROR, "invalid")
-    day8, n, action = parsed
+    day8, bkind, n, action = parsed
     session_id = f"telegram-{chat_id}"
     try:
-        payload = briefing.today_snapshot(session_id)
-        if (
-            payload is None
-            or str(payload.get("day") or "").replace("-", "") != day8
-            or (payload.get("message_id") and payload.get("message_id") != message_id)
-        ):
-            return reply(_CB_OLD, "stale")
-        return _run_briefing_action(payload, session_id, n, action, reply)
+        with _BUTTON_LOCK:  # resolve → act → save is one unit: `done` is read-modify-write
+            payload = briefing.today_snapshot(session_id, bkind)
+            stored_mid = None if payload is None else payload.get("message_id")
+            if (  # fail closed: the tapped message must be exactly the stored briefing
+                payload is None
+                or str(payload.get("day") or "").replace("-", "") != day8
+                or stored_mid is None
+                or message_id is None
+                or stored_mid != message_id
+            ):
+                return reply(_CB_OLD, "stale")
+            return _run_briefing_action(payload, session_id, n, action, reply)
     except Exception as exc:
         from services.soft_fail import soft_fail
 
@@ -260,7 +267,7 @@ def _run_briefing_action(payload: Dict[str, Any], session_id: str, n: int, actio
     feedback = row.get("feedback")
 
     def keyboard() -> dict:
-        return briefing.build_keyboard(day_iso, actionable, done, feedback)
+        return briefing.build_keyboard(day_iso, bkind, actionable, done, feedback)
 
     if action in ("up", "dn"):
         feedback = "up" if action == "up" else "down"
@@ -289,6 +296,8 @@ def _run_briefing_action(payload: Dict[str, Any], session_id: str, n: int, actio
         text = _commitment_action(db, int(ref_id), action)
         if text is None:
             return reply(_CB_ERROR, "error")
+        if text == _CB_RESOLVED:  # no longer pending: nothing was done, nothing to record
+            return reply(text, "already")
     done.add(n)
     new_payload = dict(payload)
     new_payload["done"] = sorted(done)
@@ -305,7 +314,7 @@ def _commitment_action(db, cid: int, action: str) -> str | None:
     pending = {r["id"]: r for r in db.list_pending_commitments(limit=100, include_past=True)}
     row = pending.get(cid)
     if row is None:
-        return _CB_DONE
+        return _CB_RESOLVED
     if action == "no":
         dismiss_commitment_ids([cid])
         return "Ok, dispensado."

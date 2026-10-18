@@ -20,7 +20,7 @@ Uma linha por item acionável visível (depois do `fit_volume`), na ordem do bri
 agenda/e-mail/tarefa nesta versão. Teto: 10 linhas de itens (o resto continua por texto).
 
 ### 2. `callback_data`
-`b1:<yyyymmdd>:<n>:<a>` (≤ 20 bytes): versão, dia do briefing, número, ação
+`b1:<yyyymmdd>:<m|e>:<n>:<a>` (≤ 24 bytes): versão, dia do briefing, tipo (manhã/noite), número, ação
 (`ok` | `no` | `up` | `dn`). O servidor resolve `n` pelo snapshot do dia; o tipo do item
 decide a função (`ok` em dívida = respondido; em commitment = confirmar; `no` = ignorar/
 dispensar). Nada de jid, id ou texto no botão.
@@ -50,8 +50,9 @@ Callback com erro → resposta "Não consegui; responda 'respondido N'".
 - ✅ numa **promessa** marca a promessa como feita (`done`, `confirmed_via='telegram_button'`); em
   combinado datado confirma pelo mesmo caminho da tool. ✖ dispensa os dois.
 - A linha 👍/👎 fica no teclado com ✓ no escolhido (permite trocar a nota; o último toque vale).
-- Guarda extra: o `message_id` do toque tem de ser o do briefing gravado no snapshot (evita que o
-  teclado da manhã use os números de outro briefing do mesmo dia).
+- Guarda fechada (revisão): o snapshot é o do dia **e tipo** do botão, e o `message_id` do toque tem de
+  ser o gravado no snapshot; faltando qualquer um, o toque é recusado como antigo. Toques são serializados
+  por um lock de processo; o webhook também recebe `callback_query`.
 - Idempotência por lista `done` de números no snapshot mais recente.
 
 ## Riscos

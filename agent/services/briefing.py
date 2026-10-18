@@ -736,10 +736,11 @@ def _telegram_session_id(chat_id: str) -> str:
 NO_BRIEFING_TODAY = "não há briefing de hoje para resolver os números"
 
 
-def today_snapshot(session_id: str | None) -> dict | None:
+def today_snapshot(session_id: str | None, kind: str | None = None) -> dict | None:
     """Payload of the latest ``morning_briefing`` snapshot of the session when it is
     from today (local day), else None. The latest snapshot decides, so an old one never
-    answers for a newer briefing that failed to store."""
+    answers for a newer briefing that failed to store. With ``kind`` only snapshots of
+    that briefing kind (morning/evening) are considered."""
     if not session_id:
         return None
     try:
@@ -749,6 +750,8 @@ def today_snapshot(session_id: str | None) -> dict | None:
             if row.get("tool_name") != "morning_briefing":
                 continue
             payload = row.get("payload") or {}
+            if kind is not None and payload.get("kind") != kind:
+                continue
             payload_day = str(payload.get("day") or "")
             if payload_day:  # the briefing's own local day (created_at is the DB clock)
                 same_day = payload_day == today.isoformat()
@@ -812,22 +815,25 @@ def resolve_briefing_items(
 
 BUTTON_KINDS = ("reply_debt", "commitment", "name_prompt")
 MAX_BUTTON_ROWS = 10
-CALLBACK_RE = re.compile(r"^b1:(\d{8}):(\d{1,3}):(ok|no|up|dn)$")
+KIND_CODES = {"morning": "m", "evening": "e"}
+CODE_KINDS = {v: k for k, v in KIND_CODES.items()}
+CALLBACK_RE = re.compile(r"^b1:(\d{8}):([me]):(\d{1,3}):(ok|no|up|dn)$")
 
 
 def buttons_enabled() -> bool:
     return os.getenv("EVI_BRIEFING_BUTTONS", "true").strip().lower() != "false"
 
 
-def callback_data(day: str, n: int, action: str) -> str:
-    """``b1:<yyyymmdd>:<n>:<a>`` — only the day, the item number and the action."""
-    return f"b1:{day.replace('-', '')}:{n}:{action}"
+def callback_data(day: str, kind: str, n: int, action: str) -> str:
+    """``b1:<yyyymmdd>:<m|e>:<n>:<a>`` — only the day, the briefing kind, the item number
+    and the action."""
+    return f"b1:{day.replace('-', '')}:{KIND_CODES[kind]}:{n}:{action}"
 
 
-def parse_callback_data(data: object) -> tuple[str, int, str] | None:
-    """``(yyyymmdd, n, action)`` or None for anything that is not exactly our format."""
+def parse_callback_data(data: object) -> tuple[str, str, int, str] | None:
+    """``(yyyymmdd, kind, n, action)`` or None for anything that is not exactly our format."""
     m = CALLBACK_RE.match(data) if isinstance(data, str) else None
-    return (m.group(1), int(m.group(2)), m.group(3)) if m else None
+    return (m.group(1), CODE_KINDS[m.group(2)], int(m.group(3)), m.group(4)) if m else None
 
 
 def actionable_kinds(items: list[BriefItem]) -> dict[int, str]:
@@ -847,25 +853,25 @@ def actionable_from_refs(refs: dict) -> dict[int, str]:
 
 
 def build_keyboard(
-    day: str, actionable: dict[int, str], done: object = (), feedback: str | None = None
+    day: str, kind: str, actionable: dict[int, str], done: object = (), feedback: str | None = None
 ) -> dict:
     """Inline keyboard: one row per actionable item not yet handled, then 👍/👎 (the
     chosen one marked ✓ — it stays tappable, the last tap wins)."""
     handled = {int(n) for n in done}
     rows: list[list[dict]] = []
-    for n, kind in sorted(actionable.items()):
+    for n, item_kind in sorted(actionable.items()):
         if n in handled:
             continue
-        if kind == "name_prompt":
-            rows.append([{"text": f"{n} ✖ ignorar", "callback_data": callback_data(day, n, "no")}])
+        if item_kind == "name_prompt":
+            rows.append([{"text": f"{n} ✖ ignorar", "callback_data": callback_data(day, kind, n, "no")}])
         else:
             rows.append([
-                {"text": f"{n} ✅", "callback_data": callback_data(day, n, "ok")},
-                {"text": f"{n} ✖", "callback_data": callback_data(day, n, "no")},
+                {"text": f"{n} ✅", "callback_data": callback_data(day, kind, n, "ok")},
+                {"text": f"{n} ✖", "callback_data": callback_data(day, kind, n, "no")},
             ])
     rows.append([
-        {"text": "👍 ✓" if feedback == "up" else "👍", "callback_data": callback_data(day, 0, "up")},
-        {"text": "👎 ✓" if feedback == "down" else "👎", "callback_data": callback_data(day, 0, "dn")},
+        {"text": "👍 ✓" if feedback == "up" else "👍", "callback_data": callback_data(day, kind, 0, "up")},
+        {"text": "👎 ✓" if feedback == "down" else "👎", "callback_data": callback_data(day, kind, 0, "dn")},
     ])
     return {"inline_keyboard": rows}
 
@@ -897,7 +903,7 @@ def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime |
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     # O usuário recebe o texto limpo (HTML); a memória/LLM guarda a versão marcada.
     actionable = actionable_kinds(brief.items)
-    markup = {"reply_markup": build_keyboard(day.isoformat(), actionable)} if buttons_enabled() else {}
+    markup = {"reply_markup": build_keyboard(day.isoformat(), kind, actionable)} if buttons_enabled() else {}
     if brief.text_user:
         result = send_telegram_message(brief.text_user, chat_id or None, parse_mode="HTML", **markup)
     else:

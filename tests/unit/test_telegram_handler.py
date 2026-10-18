@@ -480,7 +480,7 @@ def _rows(edit):
 
 
 def test_scn_ux_07_tap_ok_on_debt_acknowledges_and_edits_markup(buttons):
-    out = _go(_tap("b1:20261012:1:ok"))
+    out = _go(_tap("b1:20261012:m:1:ok"))
     assert out["callback"] == "done"
     assert buttons.acked == ["5511@s.whatsapp.net"]
     assert buttons.answers == ["Ok, marcado como respondido."]
@@ -492,24 +492,24 @@ def test_scn_ux_07_tap_ok_on_debt_acknowledges_and_edits_markup(buttons):
 
 
 def test_scn_ux_08_old_day_changes_nothing_and_says_old(buttons):
-    out = _go(_tap("b1:20261011:1:ok"))
+    out = _go(_tap("b1:20261011:m:1:ok"))
     assert out["callback"] == "stale" and buttons.answers == ["Esse briefing é antigo — use o de hoje."]
     assert not buttons.acked and not buttons.edits and not buttons.replied
 
 
 def test_scn_ux_08_other_message_than_the_current_briefing_is_old(buttons):
-    _go(_tap("b1:20261012:1:ok", message_id=70))
+    _go(_tap("b1:20261012:m:1:ok", message_id=70))
     assert not buttons.acked and buttons.answers == ["Esse briefing é antigo — use o de hoje."]
 
 
 def test_scn_ux_08_foreign_chat_or_sender_changes_nothing(buttons):
-    for update in (_tap("b1:20261012:1:ok", chat=555), _tap("b1:20261012:1:ok", sender=555)):
+    for update in (_tap("b1:20261012:m:1:ok", chat=555), _tap("b1:20261012:m:1:ok", sender=555)):
         assert _go(update)["skipped"] == "chat not allowed"
     assert not buttons.acked and not buttons.answers and not buttons.edits and not buttons.replied
 
 
-@pytest.mark.parametrize("data", [None, "", "x", "b1:20261012:1:rm", "b1:20261012:99:ok", "b1:20261012:2:ok ",
-                                  "b1:20261012:3:ok"])  # 3 = name prompt: only ✖ exists
+@pytest.mark.parametrize("data", [None, "", "x", "b1:20261012:m:1:rm", "b1:20261012:m:99:ok", "b1:20261012:m:2:ok ",
+                                  "b1:20261012:m:3:ok"])  # 3 = name prompt: only ✖ exists
 def test_malformed_or_impossible_data_answers_error_and_changes_nothing(buttons, data):
     out = _go(_tap(data))
     assert out["callback"] == "invalid" and "Não consegui" in buttons.answers[0]
@@ -517,39 +517,116 @@ def test_malformed_or_impossible_data_answers_error_and_changes_nothing(buttons,
 
 
 def test_second_tap_on_same_item_is_idempotent(buttons):
-    _go(_tap("b1:20261012:1:ok"))
-    out = _go(_tap("b1:20261012:1:ok"))
+    _go(_tap("b1:20261012:m:1:ok"))
+    out = _go(_tap("b1:20261012:m:1:ok"))
     assert out["callback"] == "already" and buttons.answers[-1] == "Já estava feito."
     assert buttons.acked == ["5511@s.whatsapp.net"]  # no second action
 
 
 def test_commitment_ok_confirms_with_button_provenance_and_no_dismisses(buttons):
-    _go(_tap("b1:20261012:2:ok"))
+    _go(_tap("b1:20261012:m:2:ok"))
     assert buttons.confirmed == [([12], "telegram_button")]
     assert buttons.answers == ["Ok, confirmado."]
 
 
 def test_commitment_no_dismisses_and_second_tap_changes_nothing(buttons):
-    _go(_tap("b1:20261012:2:no"))
+    _go(_tap("b1:20261012:m:2:no"))
     assert buttons.status == {12: "dismissed"} and not buttons.confirmed
-    _go(_tap("b1:20261012:2:ok"))
+    _go(_tap("b1:20261012:m:2:ok"))
     assert buttons.status == {12: "dismissed"} and buttons.answers[-1] == "Já estava feito."
 
 
 def test_promise_ok_marks_it_done(buttons):
     buttons.commitments[12] = "promise"
-    _go(_tap("b1:20261012:2:ok"))
+    _go(_tap("b1:20261012:m:2:ok"))
     assert buttons.promises == [12] and not buttons.confirmed
 
 
 def test_name_prompt_no_ignores_conversation(buttons):
-    _go(_tap("b1:20261012:3:no"))
+    _go(_tap("b1:20261012:m:3:no"))
     assert buttons.ignored == ["9@lid"]
 
 
 def test_scn_ux_09_feedback_last_tap_wins_and_keeps_row(buttons):
-    _go(_tap("b1:20261012:0:dn"))
+    _go(_tap("b1:20261012:m:0:dn"))
     assert buttons.feedback == "down" and _rows(buttons.edits[-1])[-1] == ["👍", "👎 ✓"]
-    _go(_tap("b1:20261012:0:up"))
+    _go(_tap("b1:20261012:m:0:up"))
     assert buttons.feedback == "up" and _rows(buttons.edits[-1])[-1] == ["👍 ✓", "👎"]
     assert buttons.answers == ["Obrigado!", "Obrigado!"]
+
+
+# --- guards: kind in the button, fail-closed message id, lock, webhook ---------------------
+
+
+def _snap(kind, mid, refs, done=None):
+    payload = {"kind": kind, "day": "2026-10-12", "message_id": mid, "refs": refs}
+    if done is not None:
+        payload["done"] = done
+    return {"tool_name": "morning_briefing", "created_at": "2026-10-12T10:00:00+00:00", "payload": payload}
+
+
+def test_snapshot_without_message_id_fails_closed(buttons):
+    buttons.snaps[0]["payload"].pop("message_id")
+    out = _go(_tap("b1:20261012:m:1:ok"))
+    assert out["callback"] == "stale" and not buttons.acked and not buttons.edits and not buttons.replied
+
+
+def test_callback_without_message_id_fails_closed(buttons):
+    out = _go(_tap("b1:20261012:m:1:ok", message_id=None))
+    assert out["callback"] == "stale" and not buttons.acked
+
+
+def test_morning_keyboard_never_resolves_against_the_evening_snapshot(buttons):
+    # an evening briefing went out later the same day; item 1 there is a commitment
+    buttons.snaps.insert(0, _snap("evening", 88, {"1": "commitment:12"}))
+    out = _go(_tap("b1:20261012:m:1:ok", message_id=77))  # morning keyboard
+    assert out["callback"] == "done" and buttons.acked == ["5511@s.whatsapp.net"]
+    assert not buttons.confirmed and not buttons.status
+    # a morning button on the evening message, or an evening button on the morning message
+    for data, mid in (("b1:20261012:m:1:ok", 88), ("b1:20261012:e:1:ok", 77)):
+        assert _go(_tap(data, message_id=mid))["callback"] == "stale"
+    assert not buttons.confirmed and not buttons.status
+    # the evening keyboard resolves the evening numbers
+    assert _go(_tap("b1:20261012:e:1:ok", message_id=88))["callback"] == "done"
+    assert buttons.confirmed == [([12], "telegram_button")]
+
+
+def test_commitment_no_longer_pending_is_already_resolved_without_side_effects(buttons):
+    buttons.status[12] = "dismissed"
+    n_snaps = len(buttons.snaps)
+    out = _go(_tap("b1:20261012:m:2:ok"))
+    assert out["callback"] == "already" and buttons.answers == ["Já estava resolvido."]
+    assert len(buttons.snaps) == n_snaps and not buttons.replied and not buttons.turns
+    assert not buttons.confirmed
+
+
+def test_concurrent_taps_do_not_lose_each_others_done_entries(buttons, monkeypatch):
+    import threading
+    import time
+
+    import tools.reply_debt_tools as rdt
+
+    monkeypatch.setattr(rdt, "acknowledge_debts", lambda jids: time.sleep(0.15))  # widen the race
+    buttons.snaps[0]["payload"]["refs"] = {"1": "reply_debt:a@s.whatsapp.net", "2": "reply_debt:b@s.whatsapp.net"}
+    threads = [threading.Thread(target=_go, args=(_tap(f"b1:20261012:m:{n}:ok"),)) for n in (1, 2)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert buttons.snaps[0]["payload"]["done"] == [1, 2]
+
+
+def test_webhook_forwards_callback_query_to_the_button_handler(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from fastapi.testclient import TestClient
+
+    import main
+
+    monkeypatch.setenv("EVI_API_KEY", "k")
+    main.app_state.graph = MagicMock()
+    seen = []
+    monkeypatch.setattr("services.telegram_handler.handle_briefing_callback",
+                        lambda cq: seen.append(cq) or {"ok": True, "callback": "done"})
+    body = {"update_id": 1, "callback_query": {"id": "c", "data": "b1:20261012:m:1:ok"}}
+    r = TestClient(main.app).post("/webhooks/telegram", json=body, headers={"X-Api-Key": "k"})
+    assert r.status_code == 200 and r.json()["callback"] == "done"
+    assert seen == [body["callback_query"]]

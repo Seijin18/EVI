@@ -71,7 +71,8 @@ fi
 
 echo "==> 4/4 setWebhook estável..."
 curl -s -G "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
-  --data-urlencode "url=${WEBHOOK_URL}" | tee /tmp/evi_setwebhook_named.json
+  --data-urlencode "url=${WEBHOOK_URL}" \
+  --data-urlencode 'allowed_updates=["message","callback_query"]' | tee /tmp/evi_setwebhook_named.json
 echo
 curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" | head -c 600
 echo

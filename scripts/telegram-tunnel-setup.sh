@@ -56,7 +56,8 @@ echo "Tunnel público: $PUBLIC"
 WEBHOOK_URL="${PUBLIC}${WM_PATH}?token=${WINDMILL_TELEGRAM_WEBHOOK_TOKEN}"
 echo "==> 3/4 setWebhook..."
 curl -s -G "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
-  --data-urlencode "url=${WEBHOOK_URL}" | tee /tmp/evi_setwebhook.json
+  --data-urlencode "url=${WEBHOOK_URL}" \
+  --data-urlencode 'allowed_updates=["message","callback_query"]' | tee /tmp/evi_setwebhook.json
 echo
 
 echo "==> 4/4 getWebhookInfo..."

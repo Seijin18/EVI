@@ -1006,8 +1006,8 @@ def test_scn_ux_06_rows_labels_and_opaque_callback_data(delivery, monkeypatch):
     assert _labels(markup) == [["1 ✅", "1 ✖"], ["2 ✅", "2 ✖"], ["3 ✖ ignorar"], ["👍", "👎"]]
     day = NOW.date().strftime("%Y%m%d")
     datas = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
-    assert datas == [f"b1:{day}:1:ok", f"b1:{day}:1:no", f"b1:{day}:2:ok", f"b1:{day}:2:no",
-                     f"b1:{day}:3:no", f"b1:{day}:0:up", f"b1:{day}:0:dn"]
+    assert datas == [f"b1:{day}:m:1:ok", f"b1:{day}:m:1:no", f"b1:{day}:m:2:ok", f"b1:{day}:m:2:no",
+                     f"b1:{day}:m:3:no", f"b1:{day}:m:0:up", f"b1:{day}:m:0:dn"]
     for d in datas:
         assert len(d.encode()) <= 64 and "@" not in d and "x1" not in d and "t1" not in d
     # the sent message id is kept in the snapshot (to edit it later)
@@ -1026,12 +1026,13 @@ def test_heavy_day_keeps_at_most_ten_item_rows(delivery, monkeypatch):
 
 
 def test_keyboard_hides_done_items_and_marks_feedback():
-    kb = briefing.build_keyboard("2026-10-12", {1: "reply_debt", 2: "commitment"}, done=[1], feedback="down")
+    kb = briefing.build_keyboard("2026-10-12", "morning", {1: "reply_debt", 2: "commitment"}, done=[1], feedback="down")
     assert _labels(kb) == [["2 ✅", "2 ✖"], ["👍", "👎 ✓"]]
 
 
 def test_parse_callback_data_is_strict():
-    assert briefing.parse_callback_data("b1:20261012:3:ok") == ("20261012", 3, "ok")
-    for bad in ("b2:20261012:3:ok", "b1:20261012:3:rm", "b1:2026:3:ok", "b1:20261012:3:ok ", None,
-                "b1:20261012:-1:ok", "b1:20261012:3:ok\nx"):
+    assert briefing.parse_callback_data("b1:20261012:m:3:ok") == ("20261012", "morning", 3, "ok")
+    assert briefing.parse_callback_data("b1:20261012:e:0:dn") == ("20261012", "evening", 0, "dn")
+    for bad in ("b2:20261012:m:3:ok", "b1:20261012:m:3:rm", "b1:2026:m:3:ok", "b1:20261012:m:3:ok ", None,
+                "b1:20261012:3:ok", "b1:20261012:x:3:ok", "b1:20261012:m:-1:ok", "b1:20261012:m:3:ok\nx"):
         assert briefing.parse_callback_data(bad) is None
