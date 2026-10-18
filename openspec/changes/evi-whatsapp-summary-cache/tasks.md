@@ -1,16 +1,16 @@
 ## 1. Fonte local
 
-- [ ] 1.1 `message_timeline.recent_rows(days, limit)` (pastas diretas canônicas, leitura do fim para trás, dedupe de compromisso, mesmo formato de linha da Evolution)
+- [x] 1.1 `message_timeline.recent_rows(days, limit)` (pastas diretas canônicas, leitura do fim para trás, dedupe de compromisso, mesmo formato de linha da Evolution)
   - SCN-WA-RECENT-01
   - Files: `agent/services/message_timeline.py`, `tests/unit/test_message_timeline.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_message_timeline.py -q`
 
-- [ ] 1.2 `whatsapp_activity` usa a fonte local; Evolution só para grupos da whitelist e lacunas, em paralelo com timeout total; flag `EVI_WHATSAPP_LOCAL_FIRST`
+- [x] 1.2 `whatsapp_activity` usa a fonte local; Evolution só para grupos da whitelist e lacunas, em paralelo com timeout total; flag `EVI_WHATSAPP_LOCAL_FIRST`
   - SCN-WA-RECENT-01, SCN-WA-RECENT-02
   - Files: `agent/services/whatsapp_activity.py`, `agent/services/evolution_discovery.py`, `tests/unit/test_whatsapp_activity.py`, `tests/unit/test_evolution_discovery.py`, `.env.example`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_whatsapp_activity.py tests/unit/test_evolution_discovery.py tests/unit/test_wrap_third_party.py -q`
 
-- [ ] 1.3 Cache do resumo (TTL 10 min, chave com o último ts)
+- [x] 1.3 Cache do resumo (TTL 10 min, chave com o último ts)
   - SCN-WA-RECENT-03
   - Files: `agent/services/whatsapp_activity.py`, `tests/unit/test_whatsapp_activity.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_whatsapp_activity.py -q`

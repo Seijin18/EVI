@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
+import os
+import threading
+import time
+from datetime import datetime, timezone
+
 from services.contact_identity import canonical_jid
-from services.evolution_discovery import fetch_recent_whatsapp_messages, name_query_matches
+from services.evolution_discovery import (
+    fetch_recent_whatsapp_messages,
+    groups_enabled,
+    name_query_matches,
+)
 from services.untrusted import wrap_external
 
 
@@ -60,28 +69,81 @@ def format_recent_messages(rows: list[dict], *, header: str = "") -> str:
     return "\n".join(out)
 
 
+_INCOMPLETE_NOTE = "(algumas conversas não puderam ser lidas)"
+
+
+def _local_first() -> bool:
+    return os.getenv("EVI_WHATSAPP_LOCAL_FIRST", "true").lower() in ("1", "true", "yes")
+
+
+def _recent_rows(days: int, limit: int) -> tuple[list[dict], bool]:
+    """(rows, incomplete). Local timelines first; Evolution only for groups and an empty store."""
+    status: dict = {}
+    if _local_first():
+        from services.message_timeline import recent_rows
+
+        covered: set[str] = set()
+        rows = recent_rows(days, limit, covered=covered)
+        if covered:
+            if groups_enabled():
+                extra = fetch_recent_whatsapp_messages(
+                    days=days, limit=limit, groups_only=True, status=status
+                )
+                rows = sorted(
+                    rows + list(extra),
+                    key=lambda r: r.get("ts_dt") or datetime.min.replace(tzinfo=timezone.utc),
+                    reverse=True,
+                )[:limit]
+            return rows, bool(status.get("incomplete"))
+    rows = fetch_recent_whatsapp_messages(days=days, limit=limit, status=status)
+    return rows, bool(status.get("incomplete"))
+
+
 def list_recent_whatsapp(*, days: int = 1, limit: int = 40) -> str:
     days = max(1, min(int(days), 30))
-    rows = fetch_recent_whatsapp_messages(days=days, limit=limit)
+    rows, incomplete = _recent_rows(days, limit)
     period = "ontem/hoje" if days <= 1 else f"últimos {days} dias"
-    return format_recent_messages(
+    out = format_recent_messages(
         rows,
         header=f"WhatsApp ({period}, até {limit} mensagens):",
     )
+    return f"{out}\n{_INCOMPLETE_NOTE}" if incomplete else out
 
 
 _CONTEXT_MAX = 10000
 _SUMMARY_MAX = 4000
 
 
+_CACHE_TTL_S = 600.0
+_summary_cache: dict[tuple, tuple[float, str]] = {}
+_summary_cache_lock = threading.Lock()
+
+
+def reset_summary_cache() -> None:
+    with _summary_cache_lock:
+        _summary_cache.clear()
+
+
+def _newest_ts(rows: list[dict]) -> str:
+    return max((str(r.get("ts_dt") or r.get("ts") or "") for r in rows), default="")
+
+
 def summarize_whatsapp(*, days: int = 1) -> str:
     days = max(1, min(int(days), 14))
-    rows = fetch_recent_whatsapp_messages(days=days, limit=60)
+    rows, incomplete = _recent_rows(days, 60)
     if not rows:
-        return (
+        msg = (
             "Não encontrei mensagens WhatsApp recentes no cache da Evolution. "
             "Confirme que a instância está conectada e que houve conversas no período."
         )
+        return f"{msg}\n{_INCOMPLETE_NOTE}" if incomplete else msg
+
+    key = (days, _newest_ts(rows))
+    now = time.monotonic()
+    with _summary_cache_lock:
+        hit = _summary_cache.get(key)
+        if hit and now - hit[0] < _CACHE_TTL_S:
+            return hit[1]
 
     lines = conversation_lines(rows, text_max=250)
     # Corta por linhas inteiras: nunca no meio de um bloco «externo».
@@ -113,7 +175,14 @@ Mensagens:
         body = str(resp).strip()
     # O resumo vem de um LLM que leu texto de terceiros: volta ao grafo como dado.
     wrapped = wrap_external(body, "whatsapp_resumo", _SUMMARY_MAX)
-    return f"Resumo WhatsApp ({period_label}):\n\n{wrapped}"
+    result = f"Resumo WhatsApp ({period_label}):\n\n{wrapped}"
+    if incomplete:
+        return f"{result}\n{_INCOMPLETE_NOTE}"  # partial read: not cached, retry sooner
+    with _summary_cache_lock:
+        for k in [k for k, (t, _) in _summary_cache.items() if now - t >= _CACHE_TTL_S]:
+            del _summary_cache[k]
+        _summary_cache[key] = (time.monotonic(), result)
+    return result
 
 
 def filter_messages_by_contact(

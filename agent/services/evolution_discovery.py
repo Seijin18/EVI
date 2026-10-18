@@ -253,12 +253,82 @@ def _group_whitelist() -> set[str]:
     return {p.strip() for p in raw.split(",") if p.strip()}
 
 
+def groups_enabled() -> bool:
+    """True when some group chat can be listed (whitelist, or groups not skipped)."""
+    skip = os.getenv("EVI_WHATSAPP_SKIP_GROUPS", "true").lower() in ("1", "true", "yes")
+    return bool(_group_whitelist()) or not skip
+
+
+def _recent_rows_for_chat(
+    client: Any,
+    chat: dict[str, Any],
+    registry: dict[str, dict[str, Any]],
+    cutoff: datetime,
+    per_chat: int,
+) -> list[dict[str, Any]]:
+    jid = chat["jid"]
+    is_group = "@g.us" in jid
+    raw = client.find_messages(jid, limit=per_chat)
+    if raw is None:
+        return []
+    rows: list[dict[str, Any]] = []
+    alt = _alt_phone_jid(_extract_message_records(raw), jid) if jid.endswith("@lid") else ""
+    chat_label, chat_phone = resolve_chat_label(jid, chat.get("label") or "", registry, alt)
+    for msg in parse_evolution_message_list(raw, remote_jid=jid):
+        ts_dt = _parse_msg_ts(msg.ts)
+        if ts_dt and ts_dt < cutoff:
+            continue
+        who = chat_label
+        if is_group:
+            part = (msg.participant or "").strip()
+            prow = registry.get(part) if part.endswith("@s.whatsapp.net") else None
+            who = (
+                (prow or {}).get("display_name")
+                or msg.label
+                or pretty_phone(part)
+                or "Alguém"
+            )
+        if msg.from_me:
+            preview = f"[eu] {msg.text[:300]}"
+        elif msg.is_group and who:
+            preview = f"[{who}] {msg.text[:300]}"
+        else:
+            preview = msg.text[:300]
+        rows.append(
+            {
+                "ts": msg.ts,
+                "ts_dt": ts_dt,
+                "chat_jid": jid,
+                "chat_label": chat_label,
+                "chat_phone": chat_phone,
+                "participant": msg.participant,
+                "sender_label": who,
+                "from_me": msg.from_me,
+                "text": msg.text,
+                "preview": preview,
+                "message_id": msg.id,
+            }
+        )
+    return rows
+
+
 def fetch_recent_whatsapp_messages(
     *,
     days: int = 1,
     limit: int = 40,
+    groups_only: bool = False,
+    budget_sec: float | None = None,
+    status: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Recent messages across direct chats (+ whitelisted groups) from Evolution cache."""
+    """Recent messages across direct chats (+ whitelisted groups) from Evolution cache.
+
+    Per-chat requests run concurrently (``EVI_WHATSAPP_FETCH_WORKERS``) within a total
+    budget (``EVI_WHATSAPP_FETCH_BUDGET_SEC``); requests still pending when it runs out
+    are dropped and ``status["incomplete"]`` is set. ``groups_only`` skips direct chats.
+    """
+    import time
+    from concurrent.futures import ThreadPoolExecutor, wait
+
     days = max(1, min(int(days), 30))
     limit = max(1, min(int(limit), 100))
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
@@ -276,56 +346,50 @@ def fetch_recent_whatsapp_messages(
         "true",
         "yes",
     )
+    if budget_sec is None:
+        budget_sec = float(os.getenv("EVI_WHATSAPP_FETCH_BUDGET_SEC", "8"))
+    workers = max(1, int(os.getenv("EVI_WHATSAPP_FETCH_WORKERS", "6")))
+    deadline = time.monotonic() + budget_sec
     registry = _registry_map()
 
+    pool = ThreadPoolExecutor(max_workers=workers + 1)
+    incomplete = False
     rows: list[dict[str, Any]] = []
-    for chat in fetch_evolution_chats():
-        jid = chat["jid"]
-        is_group = "@g.us" in jid
-        if is_group and skip_groups and jid not in whitelist:
-            continue
-        if not include_channels and jid.endswith(_NOISE_JID_SUFFIXES):
-            continue  # news channels / status updates are not conversations
-        raw = client.find_messages(jid, limit=per_chat)
-        if raw is None:
-            continue
-        alt = _alt_phone_jid(_extract_message_records(raw), jid) if jid.endswith("@lid") else ""
-        chat_label, chat_phone = resolve_chat_label(jid, chat.get("label") or "", registry, alt)
-        for msg in parse_evolution_message_list(raw, remote_jid=jid):
-            ts_dt = _parse_msg_ts(msg.ts)
-            if ts_dt and ts_dt < cutoff:
+    try:
+        chats_f = pool.submit(fetch_evolution_chats)
+        done, _ = wait([chats_f], timeout=max(0.0, deadline - time.monotonic()))
+        if not done:
+            incomplete = True
+            chats: list[dict[str, Any]] = []
+        else:
+            chats = chats_f.result()
+        futs = []
+        for chat in chats:
+            jid = chat["jid"]
+            is_group = "@g.us" in jid
+            if is_group and skip_groups and jid not in whitelist:
                 continue
-            who = chat_label
-            if is_group:
-                part = (msg.participant or "").strip()
-                prow = registry.get(part) if part.endswith("@s.whatsapp.net") else None
-                who = (
-                    (prow or {}).get("display_name")
-                    or msg.label
-                    or pretty_phone(part)
-                    or "Alguém"
-                )
-            if msg.from_me:
-                preview = f"[eu] {msg.text[:300]}"
-            elif msg.is_group and who:
-                preview = f"[{who}] {msg.text[:300]}"
-            else:
-                preview = msg.text[:300]
-            rows.append(
-                {
-                    "ts": msg.ts,
-                    "ts_dt": ts_dt,
-                    "chat_jid": jid,
-                    "chat_label": chat_label,
-                    "chat_phone": chat_phone,
-                    "participant": msg.participant,
-                    "sender_label": who,
-                    "from_me": msg.from_me,
-                    "text": msg.text,
-                    "preview": preview,
-                    "message_id": msg.id,
-                }
-            )
+            if groups_only and not is_group:
+                continue
+            if not include_channels and jid.endswith(_NOISE_JID_SUFFIXES):
+                continue  # news channels / status updates are not conversations
+            futs.append(pool.submit(_recent_rows_for_chat, client, chat, registry, cutoff, per_chat))
+        done, pending = wait(futs, timeout=max(0.0, deadline - time.monotonic()))
+        if pending:
+            incomplete = True
+        for f in futs:
+            if f in done:
+                try:
+                    rows.extend(f.result())
+                except Exception as exc:
+                    from services.soft_fail import soft_fail
+
+                    soft_fail("evolution_discovery.recent_chat", exc)
+                    incomplete = True
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+    if status is not None and incomplete:
+        status["incomplete"] = True
 
     rows.sort(
         key=lambda r: r.get("ts_dt") or datetime.min.replace(tzinfo=timezone.utc),

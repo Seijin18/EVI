@@ -102,3 +102,35 @@ def test_pretty_phone_and_label_resolution_never_returns_raw_jid():
     assert resolve_chat_label("5511999999999@s.whatsapp.net", "Zeca", {})[0] == "Zeca"
     assert resolve_chat_label("888@lid", "888", {})[0] == "Contato sem nome"
     assert resolve_chat_label("1203@g.us", "1203@g.us", {})[0] == "Grupo sem nome"
+
+
+def test_fetch_recent_parallel_and_budget():
+    import threading
+    import time
+
+    release = threading.Event()
+    jids = [f"55119000000{i:02d}@s.whatsapp.net" for i in range(4)]
+
+    class Fake:
+        def find_chats(self, *, limit=None):
+            return [{"id": j, "name": j[:6]} for j in jids]
+
+        def find_messages(self, jid, *, limit=None):
+            if jid == jids[0]:
+                release.wait(5)
+                return None
+            return {"messages": {"records": [{
+                "key": {"remoteJid": jid, "id": "i" + jid, "fromMe": False},
+                "message": {"conversation": "olá " + jid[-4:]},
+                "messageTimestamp": int(time.time()) - 60}]}}
+
+    status: dict = {}
+    t0 = time.monotonic()
+    with patch("services.evolution_discovery.EvolutionClient", Fake), patch(
+        "services.evolution_discovery._registry_map", return_value={}
+    ):
+        rows = fetch_recent_whatsapp_messages(days=1, limit=10, budget_sec=0.5, status=status)
+    release.set()
+    assert time.monotonic() - t0 < 3
+    assert status == {"incomplete": True}
+    assert {r["chat_jid"] for r in rows} == set(jids[1:])

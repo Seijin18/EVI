@@ -28,6 +28,12 @@ Ignora entradas de compromisso duplicadas (mesma regra do `contact_knowledge._wi
   não puderam ser lidas)".
 - `EVI_WHATSAPP_LOCAL_FIRST` (padrão `true`) volta ao comportamento antigo com `false`.
 
+### 2b. As-built
+Complemento pela Evolution só para grupos da whitelist e, quando a timeline local não tem
+**nenhuma** entrada no período (instalação nova, dia sem mensagens ou WhatsApp desconectado),
+o caminho completo da Evolution — agora em paralelo e com orçamento de 8 s, então o pior caso
+cai de ~46 s para ~8 s. Resultado incompleto não entra no cache.
+
 ### 3. Cache do resumo
 Chave `(days, último ts visto)`; TTL 10 min; mensagem nova muda a chave. Só o resumo (o LLM);
 a listagem local já é rápida.
