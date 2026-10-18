@@ -245,7 +245,7 @@ Os schedules vivem no Windmill (não no repo). Valores recomendados (hora local)
 | Script | Cron | Notas |
 |--------|------|-------|
 | `f/integrations/briefing` | `0 7 * * *` | `kind=morning` |
-| `f/integrations/briefing` (opcional) | `0 21 * * *` | `kind=evening` |
+| `f/integrations/briefing` | `0 21 * * *` | `kind=evening` — prévia de amanhã; `briefing_evening.schedule.yaml` (ligado desde 18/10) |
 | `f/integrations/probe` | `30 6 * * *` | probe diário |
 | `f/integrations/usage_signals` | `0 3 * * *` | sinais de uso diários |
 | `f/integrations/usage_report` | `30 0 * * 1` | segunda 00:30; reporta a semana ISO que acabou de fechar |

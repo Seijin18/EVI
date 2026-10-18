@@ -12,7 +12,7 @@
   - Files: `agent/services/briefing.py`, `agent/services/telegram_handler.py`, `agent/tools/reminder_tools.py`, `tests/unit/test_briefing.py`, `tests/unit/test_telegram_handler.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_telegram_handler.py -q`
 
-- [ ] 2.2 Schedule `briefing_evening` (21:00, ligado) no repo + `windmill/README.md`; publicar com push restrito (`wmill sync push --includes`)
+- [x] 2.2 Schedule `briefing_evening` (21:00, ligado) no repo + `windmill/README.md`; publicar com push restrito (`wmill sync push --includes`)
   - SCN-TIP-04
   - Files: `windmill/f/integrations/briefing_evening.schedule.yaml`, `windmill/README.md`
   - Verify: `wmill schedule list --workspace evi` mostra `briefing_evening` habilitado

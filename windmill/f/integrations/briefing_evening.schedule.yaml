@@ -1,0 +1,7 @@
+summary: Prévia de amanhã no Telegram (21:00)
+schedule: '0 0 21 * * *'
+timezone: America/Sao_Paulo
+script_path: f/integrations/briefing
+is_flow: false
+args: {kind: evening, force: false}
+enabled: true
