@@ -7,6 +7,14 @@ Roda **fora** do EVI (timer de usuário do systemd, a cada minuto). Faz `GET /he
 Na 2ª falha seguida envia **um** alerta no Telegram ("⚠️ EVI fora do ar desde HH:MM — motivo");
 quando o health volta depois de alertar, envia **uma** mensagem "✅ EVI voltou (fora por N min)".
 
+Também vigia a **sessão do WhatsApp**: `GET /instance/connectionState/<instância>` na Evolution
+(timeout 5 s, header `apikey`); estado diferente de `open` ou Evolution inalcançável é falha.
+Na 2ª falha seguida envia **um** alerta ("📵 WhatsApp desconectado desde HH:MM … Gere o QR em
+http://localhost:8082/manager") e, quando volta a `open` depois de alertar, **uma** mensagem
+"✅ WhatsApp reconectado.". É independente do health do agente (estado `wa_*` no mesmo arquivo;
+os dois alertas podem sair na mesma execução). Sem `EVOLUTION_API_KEY` ou com
+`EVI_SOURCE_ALERTS_ENABLED=false` a checagem é pulada em silêncio.
+
 Configuração (opcional):
 
 | Env | Default |
@@ -14,9 +22,12 @@ Configuração (opcional):
 | `EVI_WATCHDOG_URL` | `http://127.0.0.1:8002/health` (porta publicada do `agent-api`) |
 | `EVI_WATCHDOG_TIMEOUT` | `10` (segundos) |
 | `TELEGRAM_API_BASE` | `https://api.telegram.org` |
+| `EVI_WATCHDOG_EVOLUTION_URL` | `http://127.0.0.1:8082` |
+| `EVI_WATCHDOG_ENV_FILE` | `.env` do repo (útil em testes) |
 
-`TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` vêm do ambiente ou, se ausentes, dessas duas
-linhas do `.env` do repo (o arquivo nunca é "sourced"; o token nunca é impresso).
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE_NAME`
+(default `evi`) e `EVI_SOURCE_ALERTS_ENABLED` vêm do ambiente ou, se ausentes, **somente**
+dessas linhas do `.env` do repo (o arquivo nunca é "sourced"; token e API key nunca são impressos).
 Estado: `${XDG_STATE_HOME:-~/.local/state}/evi-watchdog/state`.
 
 ### Instalar (ação do usuário)
@@ -31,10 +42,14 @@ journalctl --user -u evi-watchdog.service -n 20
 
 Desinstalar: `systemctl --user disable --now evi-watchdog.timer`.
 
+Quem já instalou **não precisa reinstalar** para a checagem do WhatsApp: a unit executa o mesmo
+`scripts/evi-watchdog`, então a próxima execução (1 min) já a inclui.
+
 ### Testar
 
 ```bash
-scripts/evi-watchdog --dry-run   # imprime a decisão (ok / fail N / would alert / would send recovery); não envia nem grava estado
+scripts/evi-watchdog --dry-run   # imprime a decisão (ok / fail N / would alert / would send recovery, e "whatsapp ok / whatsapp fail N"); não envia nem grava estado
+EVI_SOURCE_ALERTS_ENABLED=false scripts/evi-watchdog --dry-run   # só o health do agente
 ```
 
 Teste induzido: `docker compose stop agent-api`, esperar ~2 min (chega o alerta, uma vez),

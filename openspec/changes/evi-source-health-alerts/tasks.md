@@ -12,7 +12,7 @@
 
 ## 2. Watchdog
 
-- [ ] 2.1 Watchdog verifica o WhatsApp direto na Evolution: aviso após 2 leituras fora de `open`, um por queda, aviso de volta; estado próprio no arquivo; lê só as chaves necessárias do `.env`
+- [x] 2.1 Watchdog verifica o WhatsApp direto na Evolution: aviso após 2 leituras fora de `open`, um por queda, aviso de volta; estado próprio no arquivo; lê só as chaves necessárias do `.env`
   - SCN-REL-03
   - Files: `scripts/evi-watchdog`, `tests/unit/test_watchdog.py`, `docs/operations.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_watchdog.py -q`

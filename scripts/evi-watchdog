@@ -5,10 +5,17 @@ GET the agent's /health; HTTP error / timeout / JSON status "down" is a failure
 ("degraded" is not). On the 2nd consecutive failure send ONE Telegram alert; when
 health returns after an alert send ONE recovery message.
 
+It also checks the WhatsApp session (Evolution connectionState != "open" or Evolution
+unreachable is a failure): ONE alert after the 2nd consecutive failure, ONE
+"reconectado" message when it is open again. Independent of the agent check, separate
+state keys (wa_*). Skipped silently when EVOLUTION_API_KEY is absent or
+EVI_SOURCE_ALERTS_ENABLED=false.
+
 Env (all optional): EVI_WATCHDOG_URL, EVI_WATCHDOG_TIMEOUT (s, default 10),
-TELEGRAM_API_BASE, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, XDG_STATE_HOME.
-The token/chat id are read from the process env first, else from ONLY those two
-lines of the repo .env (never sourced). The token is never printed.
+EVI_WATCHDOG_EVOLUTION_URL (default http://127.0.0.1:8082), EVI_WATCHDOG_ENV_FILE,
+TELEGRAM_API_BASE, XDG_STATE_HOME, plus the ENV_KEYS below.
+These are read from the process env first, else from ONLY those lines of the repo
+.env (never sourced). Secrets (token, API key) are never printed.
 
 Usage: evi-watchdog [--dry-run]   (dry-run: print the decision, send/write nothing)
 """
@@ -23,14 +30,25 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_URL = "http://127.0.0.1:8002/health"  # agent-api publishes 8002:8000
+DEFAULT_EVOLUTION_URL = "http://127.0.0.1:8082"
 ALERT_AFTER = 2
+# The only .env lines this script ever reads.
+ENV_KEYS = frozenset({
+    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "EVOLUTION_API_KEY",
+    "EVOLUTION_INSTANCE_NAME", "EVI_SOURCE_ALERTS_ENABLED",
+})
+STATE_DEFAULTS = {"failures": 0, "alerted": 0, "since": 0,
+                  "wa_failures": 0, "wa_alerted": 0, "wa_since": 0}
 
 
 def env_value(name: str) -> str:
+    if name not in ENV_KEYS:
+        return ""
     if os.environ.get(name):
         return os.environ[name]
+    env_file = Path(os.environ.get("EVI_WATCHDOG_ENV_FILE") or REPO / ".env")
     try:
-        for line in (REPO / ".env").read_text(encoding="utf-8").splitlines():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
             if line.startswith(name + "="):
                 return line.split("=", 1)[1].strip().strip("'\"")
     except OSError:
@@ -62,7 +80,7 @@ def check_health(url: str, timeout: float) -> tuple[bool, str]:
 
 
 def load_state(path: Path) -> dict:
-    state = {"failures": 0, "alerted": 0, "since": 0}
+    state = dict(STATE_DEFAULTS)  # old files without wa_* keys load as zeros
     try:
         for line in path.read_text().splitlines():
             k, _, v = line.partition("=")
@@ -78,6 +96,54 @@ def save_state(path: Path, state: dict) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text("".join(f"{k}={v}\n" for k, v in state.items()))
     tmp.replace(path)
+
+
+def check_whatsapp(base: str, instance: str, key: str, timeout: float = 5) -> bool:
+    """True only when Evolution reports connectionState == "open"."""
+    req = urllib.request.Request(
+        f"{base.rstrip('/')}/instance/connectionState/{urllib.parse.quote(instance)}",
+        headers={"apikey": key},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read())
+    except Exception:  # unreachable / HTTP error / bad JSON: all count as not open
+        return False
+    inst = data.get("instance") if isinstance(data, dict) else None
+    state = (inst or {}).get("state") if isinstance(inst, dict) else None
+    return state == "open"
+
+
+def whatsapp_step(state: dict, now: int, dry: bool) -> tuple[dict, int]:
+    """Run the WhatsApp check; return (wa_* state updates, rc). {} = skipped."""
+    key = env_value("EVOLUTION_API_KEY")
+    if env_value("EVI_SOURCE_ALERTS_ENABLED").lower() == "false" or not key:
+        return {}, 0
+    instance = env_value("EVOLUTION_INSTANCE_NAME") or "evi"
+    base = os.environ.get("EVI_WATCHDOG_EVOLUTION_URL", DEFAULT_EVOLUTION_URL)
+    prefix = "[dry-run] " if dry else ""
+    new = {k: state[k] for k in ("wa_failures", "wa_alerted", "wa_since")}
+    if check_whatsapp(base, instance, key):
+        if state["wa_alerted"]:
+            print(f"{prefix}{'would send' if dry else 'sending'} whatsapp reconnected")
+            if not dry and not send_telegram("✅ WhatsApp reconectado."):
+                return {}, 1  # keep wa_alerted=1 so it is retried next run
+        else:
+            print(f"{prefix}whatsapp ok")
+        return {"wa_failures": 0, "wa_alerted": 0, "wa_since": 0}, 0
+    failures = state["wa_failures"] + 1
+    new["wa_failures"] = failures
+    new["wa_since"] = state["wa_since"] if state["wa_failures"] else now
+    if failures >= ALERT_AFTER and not state["wa_alerted"]:
+        hhmm = time.strftime("%H:%M", time.localtime(new["wa_since"]))
+        print(f"{prefix}whatsapp fail {failures}: {'would alert' if dry else 'alerting'}")
+        msg = (f"📵 WhatsApp desconectado desde {hhmm} — o EVI não está lendo suas conversas. "
+               f"Gere o QR em http://localhost:8082/manager (instância {instance}) e escaneie no celular.")
+        if not dry and send_telegram(msg):
+            new["wa_alerted"] = 1
+    else:
+        print(f"{prefix}whatsapp fail {failures}")
+    return new, 0
 
 
 def send_telegram(text: str) -> bool:
@@ -104,17 +170,21 @@ def main(argv: list[str]) -> int:
     state = load_state(state_path)
     now = int(time.time())
 
+    rc = 0
     ok, reason = check_health(url, timeout)
     prefix = "[dry-run] " if dry else ""
+    new = {k: state[k] for k in ("failures", "alerted", "since")}
     if ok:
         if state["alerted"]:
             minutes = max(0, (now - state["since"]) // 60)
             print(f"{prefix}{'would send' if dry else 'sending'} recovery (down {minutes} min)")
-            if not dry and not send_telegram(f"✅ EVI voltou (fora por {minutes} min)"):
-                return 1  # keep alerted=1 so the recovery is retried next run
+            if dry or send_telegram(f"✅ EVI voltou (fora por {minutes} min)"):
+                new = {"failures": 0, "alerted": 0, "since": 0}
+            else:
+                rc = 1  # keep alerted=1 so the recovery is retried next run
         else:
             print(f"{prefix}ok ({reason})")
-        new = {"failures": 0, "alerted": 0, "since": 0}
+            new = {"failures": 0, "alerted": 0, "since": 0}
     else:
         failures = state["failures"] + 1
         since = state["since"] if state["failures"] else now
@@ -126,9 +196,11 @@ def main(argv: list[str]) -> int:
                 new["alerted"] = 1
         else:
             print(f"{prefix}fail {failures} ({reason})")
+    wa_new, wa_rc = whatsapp_step(state, now, dry)
+    full = {**state, **new, **wa_new}
     if not dry:
-        save_state(state_path, new)
-    return 0
+        save_state(state_path, full)
+    return rc or wa_rc
 
 
 if __name__ == "__main__":
