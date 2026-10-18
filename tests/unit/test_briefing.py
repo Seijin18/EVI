@@ -80,6 +80,12 @@ def source_status(monkeypatch):
     return st
 
 
+@pytest.fixture(autouse=True)
+def _no_tip_by_default(monkeypatch):
+    # the morning tip reads the turn_log; tip tests opt in explicitly
+    monkeypatch.setenv("EVI_BRIEFING_TIPS", "false")
+
+
 @pytest.fixture
 def setup(monkeypatch):
     def _setup(responses=None, commitments=None):
@@ -558,7 +564,7 @@ def test_scn_debt_06_three_labelled_groups(setup, monkeypatch):
         "Esperando sua resposta", "Suas promessas", "Combinados"]
     assert [i.ref for i in wa.items] == [
         {"kind": "reply_debt", "id": "55@s.whatsapp.net"},
-        {"kind": "commitment", "id": 20},
+        {"kind": "commitment", "id": 20, "rm_title": "Mandar o contrato"},  # due tomorrow
         {"kind": "commitment", "id": 21},
     ]
     assert [i.n for i in b.items] == list(range(1, 9))
@@ -1033,6 +1039,132 @@ def test_keyboard_hides_done_items_and_marks_feedback():
 def test_parse_callback_data_is_strict():
     assert briefing.parse_callback_data("b1:20261012:m:3:ok") == ("20261012", "morning", 3, "ok")
     assert briefing.parse_callback_data("b1:20261012:e:0:dn") == ("20261012", "evening", 0, "dn")
-    for bad in ("b2:20261012:m:3:ok", "b1:20261012:m:3:rm", "b1:2026:m:3:ok", "b1:20261012:m:3:ok ", None,
+    assert briefing.parse_callback_data("b1:20261012:e:3:rm") == ("20261012", "evening", 3, "rm")
+    for bad in ("b2:20261012:m:3:ok", "b1:20261012:m:3:xx", "b1:2026:m:3:ok", "b1:20261012:m:3:ok ", None,
                 "b1:20261012:3:ok", "b1:20261012:x:3:ok", "b1:20261012:m:-1:ok", "b1:20261012:m:3:ok\nx"):
         assert briefing.parse_callback_data(bad) is None
+
+
+# --- discovery tip (evi-discovery-tips, SCN-TIP-01/02) -----------------------------------
+
+
+def _tips(monkeypatch, used):
+    monkeypatch.setenv("EVI_BRIEFING_TIPS", "true")
+    monkeypatch.setattr(db, "capabilities_used_since", lambda since: set(used))
+
+
+def test_scn_tip_01_morning_ends_with_reminder_tip(setup, monkeypatch):
+    setup()
+    _tips(monkeypatch, {"input_kind:voice", "get_whatsapp_contact_info", "input_kind:button"})
+    b = briefing.assemble_briefing(kind="morning", now=NOW)
+    last = b.text_user.rstrip().splitlines()[-1]
+    assert last.startswith("💡 Dica:") and "me lembra" in last
+    assert b.text.rstrip().splitlines()[-1] == last
+
+
+def test_scn_tip_02_all_capabilities_used_has_no_tip(setup, monkeypatch):
+    setup()
+    _tips(monkeypatch, {"create_reminder", "input_kind:voice", "get_whatsapp_contact_info", "input_kind:button"})
+    b = briefing.assemble_briefing(kind="morning", now=NOW)
+    assert "Dica" not in b.text_user and "Dica" not in b.text
+
+
+def test_tip_is_morning_only_and_flag_off_hides_it(setup, monkeypatch):
+    setup()
+    _tips(monkeypatch, set())
+    assert "Dica" not in briefing.assemble_briefing(kind="evening", now=NOW).text_user
+    monkeypatch.setenv("EVI_BRIEFING_TIPS", "false")
+    assert "Dica" not in briefing.assemble_briefing(kind="morning", now=NOW).text_user
+
+
+def test_tip_db_failure_means_no_tip(setup, monkeypatch):
+    setup()
+    monkeypatch.setenv("EVI_BRIEFING_TIPS", "true")
+
+    def boom(since):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db, "capabilities_used_since", boom)
+    b = briefing.assemble_briefing(kind="morning", now=NOW)
+    assert "Dica" not in b.text_user and "Bom dia" in b.text_user
+
+
+def test_tip_is_the_first_line_dropped_over_the_budget(setup, monkeypatch):
+    setup()
+    base = briefing.assemble_briefing(kind="morning", now=NOW)
+    used_lines = briefing.volume_lines(base.sections)
+    _tips(monkeypatch, set())
+    monkeypatch.setattr(briefing, "MAX_LINES", used_lines)  # no spare line: the tip goes first
+    b = briefing.assemble_briefing(kind="morning", now=NOW)
+    assert "Dica" not in b.text_user
+    assert [s.collapsed for s in b.sections] == [s.collapsed for s in base.sections]  # nothing else cut
+    monkeypatch.setattr(briefing, "MAX_LINES", used_lines + 1)
+    assert "Dica" in briefing.assemble_briefing(kind="morning", now=NOW).text_user
+
+
+# --- evening reminder action (SCN-TIP-03) ---------------------------------------------------
+
+TOMORROW_TASKS = _env(tasks=[
+    {"id": "tt1", "title": "Pagar <b>boleto</b>", "due": "2026-10-11", "status": "needsAction"},
+    {"id": "tt2", "title": "Outra", "due": "2026-10-20", "status": "needsAction"},
+])
+
+
+def _evening(setup, commitments=None):
+    setup(responses={"list_events": _env(events=[]), "list_tasks": TOMORROW_TASKS},
+          commitments=[] if commitments is None else commitments)
+    return briefing.assemble_briefing(kind="evening", now=NOW)
+
+
+def test_evening_items_due_tomorrow_are_remindable(setup):
+    b = _evening(setup)
+    task = next(i for i in b.items if i.ref.get("id") == "tt1")
+    rm = briefing.remindable_titles(b.items, "evening")
+    assert rm == {task.n: "Pagar <b>boleto</b>"}
+    assert briefing.remindable_titles(b.items, "morning") == {}
+    assert f"lembra {task.n}" in b.text_user
+
+
+def test_evening_commitments_only_with_date_tomorrow_and_not_events(setup):
+    commitments = [
+        {"id": 1, "title": "Enviar X", "type": "promise", "event_date": "2026-10-11", "raw_text": "x"},
+        {"id": 2, "title": "Reunião", "type": "event", "event_date": "2026-10-11", "raw_text": "x"},
+        {"id": 3, "title": "Depois", "type": "promise", "event_date": "2026-10-15", "raw_text": "x"},
+        {"id": 4, "title": "Sem data", "type": "promise", "raw_text": "x"},
+    ]
+    b = _evening(setup, commitments)
+    rm_ids = {i.ref["id"] for i in b.items if i.n in briefing.remindable_titles(b.items, "evening")}
+    assert rm_ids == {1, "tt1"}
+
+
+def test_keyboard_has_bell_button_and_drops_it_once_reminded():
+    kb = briefing.build_keyboard("2026-10-10", "evening", {2: "commitment"}, remind={1: "t", 2: "u"})
+    rows = [[b["text"] for b in r] for r in kb["inline_keyboard"]]
+    assert rows[:2] == [["1 🔔"], ["2 ✅", "2 ✖", "2 🔔"]]
+    data = kb["inline_keyboard"][0][0]["callback_data"]
+    assert data == "b1:20261010:e:1:rm" and len(data.encode()) <= 64
+    assert briefing.parse_callback_data(data) == ("20261010", "evening", 1, "rm")
+    kb = briefing.build_keyboard("2026-10-10", "evening", {2: "commitment"}, remind={1: "t", 2: "u"},
+                                 reminded=[1, 2], done=[2])
+    assert [[b["text"] for b in r] for r in kb["inline_keyboard"]][:-1] == []
+
+
+def test_evening_without_items_is_one_free_line(setup):
+    setup(responses={"list_events": _env(events=[]), "list_tasks": _env(tasks=[]),
+                     "summarize_inbox": _env(messages=[])}, commitments=[])
+    b = briefing.assemble_briefing(kind="evening", now=NOW)
+    assert "Amanhã está livre." in b.text_user and "Dia livre" not in b.text_user
+
+
+def test_deliver_evening_sends_bell_buttons_and_stores_wrapped_titles(setup, delivery, monkeypatch):
+    items = [briefing.BriefItem(1, "a", {"kind": "task", "id": "tt1", "rm_title": "Pagar boleto"}),
+             briefing.BriefItem(2, "b", {"kind": "task", "id": "tt2"})]
+    sec = [briefing.Section("tasks", "Tarefas", items=items)]
+    monkeypatch.setattr(briefing, "assemble_briefing",
+                        lambda kind="morning", now=None: briefing.Briefing("TEXTO", sec, items))
+    briefing.deliver_briefing("evening", now=NOW)
+    rows = [[b["text"] for b in r] for r in delivery.markups[0]["inline_keyboard"]]
+    assert rows[0] == ["1 🔔"] and ["2 🔔"] not in rows
+    payload = delivery.db.snaps[-1][2]
+    assert list(payload["rm"]) == ["1"] and "Pagar boleto" in payload["rm"]["1"]
+    assert payload["rm"]["1"].startswith("«externo:")  # shown to the model: delimited

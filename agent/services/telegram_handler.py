@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 from typing import Any, Callable, Dict
 
@@ -192,7 +193,10 @@ _CB_ERROR = "Não consegui; responda 'respondido N'."
 _CB_OLD = "Esse briefing é antigo — use o de hoje."
 _CB_DONE = "Já estava feito."
 _CB_RESOLVED = "Já estava resolvido."
+_CB_REMINDED = "🔔 Vou te lembrar amanhã às 9h."
+_CB_REMINDED_ALREADY = "Já estava agendado."
 _BUTTON_LOCK = threading.Lock()
+_REMIND_REPLY = re.compile(r"^\s*lembra\s+(\d{1,3})\s*[.!]?\s*$", re.IGNORECASE)
 _CB_KINDS = {"reply_debt": ("ok", "no"), "commitment": ("ok", "no"), "name_prompt": ("no",)}
 
 
@@ -267,13 +271,24 @@ def _run_briefing_action(payload: Dict[str, Any], session_id: str, n: int, actio
     feedback = row.get("feedback")
 
     def keyboard() -> dict:
-        return briefing.build_keyboard(day_iso, bkind, actionable, done, feedback)
+        return briefing.build_keyboard(
+            day_iso, bkind, actionable, done, feedback,
+            remind=payload.get("rm") or {}, reminded=payload.get("rm_done") or [],
+        )
 
     if action in ("up", "dn"):
         feedback = "up" if action == "up" else "down"
         db.set_briefing_feedback(day, bkind, feedback)  # last tap wins
         db.mark_briefing_replied(day, bkind)
         return reply("Obrigado!", "done", markup=keyboard(), action=action)
+
+    if action == "rm":
+        outcome, text = _tomorrow_reminder(payload, session_id, n)
+        if outcome == "done":
+            payload = _store_reminded(payload, session_id, n)
+        return reply(
+            text, outcome, markup=keyboard() if outcome in ("done", "already") else None, action=action
+        )
 
     kind, _, ref_id = str(refs.get(str(n)) or "").partition(":")
     if n not in actionable or action not in _CB_KINDS.get(kind, ()) or not ref_id:
@@ -304,6 +319,66 @@ def _run_briefing_action(payload: Dict[str, Any], session_id: str, n: int, actio
     db.save_tool_snapshot(session_id, "morning_briefing", new_payload)
     db.mark_briefing_replied(day, bkind)
     return reply(text, "done", markup=keyboard(), action=action)
+
+
+def _tomorrow_reminder(payload: Dict[str, Any], session_id: str, n: int) -> tuple[str, str]:
+    """"🔔 lembrar amanhã 9h" on item ``n`` of tonight's preview: creates the reminder (same
+    code as ``create_reminder``) with the item's title. Returns ``(outcome, answer)`` with
+    outcome done | already | invalid | error. Does not store ``rm_done`` (see _store_reminded)."""
+    from datetime import date as _date, datetime as _dt, time as _t, timedelta
+    from zoneinfo import ZoneInfo
+
+    from services.untrusted import strip_markers
+    from tools.calendar_time import evi_timezone
+    from tools.reminder_tools import create_reminder_now
+
+    wrapped = (payload.get("rm") or {}).get(str(n))
+    if payload.get("kind") != "evening" or not wrapped:
+        return "invalid", _CB_ERROR
+    title = " ".join(strip_markers(str(wrapped)).split())
+    if not title:
+        return "invalid", _CB_ERROR
+    if n in {int(x) for x in payload.get("rm_done") or []}:
+        return "already", _CB_REMINDED_ALREADY
+    due = _dt.combine(
+        _date.fromisoformat(str(payload["day"])) + timedelta(days=1), _t(9, 0),
+        tzinfo=ZoneInfo(evi_timezone()),
+    )
+    created, message = create_reminder_now(title, due, created_from="telegram")
+    if not created:
+        return "error", message[:190]
+    return "done", _CB_REMINDED
+
+
+def _store_reminded(payload: Dict[str, Any], session_id: str, n: int) -> Dict[str, Any]:
+    """Records item ``n`` in the snapshot's ``rm_done`` (idempotency) and counts the reply."""
+    import db
+    from datetime import date as _date
+
+    new_payload = dict(payload)
+    new_payload["rm_done"] = sorted({int(x) for x in payload.get("rm_done") or []} | {n})
+    db.save_tool_snapshot(session_id, "morning_briefing", new_payload)
+    db.mark_briefing_replied(_date.fromisoformat(str(payload["day"])), str(payload.get("kind") or "evening"))
+    return new_payload
+
+
+def try_reminder_reply(text: str, session_id: str) -> str | None:
+    """Deterministic "lembra N" against tonight's evening preview (no LLM). Claims the
+    message only when item N of today's evening snapshot offers a reminder."""
+    m = _REMIND_REPLY.match(text or "")
+    if not m:
+        return None
+    from services import briefing
+
+    n = int(m.group(1))
+    with _BUTTON_LOCK:  # read → create → store `rm_done` is one unit, like the buttons
+        payload = briefing.today_snapshot(session_id, "evening")
+        if not payload or str(n) not in (payload.get("rm") or {}):
+            return None
+        outcome, answer = _tomorrow_reminder(payload, session_id, n)
+        if outcome == "done":
+            _store_reminded(payload, session_id, n)
+        return answer if outcome in ("done", "already", "error") else None
 
 
 def _commitment_action(db, cid: int, action: str) -> str | None:
@@ -414,6 +489,24 @@ def process_telegram_update(
                 ai_content=named,
                 tools=[{"type": "direct", "tool": "contact_name_reply"}],
                 extra={"name_reply": True},
+            )
+
+    if not forwarded:
+        # "lembra N" on tonight's preview: reminder for tomorrow 09:00 with the item's title.
+        try:
+            reminded = try_reminder_reply(text, session_id)
+        except Exception as exc:
+            from services.soft_fail import soft_fail
+            soft_fail("telegram_handler.reminder_reply", exc)
+            reminded = None
+        if reminded:
+            return _reply_direct(
+                session_id=session_id,
+                chat_id=chat_id,
+                text=text,
+                ai_content=reminded,
+                tools=[{"type": "direct", "tool": "briefing_reminder"}],
+                extra={"briefing_reminder": True},
             )
 
     if direct_handlers_enabled():

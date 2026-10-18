@@ -630,3 +630,108 @@ def test_webhook_forwards_callback_query_to_the_button_handler(monkeypatch):
     r = TestClient(main.app).post("/webhooks/telegram", json=body, headers={"X-Api-Key": "k"})
     assert r.status_code == 200 and r.json()["callback"] == "done"
     assert seen == [body["callback_query"]]
+
+
+# --- evening "🔔 lembrar amanhã 9h" (SCN-TIP-03) ----------------------------------------------
+
+
+@pytest.fixture
+def evening(buttons, monkeypatch):
+    import db
+    import tools.reminder_tools as rt
+
+    buttons.created = []
+    buttons.snaps.insert(0, {"tool_name": "morning_briefing", "created_at": "2026-10-12T22:00:00+00:00", "payload": {
+        "kind": "evening", "day": "2026-10-12", "message_id": 88,
+        "refs": {"1": "task:t1", "2": "commitment:12"},
+        "rm": {"1": "«externo:briefing» Pagar boleto «/externo»", "2": "«externo:briefing» Enviar X «/externo»"},
+    }})
+    monkeypatch.setenv("EVI_REMINDERS_ENABLED", "true")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", str(OWNER))
+    monkeypatch.setattr(rt, "now_local", lambda: TODAY.replace(hour=21))
+    monkeypatch.setattr(db, "create_reminder",
+                        lambda text, due, rep, chat, src, anchor_day=None: buttons.created.append((text, due, rep, chat, src)) or 1)
+    return buttons
+
+
+def _due(local_day, hour=9):
+    return datetime(2026, 10, local_day, hour, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))
+
+
+def test_scn_tip_03_tap_bell_creates_reminder_for_tomorrow_9h_with_the_title(evening):
+    out = _go(_tap("b1:20261012:e:1:rm", message_id=88))
+    assert out["callback"] == "done" and evening.answers == ["🔔 Vou te lembrar amanhã às 9h."]
+    [(text, due, rep, chat, src)] = evening.created
+    assert text == "Pagar boleto" and due == _due(13) and rep is None and src == "telegram"
+    assert evening.snaps[0]["payload"]["rm_done"] == [1]
+    assert [r for r in _rows(evening.edits[-1]) if r[0].startswith("1 ")] == []  # its 🔔 is gone
+    assert ["2 ✅", "2 ✖", "2 🔔"] in _rows(evening.edits[-1])
+    assert evening.turns and evening.replied == [("2026-10-12", "evening")]
+
+
+def test_bell_second_tap_is_idempotent(evening):
+    _go(_tap("b1:20261012:e:1:rm", message_id=88))
+    out = _go(_tap("b1:20261012:e:1:rm", message_id=88))
+    assert out["callback"] == "already" and evening.answers[-1] == "Já estava agendado."
+    assert len(evening.created) == 1
+
+
+def test_bell_stale_or_foreign_changes_nothing(evening):
+    assert _go(_tap("b1:20261011:e:1:rm", message_id=88))["callback"] == "stale"  # old day
+    assert _go(_tap("b1:20261012:e:1:rm", message_id=77))["callback"] == "stale"  # other message
+    assert _go(_tap("b1:20261012:e:1:rm", message_id=88, chat=999, sender=999))["skipped"] == "chat not allowed"
+    assert not evening.created
+
+
+def test_bell_on_item_without_reminder_or_on_morning_snapshot_is_invalid(evening):
+    assert _go(_tap("b1:20261012:e:3:rm", message_id=88))["callback"] == "invalid"
+    assert _go(_tap("b1:20261012:m:1:rm", message_id=77))["callback"] == "invalid"  # morning: no `rm`
+    assert not evening.created
+
+
+def test_bell_reminders_disabled_answers_without_marking_done(evening, monkeypatch):
+    monkeypatch.setenv("EVI_REMINDERS_ENABLED", "false")
+    out = _go(_tap("b1:20261012:e:1:rm", message_id=88))
+    assert out["callback"] == "error" and "desativados" in evening.answers[-1]
+    assert "rm_done" not in evening.snaps[0]["payload"] and not evening.created
+
+
+def test_bell_does_not_disturb_ok_no_done_list(evening):
+    _go(_tap("b1:20261012:e:2:rm", message_id=88))
+    assert _go(_tap("b1:20261012:e:2:ok", message_id=88))["callback"] == "done"
+    assert evening.confirmed == [([12], "telegram_button")]
+    assert evening.snaps[0]["payload"]["done"] == [2] and evening.snaps[0]["payload"]["rm_done"] == [2]
+
+
+def _say(text, monkeypatch):
+    sent = []
+    monkeypatch.setattr("services.telegram_handler.send_telegram_message",
+                        lambda text, chat_id=None, **kw: sent.append(text) or True)
+    monkeypatch.setattr("services.telegram_handler._persist_turn", lambda *a: None)
+    monkeypatch.setattr("services.telegram_handler.log_telegram_turn", lambda *a, **k: None)
+
+    def no_chat(*a, **k):
+        raise AssertionError("deterministic reply never reaches the LLM")
+
+    out = process_telegram_update({"message": {"chat": {"id": OWNER}, "text": text}}, no_chat)
+    return out, sent
+
+
+def test_scn_tip_03_text_reply_lembra_n_creates_the_reminder(evening, monkeypatch):
+    out, sent = _say("lembra 1", monkeypatch)
+    assert out.get("briefing_reminder") is True
+    [(text, due, *_)] = evening.created
+    assert text == "Pagar boleto" and due == _due(13)
+    assert sent == ["🔔 Vou te lembrar amanhã às 9h."]
+    _, sent = _say("Lembra 1.", monkeypatch)  # again: idempotent
+    assert len(evening.created) == 1 and sent == ["Já estava agendado."]
+
+
+def test_text_reply_not_claimed_without_matching_item(evening, monkeypatch):
+    from services.telegram_handler import try_reminder_reply
+
+    assert try_reminder_reply("lembra 9", f"telegram-{OWNER}") is None  # no such item
+    assert try_reminder_reply("me lembra 1 de algo", f"telegram-{OWNER}") is None
+    evening.snaps.insert(0, _snap("morning", 99, {"1": "task:t1"}))  # latest *evening* still decides
+    assert try_reminder_reply("lembra 1", f"telegram-{OWNER}") == "🔔 Vou te lembrar amanhã às 9h."
+    assert len(evening.created) == 1

@@ -26,6 +26,9 @@ botões estão ligados; senão a frase "responda 'lembra N'"). O toque cria um l
 mesmo código de `create_reminder` (amanhã 09:00 local, texto = título do item, sem conteúdo
 de terceiros além do título já mostrado). Noite sem itens: "Amanhã está livre." (uma linha).
 
+### 2b. As-built
+Idempotência do 🔔 numa lista própria (`rm_done`) no snapshot, para não esconder os botões ✅/✖ do mesmo item; os títulos ficam no snapshot como texto delimitado (o snapshot é lido pelo LLM) e são limpos ao criar o lembrete. `create_reminder_now` é o corpo da tool, usado também pelo toque.
+
 ### 3. Flags
 `EVI_BRIEFING_TIPS` (padrão `true`). A prévia da noite é controlada pelo schedule (Windmill).
 

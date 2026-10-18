@@ -1,13 +1,13 @@
 ## 1. Dicas
 
-- [ ] 1.1 `discovery_tips` (catálogo, detecção de uso no `turn_log` em 14 dias, rotação diária) + linha no rodapé do briefing da manhã respeitando o teto; flag `EVI_BRIEFING_TIPS`
+- [x] 1.1 `discovery_tips` (catálogo, detecção de uso no `turn_log` em 14 dias, rotação diária) + linha no rodapé do briefing da manhã respeitando o teto; flag `EVI_BRIEFING_TIPS`
   - SCN-TIP-01, SCN-TIP-02
   - Files: `agent/services/discovery_tips.py`, `agent/services/briefing.py`, `agent/db.py`, `tests/unit/test_discovery_tips.py`, `tests/unit/test_briefing.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_discovery_tips.py tests/unit/test_briefing.py -q`
 
 ## 2. Prévia da noite
 
-- [ ] 2.1 Ação "lembrar amanhã 9h" nos itens com prazo amanhã da prévia da noite (botão `rm` + resposta "lembra N"), criando o lembrete pelo código de `create_reminder`
+- [x] 2.1 Ação "lembrar amanhã 9h" nos itens com prazo amanhã da prévia da noite (botão `rm` + resposta "lembra N"), criando o lembrete pelo código de `create_reminder`
   - SCN-TIP-03
   - Files: `agent/services/briefing.py`, `agent/services/telegram_handler.py`, `agent/tools/reminder_tools.py`, `tests/unit/test_briefing.py`, `tests/unit/test_telegram_handler.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_telegram_handler.py -q`

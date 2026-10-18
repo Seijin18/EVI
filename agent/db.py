@@ -983,6 +983,32 @@ def insert_turn(
     return turn_id
 
 
+def capabilities_used_since(since) -> set[str]:
+    """Markers of what the user's real (non-test) turns used since ``since``: the names of
+    the tools that ran (not failed) and ``input_kind:<kind>`` (voice, button, ...)."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT t->>'name'
+                FROM turn_log,
+                     jsonb_array_elements(
+                         CASE WHEN jsonb_typeof(tools) = 'array' THEN tools ELSE '[]'::jsonb END
+                     ) AS t
+                WHERE ts >= %s AND NOT is_test
+                  AND jsonb_typeof(t) = 'object'
+                  AND COALESCE(t->>'ok', 'true') <> 'false'
+                UNION
+                SELECT DISTINCT 'input_kind:' || input_kind
+                FROM turn_log
+                WHERE ts >= %s AND NOT is_test
+                """,
+                (since, since),
+            )
+            rows = cur.fetchall()
+    return {r[0] for r in rows if r[0]}
+
+
 def set_turn_feedback(session_id: str, feedback: str, note: str | None = None) -> int | None:
     """Attach feedback ('bom'|'ruim') to the latest non-command turn of the session.
 

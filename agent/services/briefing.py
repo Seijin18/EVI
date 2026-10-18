@@ -49,6 +49,8 @@ _FREE_DAY = "Dia livre: sem eventos, tarefas ou pendências"
 _TRUNC = "…[truncado]"
 _WEEKDAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 _FIELD_MAX = 120
+_RM_TITLE_MAX = 80  # reminder text taken from an item title (evi-discovery-tips)
+_EVENING_FREE = "Amanhã está livre."
 
 
 @dataclass(frozen=True)
@@ -261,7 +263,10 @@ def _collect_tasks(day: date, overdue: bool) -> list[Row]:
         title = wrap_external(t.get("title") or "(sem título)", "tarefa", _FIELD_MAX)
         tag = f" (venceu {due_d.strftime('%d/%m')})" if due_d < day else ""
         user = _clean(t.get("title") or "(sem título)") + (f" · venceu {due_d.strftime('%d/%m')}" if tag else "")
-        rows.append((Row(f"{title}{tag}", {"kind": "task", "id": t.get("id") or ""}, user), due_d))
+        ref = {"kind": "task", "id": t.get("id") or ""}
+        if due_d == day:  # due that day: the evening preview offers a reminder for it
+            ref["rm_title"] = plain_external(t.get("title") or "(sem título)", _RM_TITLE_MAX)
+        rows.append((Row(f"{title}{tag}", ref, user), due_d))
     rows.sort(key=lambda r: r[1])
     return [row for row, _ in rows]
 
@@ -363,6 +368,8 @@ def _collect_whatsapp(today: date | None = None) -> list[Row]:
         if when_d:
             line += f" ({when_d.strftime('%d/%m')})"
         ref = {"kind": "commitment", "id": c.get("id")}
+        if when_d == today + timedelta(days=1) and c.get("type") != "event":  # events are already scheduled
+            ref["rm_title"] = plain_external(c.get("title") or c.get("raw_text") or "", _RM_TITLE_MAX)
         is_promise = c.get("type") == "promise"
         who_user = _who_label(who)
         parts = []
@@ -536,7 +543,7 @@ def fit_volume(sections: list[Section], budget: int = MAX_LINES) -> list[Section
     return out
 
 
-def _footer(items: list[BriefItem]) -> str:
+def _footer(items: list[BriefItem], kind: str = "morning") -> str:
     """Comandos de resposta válidos para os tipos de item mostrados (um número de exemplo cada)."""
     first: dict = {}
     for it in items:
@@ -548,14 +555,17 @@ def _footer(items: list[BriefItem]) -> str:
         parts.append(f"respondido {first['reply_debt']}")
     if "name_prompt" in first:
         parts += [f"nomeia {first['name_prompt']} Nome", f"ignora {first['name_prompt']}"]
+    remind = remindable_titles(items, kind)
+    if remind:
+        parts.append(f"lembra {min(remind)}")
     return f"<i>Responda: {_esc(' · '.join(parts))}</i>" if parts else ""
 
 
-def _render_model(header: str, sections: list[Section], free_day: bool, banner: list[str] = ()) -> str:
+def _render_model(header: str, sections: list[Section], free_day: str, banner: list[str] = (), tip: str = "") -> str:
     """Texto para a sessão/LLM: terceiros delimitados por ``wrap_external``."""
     lines = [header, *banner]
     if free_day:
-        lines.append(_FREE_DAY)
+        lines.append(free_day)
     for sec in sections:
         if sec.error and sec.in_banner:
             lines.append(f"⚠ {sec.title} indisponível ({_SEE_BANNER})")
@@ -577,16 +587,18 @@ def _render_model(header: str, sections: list[Section], free_day: bool, banner: 
                     lines.append(f"+{sec.group_more[it.group]}")
             if sec.more:
                 lines.append(f"+{sec.more}")
+    if tip:
+        lines += ["", tip]
     return _truncate("\n".join(lines))
 
 
 def _render_user(day: date, kind: str, sections: list[Section], items: list[BriefItem],
-                 free_day: bool, banner: list[str] = ()) -> str:
+                 free_day: str, banner: list[str] = (), tip: str = "") -> str:
     """Texto para o usuário: HTML do Telegram, sem marcadores, dinâmico escapado."""
     greeting, rest = _header_parts(day, kind)
     lines = [f"{_bold(greeting)} {_esc(rest)}", *(_esc(ln) for ln in banner)]
     if free_day:
-        lines.append(_esc(_FREE_DAY))
+        lines.append(_esc(free_day))
     prev_short = False  # avisos e resumos de uma linha ficam colados, sem linha em branco
     for sec in sections:
         sec_lines = _user_section_lines(sec)
@@ -596,9 +608,11 @@ def _render_user(day: date, kind: str, sections: list[Section], items: list[Brie
         if sec_lines:
             prev_short = short
         lines.extend(sec_lines)
-    footer = _footer(items)
+    footer = _footer(items, kind)
     if footer:
         lines += ["", footer]
+    if tip:
+        lines += ["", _esc(tip)]
     return _truncate("\n".join(lines))
 
 
@@ -707,7 +721,8 @@ def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Bri
         raw_sections = [f.result() for f in futures]
 
     banner, raw_sections = _source_health(raw_sections)
-    free_day = not any(s.items for s in raw_sections) and not any(s.error for s in raw_sections)
+    is_free = not any(s.items for s in raw_sections) and not any(s.error for s in raw_sections)
+    free_day = (_EVENING_FREE if evening else _FREE_DAY) if is_free else ""
     fitted = fit_volume(raw_sections, MAX_LINES - len(banner))  # o selo conta primeiro e não colapsa  # antes de numerar: só o que aparece recebe número
     n = 0
     sections: list[Section] = []
@@ -719,8 +734,14 @@ def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Bri
         sections.append(replace(sec, items=numbered))
     items = [it for sec in sections for it in sec.items]
 
-    text_model = _render_model(_header(now, day, kind), sections, free_day, banner)
-    text_user = _render_user(day, kind, sections, items, free_day, banner)
+    tip = ""
+    if kind == "morning" and volume_lines(sections) + len(banner) < MAX_LINES:
+        # the tip is the first line to go: it only fits when the budget has a spare line
+        from services.discovery_tips import tip_for
+
+        tip = tip_for(now.date(), now) or ""
+    text_model = _render_model(_header(now, day, kind), sections, free_day, banner, tip)
+    text_user = _render_user(day, kind, sections, items, free_day, banner, tip)
     return Briefing(text_model, sections, items, text_user)
 
 
@@ -817,7 +838,7 @@ BUTTON_KINDS = ("reply_debt", "commitment", "name_prompt")
 MAX_BUTTON_ROWS = 10
 KIND_CODES = {"morning": "m", "evening": "e"}
 CODE_KINDS = {v: k for k, v in KIND_CODES.items()}
-CALLBACK_RE = re.compile(r"^b1:(\d{8}):([me]):(\d{1,3}):(ok|no|up|dn)$")
+CALLBACK_RE = re.compile(r"^b1:(\d{8}):([me]):(\d{1,3}):(ok|no|up|dn|rm)$")
 
 
 def buttons_enabled() -> bool:
@@ -852,23 +873,38 @@ def actionable_from_refs(refs: dict) -> dict[int, str]:
     return dict(sorted(out.items())[:MAX_BUTTON_ROWS])
 
 
+def remindable_titles(items: list[BriefItem], kind: str) -> dict[int, str]:
+    """Evening preview only: item number -> title for the items due tomorrow (the ones that
+    offer "🔔 lembrar amanhã 9h"). Titles are plain text, at most ``_RM_TITLE_MAX`` chars."""
+    if kind != "evening":
+        return {}
+    out = {it.n: str(it.ref["rm_title"]) for it in items if it.ref.get("rm_title")}
+    return dict(sorted(out.items())[:MAX_BUTTON_ROWS])
+
+
 def build_keyboard(
-    day: str, kind: str, actionable: dict[int, str], done: object = (), feedback: str | None = None
+    day: str, kind: str, actionable: dict[int, str], done: object = (), feedback: str | None = None,
+    remind: object = (), reminded: object = (),
 ) -> dict:
-    """Inline keyboard: one row per actionable item not yet handled, then 👍/👎 (the
-    chosen one marked ✓ — it stays tappable, the last tap wins)."""
+    """Inline keyboard: one row per item with something left to do (✅/✖ for actionable
+    kinds, 🔔 for ``remind`` items not yet in ``reminded``), then 👍/👎 (the chosen one
+    marked ✓ — it stays tappable, the last tap wins)."""
     handled = {int(n) for n in done}
+    set_reminders = {int(n) for n in remind} - {int(n) for n in reminded}
     rows: list[list[dict]] = []
-    for n, item_kind in sorted(actionable.items()):
-        if n in handled:
-            continue
-        if item_kind == "name_prompt":
-            rows.append([{"text": f"{n} ✖ ignorar", "callback_data": callback_data(day, kind, n, "no")}])
-        else:
-            rows.append([
-                {"text": f"{n} ✅", "callback_data": callback_data(day, kind, n, "ok")},
-                {"text": f"{n} ✖", "callback_data": callback_data(day, kind, n, "no")},
-            ])
+    for n in sorted(set(actionable) | set_reminders):
+        item_kind = actionable.get(n)
+        row: list[dict] = []
+        if item_kind and n not in handled:
+            if item_kind == "name_prompt":
+                row.append({"text": f"{n} ✖ ignorar", "callback_data": callback_data(day, kind, n, "no")})
+            else:
+                row.append({"text": f"{n} ✅", "callback_data": callback_data(day, kind, n, "ok")})
+                row.append({"text": f"{n} ✖", "callback_data": callback_data(day, kind, n, "no")})
+        if n in set_reminders:
+            row.append({"text": f"{n} 🔔", "callback_data": callback_data(day, kind, n, "rm")})
+        if row:
+            rows.append(row)
     rows.append([
         {"text": "👍 ✓" if feedback == "up" else "👍", "callback_data": callback_data(day, kind, 0, "up")},
         {"text": "👎 ✓" if feedback == "down" else "👎", "callback_data": callback_data(day, kind, 0, "dn")},
@@ -903,7 +939,11 @@ def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime |
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     # O usuário recebe o texto limpo (HTML); a memória/LLM guarda a versão marcada.
     actionable = actionable_kinds(brief.items)
-    markup = {"reply_markup": build_keyboard(day.isoformat(), kind, actionable)} if buttons_enabled() else {}
+    remind = remindable_titles(brief.items, kind)
+    markup = (
+        {"reply_markup": build_keyboard(day.isoformat(), kind, actionable, remind=remind)}
+        if buttons_enabled() else {}
+    )
     if brief.text_user:
         result = send_telegram_message(brief.text_user, chat_id or None, parse_mode="HTML", **markup)
     else:
@@ -949,6 +989,9 @@ def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime |
                 # compacto ("n": "kind:id"): format_tool_snapshots corta em 1200 chars
                 "refs": {str(it.n): f"{it.ref.get('kind')}:{it.ref.get('id')}" for it in brief.items},
                 "message_id": getattr(result, "message_id", None),
+                # item -> title (delimited: the snapshot is shown to the model) for "🔔 / lembra N"
+                **({"rm": {str(n): wrap_external(t, "briefing", _RM_TITLE_MAX) for n, t in remind.items()}}
+                   if remind else {}),
             },
         )
     except Exception as exc:

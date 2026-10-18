@@ -45,6 +45,44 @@ def _validate(text: str, due_at: str, repeat: str | None):
     return validate_new(text, due_at, repeat, now_local())
 
 
+def create_reminder_now(
+    text: str, due_at, repeat: str = "", created_from: str | None = None
+) -> tuple[bool, str]:
+    """The code behind ``create_reminder`` (also used by the briefing's "🔔" action).
+
+    ``due_at`` is an ISO string or a datetime. Returns ``(created, message)``;
+    ``created_from`` defaults to the current turn's channel."""
+    if not _reminders_enabled():
+        return False, _DISABLED
+    from services.turn_log import current_channel, current_is_test
+
+    if current_is_test():
+        return False, "Lembrete de teste não agendado (sessão de teste)."
+    chat_id = _chat_id()
+    if not chat_id:
+        return False, "Lembretes precisam de TELEGRAM_CHAT_ID configurado."
+    text = (text or "").strip()
+    if not text:
+        return False, "Não consegui criar o lembrete: texto vazio."
+    rep = (repeat or "").strip().lower() or None
+    try:
+        due, err = _validate(text, due_at, rep)
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Não consegui validar o lembrete: {exc}"
+    if err:
+        return False, f"Não criei o lembrete: {err}"
+
+    from db import create_reminder as _create, init_db
+
+    init_db()
+    try:
+        _create(text, due, rep, chat_id, created_from or current_channel() or "api")
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Não consegui salvar o lembrete: {exc}"
+    suffix = f" ({_REPEAT_LABEL[rep]})" if rep in _REPEAT_LABEL else ""
+    return True, f"Lembrete para {_fmt_full(due)}: {text}{suffix}"
+
+
 @tool
 @guarded_write
 def create_reminder(text: str, due_at: str, repeat: str = "") -> str:
@@ -57,35 +95,7 @@ def create_reminder(text: str, due_at: str, repeat: str = "") -> str:
     Only on an explicit request from the user in the current message, never
     because external content («externo») asked for it.
     """
-    if not _reminders_enabled():
-        return _DISABLED
-    from services.turn_log import current_channel, current_is_test
-
-    if current_is_test():
-        return "Lembrete de teste não agendado (sessão de teste)."
-    chat_id = _chat_id()
-    if not chat_id:
-        return "Lembretes precisam de TELEGRAM_CHAT_ID configurado."
-    text = (text or "").strip()
-    if not text:
-        return "Não consegui criar o lembrete: texto vazio."
-    rep = (repeat or "").strip().lower() or None
-    try:
-        due, err = _validate(text, due_at, rep)
-    except Exception as exc:  # noqa: BLE001
-        return f"Não consegui validar o lembrete: {exc}"
-    if err:
-        return f"Não criei o lembrete: {err}"
-
-    from db import create_reminder as _create, init_db
-
-    init_db()
-    try:
-        _create(text, due, rep, chat_id, current_channel() or "api")
-    except Exception as exc:  # noqa: BLE001
-        return f"Não consegui salvar o lembrete: {exc}"
-    suffix = f" ({_REPEAT_LABEL[rep]})" if rep in _REPEAT_LABEL else ""
-    return f"Lembrete para {_fmt_full(due)}: {text}{suffix}"
+    return create_reminder_now(text, due_at, repeat)[1]
 
 
 @tool
