@@ -17,10 +17,10 @@
 
 ## 2. Simulação e fechamento
 
-- [ ] 2.1 Cenário `SIM-WA-02` (resumo vem da timeline local; latência da tool < 5 s com a Evolution lenta no fake); cassetes; `docs/testing.md`
+- [x] 2.1 (id SIM-WA-04: SIM-WA-02 já existia; latência por tool não é observável na sim — usado 0 findMessages + tempo do turno) Cenário `SIM-WA-04` (resumo vem da timeline local; latência da tool < 5 s com a Evolution lenta no fake); cassetes; `docs/testing.md`
   - SCN-WA-RECENT-01
   - Files: `tests/sim/scenarios/whatsapp/`, `tests/sim/cassettes/`, `agent/testing/sim/fake_evolution.py`, `docs/testing.md`
-  - Verify: `./scripts/evi-sim run --id SIM-WA-02 --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`
+  - Verify: `./scripts/evi-sim run --id SIM-WA-04 --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`
 
 - [ ] 2.2 Deploy, gates, BACKLOG + Progress
   - SCN-WA-RECENT-01

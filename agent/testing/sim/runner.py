@@ -393,6 +393,7 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
         timeout = float(exp.get("no_reply_window_s") or schema.DEFAULT_NO_REPLY_WINDOW_S)
     t0 = time.monotonic()
     sent_base = len(_telegram_user_sent(ctx)) if "telegram_message" in exp else 0
+    evo_base = dict((ctx.fakes("GET", "/_sim/state") or {}).get("evolution_requests") or {}) if "evolution_requests" in exp else {}
     if step.type == "telegram":
         base = len(_telegram_replies(ctx))
         ctx.fakes("POST", "/_sim/telegram/updates", {"text": step.value})
@@ -489,6 +490,9 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
         step_obs.update({"reply": sr.reply, "latency_s": sr.latency_s})
         if "telegram_message" in exp:
             step_obs["telegram_step_sent"] = _telegram_user_sent(ctx)[sent_base:]
+        if "evolution_requests" in exp:
+            now = (ctx.fakes("GET", "/_sim/state") or {}).get("evolution_requests") or {}
+            step_obs["evolution_requests"] = {k: v - evo_base.get(k, 0) for k, v in now.items()}
         sr.failures = schema.eval_expect(exp, observe(ctx, step_obs, exp))
     return sr
 

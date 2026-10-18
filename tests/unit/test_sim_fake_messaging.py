@@ -255,6 +255,24 @@ def test_evolution_seeded_reads(evo):
     assert evo.post("/chat/fetchProfile/sim", json={"number": "551188"}, headers=EVO).json()["name"] == "Maria"
 
 
+def test_evolution_request_counter_and_delay(evo):
+    evo.post("/_sim/evolution/seed", json={"delay_ms": 300})
+    t0 = time.monotonic()
+    evo.post("/chat/findMessages/sim", json={}, headers=EVO)
+    assert time.monotonic() - t0 >= 0.28  # history requests are slow ...
+    t0 = time.monotonic()
+    evo.post("/chat/findContacts/sim", json={}, headers=EVO)
+    evo.post("/chat/findChats/sim", json={}, headers=EVO)
+    assert time.monotonic() - t0 >= 0.28  # ... findChats too, findContacts is not (one delay only)
+    assert evo.get("/_sim/state").json()["evolution_requests"] == {
+        "chat/findMessages": 1,
+        "chat/findContacts": 1,
+        "chat/findChats": 1,
+    }
+    evo.post("/_sim/reset")
+    assert evo.get("/_sim/state").json()["evolution_requests"] == {}
+
+
 def test_real_evolution_client_against_fake(live_server, monkeypatch):
     from messaging.evolution import EvolutionClient
 
@@ -281,7 +299,7 @@ def test_combined_state_seed_and_reset(client):
     client.post("/message/sendText/sim", json={"number": "1", "text": "b"})
     client.post("/_sim/faults", json={"*": "http_500"})
     st = client.get("/_sim/state").json()
-    assert set(st) == {"google", "windmill_calls", "telegram_sent", "evolution_sent", "media_requests"}
+    assert set(st) == {"google", "windmill_calls", "telegram_sent", "evolution_sent", "media_requests", "evolution_requests"}
     assert st["google"]["tasks"] and len(st["telegram_sent"]) == 1 and len(st["evolution_sent"]) == 1
     client.post("/_sim/telegram/updates", json={"text": "pend"})
     client.post("/_sim/telegram/faults", json={"sendMessage": "transient"})

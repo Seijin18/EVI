@@ -207,6 +207,14 @@ def test_voice_step_validation(step, needle):
     assert needle in str(ei.value)
 
 
+def test_evolution_requests_expectation():
+    exp = {"evolution_requests": {"chat/findMessages": 0}}
+    assert schema.eval_expect(exp, {"evolution_requests": {}}) == []
+    assert schema.eval_expect(exp, {"evolution_requests": {"chat/findMessages": 2}})
+    with pytest.raises(schema.ScenarioError):
+        schema.parse_scenario({"id": "X", "steps": [{"telegram": "oi", "expect": {"evolution_requests": {"chat/nope": 0}}}]})
+
+
 def test_media_requests_expectation():
     assert schema.eval_expect({"media_requests": 0}, {"media_requests": []}) == []
     fails = schema.eval_expect({"media_requests": 0}, {"media_requests": [{"id": "A"}]})

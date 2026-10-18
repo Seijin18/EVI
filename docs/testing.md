@@ -122,6 +122,8 @@ O workspace do sim é semeado a cada reset com os arquivos versionados de `EVI_W
 
 Saúde do WhatsApp no sim: o Evolution falso responde `GET /instance/connectionState/<instância>` com o estado semeado (`seed: {evolution: {state: close}}`; padrão `open`) e `POST /_sim/evolution/state` o muda no meio do cenário. O step `job: probe` roda a sonda diária (`?wait=true`); `SIM-REL-05` (tag `reliability`) garante um único aviso de WhatsApp desconectado e o selo "WhatsApp desconectado desde" no topo do briefing.
 
+Resumo do WhatsApp (SIM-WA-04, tag `whatsapp`): o Evolution falso aceita `seed: {evolution: {delay_ms: 5000}}` (espera artificial em cada `findMessages`/`findChats`, sem travar os outros fakes) e conta as requisições por endpoint (`/_sim/state` → `evolution_requests`). `expect.evolution_requests: {chat/findMessages: 0}` compara a contagem **durante o passo**; o cenário prova que o resumo do dia sai das timelines locais (três contatos + resposta do usuário via webhook) sem nenhuma chamada lenta à Evolution. A latência individual da tool não é exposta pelo harness; o contador zero mais `reply_within_s` cobrem o turno. O reaproveitamento do resumo em cache (2ª pergunta) não é observável no sim (só se confere que a 2ª resposta continua correta e sem `findMessages`).
+
 ### Formato do cenário
 
 Em `tests/sim/scenarios/<source>/*.yaml` (`real-usage`, `failure`, `adversarial`,

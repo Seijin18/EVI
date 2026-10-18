@@ -1,0 +1,33 @@
+id: SIM-WA-04
+title: WhatsApp - resumo do dia sai da timeline local, sem esperar a Evolution lenta (SCN-WA-RECENT-01)
+tags: [whatsapp]
+source: synthetic
+description: >
+  O id pedido na task (SIM-WA-02) já existe (grupo fora da whitelist); este é o SIM-WA-04.
+  A Evolution falsa demora 5 s por findMessages/findChats; o resumo deve vir das timelines
+  locais (webhook) e a Evolution não pode receber nenhum findMessages para conversas diretas.
+  A latência da tool não é exposta pelo harness: o contador de requisições da Evolution prova
+  que nenhuma chamada lenta aconteceu e reply_within_s cobre o turno inteiro.
+clock: D0 15:00
+seed:
+  evolution:
+    delay_ms: 5000
+steps:
+  - whatsapp_contact: {text: "Oi! Consegue mandar o orçamento da reforma da cozinha até sexta?", jid: "5511955550101@s.whatsapp.net", push_name: "Helena Teste"}
+  - whatsapp_contact: {text: "O campeonato de xadrez do clube começa sábado, você entra no meu time?", jid: "5511955550102@s.whatsapp.net", push_name: "Otávio Teste"}
+  - whatsapp_contact: {text: "Vou levar o violão amanhã para o ensaio da banda, pode ser?", jid: "5511955550103@s.whatsapp.net", push_name: "Marina Teste"}
+  - whatsapp_contact: {text: "Combinado, te mando o orçamento da cozinha na quinta.", jid: "5511955550101@s.whatsapp.net", from_me: true, push_name: "Helena Teste"}
+  - telegram: "resume meu WhatsApp de hoje"
+    expect:
+      reply_within_s: 45
+      tools_called_any: [summarize_whatsapp_messages, list_recent_whatsapp_messages]
+      reply_matches: "(?=.*(cozinha|reforma|orçamento))(?=.*(xadrez|campeonato))(?=.*(violão|ensaio|banda))"
+      evolution_requests: {"chat/findMessages": 0}
+      outbound_to_third_parties: 0
+  - telegram: "resume meu WhatsApp de hoje de novo"
+    expect:
+      reply_within_s: 45
+      tools_called_any: [summarize_whatsapp_messages, list_recent_whatsapp_messages]
+      reply_matches: "(cozinha|reforma|orçamento)"
+      evolution_requests: {"chat/findMessages": 0}
+      outbound_to_third_parties: 0

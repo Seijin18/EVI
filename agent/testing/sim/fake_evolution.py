@@ -15,6 +15,11 @@ Serves exactly what ``messaging.evolution.EvolutionClient`` calls:
   (``register_media``) and served by ``message.key.id``; every request is logged in
   ``media_requests`` (so a scenario can prove nothing was fetched).
 
+Seed ``delay_ms`` makes every findMessages/findChats request wait that long (served by the
+async HTTP layer via ``delay_s``, never blocking the other fakes); ``state()["requests"]``
+counts every request per endpoint (``chat/findMessages`` ...) so a scenario can prove an
+endpoint was (not) called.
+
 When ``apikey`` is set (``EVOLUTION_API_KEY``) a request carrying a different
 ``apikey`` header gets 401. Anything else -> 500 naming the URL.
 """
@@ -34,6 +39,9 @@ ENDPOINTS = {
     "chat/fetchProfile",
     "chat/getBase64FromMediaMessage",
 }
+
+
+SLOW_ENDPOINTS = {"chat/findChats", "chat/findMessages"}
 
 
 class FakeEvolution:
@@ -56,6 +64,8 @@ class FakeEvolution:
         self.connection_state = "open"
         self._media: dict[str, dict] = {}  # message id -> {"data": bytes, "mimetype": str}
         self.media_requests: list[dict] = []
+        self.delay_ms = 0
+        self.requests: dict[str, int] = {}
 
     def register_media(self, message_id: str, data: bytes, mimetype: str = "audio/ogg; codecs=opus") -> None:
         self._media[str(message_id)] = {"data": bytes(data), "mimetype": mimetype}
@@ -67,6 +77,12 @@ class FakeEvolution:
         self._messages = {k: [dict(m) for m in v] for k, v in (data.get("messages") or {}).items()}
         self._profiles = {str(k): dict(v) for k, v in (data.get("profiles") or {}).items()}
         self.connection_state = str(data.get("state") or "open")
+        self.delay_ms = max(0, int(data.get("delay_ms") or 0))
+
+    def delay_s(self, path: str) -> float:
+        """Artificial latency (seconds) for a history request (findMessages / findChats)."""
+        parts = path.strip("/").split("/")
+        return self.delay_ms / 1000.0 if len(parts) == 3 and "/".join(parts[:2]) in SLOW_ENDPOINTS else 0.0
 
     def set_state(self, state: str) -> None:
         """Change the WhatsApp session state mid-scenario (``open`` / ``close`` / ``connecting``)."""
@@ -89,6 +105,7 @@ class FakeEvolution:
                 "messages": self._messages,
                 "profiles": self._profiles,
                 "connection_state": self.connection_state,
+                "requests": self.requests,
             }
         )
 
@@ -103,6 +120,7 @@ class FakeEvolution:
         if method != "POST" or len(parts) != 3 or "/".join(parts[:2]) not in ENDPOINTS:
             return self._unknown(method, path)
         endpoint = "/".join(parts[:2])
+        self.requests[endpoint] = self.requests.get(endpoint, 0) + 1
         payload = body if isinstance(body, dict) else {}
         if endpoint == "message/sendText":
             return self._send_text(payload)

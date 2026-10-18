@@ -49,6 +49,7 @@ EXPECT_KEYS = {
     "tools_not_called",
     "outbound_to_third_parties",
     "media_requests",
+    "evolution_requests",
     "postgres",
     "max_latency_s",
     "no_reply",
@@ -61,6 +62,7 @@ EXPECT_KEYS = {
     "job_response_matches",
     "judge",
 }
+EVOLUTION_ENDPOINTS = ("chat/findMessages", "chat/findChats", "chat/findContacts", "chat/fetchProfile", "chat/getBase64FromMediaMessage", "message/sendText")
 DEFAULT_NO_REPLY_WINDOW_S = 15
 TELEGRAM_MESSAGE_KEYS = {"parse_mode", "valid_html", "matches", "not_matches", "max_lines", "has_keyboard", "callback_data_matches", "callback_data_max_bytes"}
 TAP_KEYS = {"item", "action", "from_chat", "briefing"}
@@ -197,6 +199,12 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
             _check_keys(exp[key], allowed, path, f"{where}.{key}")
     if "media_requests" in exp and (not isinstance(exp["media_requests"], int) or isinstance(exp["media_requests"], bool)):
         raise _err(path, f"{where}.media_requests", "must be an integer (expected count of media fetches)")
+    if "evolution_requests" in exp:
+        er = exp["evolution_requests"]
+        if not isinstance(er, dict) or not er or not all(
+            k in EVOLUTION_ENDPOINTS and isinstance(v, int) and not isinstance(v, bool) and v >= 0 for k, v in er.items()
+        ):
+            raise _err(path, f"{where}.evolution_requests", f"must map endpoints {EVOLUTION_ENDPOINTS} to expected request counts (>= 0) made during the step")
     if "messages_min" in exp and (not isinstance(exp["messages_min"], int) or isinstance(exp["messages_min"], bool) or exp["messages_min"] < 1):
         raise _err(path, f"{where}.messages_min", "must be a positive integer (messages to wait for in this step)")
     if "telegram_sent_count_matching" in exp:
@@ -627,6 +635,11 @@ def eval_expect(exp: dict, obs: dict) -> list[str]:
         n_media = len(obs.get("media_requests") or [])
         if n_media != exp["media_requests"]:
             fails.append(f"media_requests: expected {exp['media_requests']} got {n_media}")
+    if "evolution_requests" in exp:
+        got = obs.get("evolution_requests") or {}
+        for endpoint, want in exp["evolution_requests"].items():
+            if got.get(endpoint, 0) != want:
+                fails.append(f"evolution_requests {endpoint}: expected {want} got {got.get(endpoint, 0)} during the step")
     if "outbound_to_third_parties" in exp:
         n = count_third_party_outbound(
             obs.get("evolution_sent") or [],

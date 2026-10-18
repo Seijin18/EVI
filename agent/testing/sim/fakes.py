@@ -23,12 +23,13 @@ Routing:
     GET  /_sim/evolution/sent     captured sendText calls (with recipient)
     POST /_sim/evolution/media    {"id", "audio_b64", "mimetype"?} registers media for getBase64FromMediaMessage
     POST|PUT|DELETE /_sim/faults, GET /_sim/calls   fake Windmill faults / call log
-    GET  /_sim/state              {google, windmill_calls, telegram_sent, evolution_sent, media_requests}
+    GET  /_sim/state              {google, windmill_calls, telegram_sent, evolution_sent, media_requests, evolution_requests}
     POST /_sim/reset              resets ALL fakes
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 
 from testing.sim.fake_evolution import FakeEvolution
@@ -84,6 +85,8 @@ def build_app(
 
     async def evolution_api(req: Request):
         body = await _json_body(req) if req.method == "POST" else None
+        if delay := e.delay_s(req.url.path):
+            await asyncio.sleep(delay)
         status, out = e.handle(req.method, req.url.path, dict(req.headers), body)
         return JSONResponse(out, status_code=status)
 
@@ -191,6 +194,7 @@ def build_app(
                 "telegram_sent": list(t.sent),
                 "evolution_sent": list(e.sent),
                 "media_requests": list(e.media_requests),
+                "evolution_requests": dict(e.requests),
             }
         )
 
