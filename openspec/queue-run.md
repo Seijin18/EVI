@@ -1,4 +1,22 @@
-# Execução da fila — iniciada 2026-10-12 (2ª rodada)
+# Execução da fila — iniciada 2026-10-18 (3ª rodada)
+## Estado
+- Change atual: evi-source-health-alerts (fase: propor)
+- Ordem: evi-source-health-alerts → evi-briefing-buttons → evi-whatsapp-summary-cache → evi-discovery-tips → evi-awaiting-their-reply → evi-scheduled-tasks
+- Concluídos: —
+- Pulados: —
+## Decisões do usuário no preflight (2026-10-18)
+- Mudanças novas no Telegram entram **ligadas por padrão**, cada uma com flag no `.env` para desligar.
+- Prévia da noite: schedule às 21h **ligado**.
+- Tarefas agendadas: **só leitura** (nunca apaga, cria ou envia), com teto de execuções/dia.
+## Decisões tomadas sem o usuário
+## Pendências do usuário (não bloqueantes)
+- [ ] WhatsApp desconectado desde 14/10 — gerar o QR e escanear (a geração foi bloqueada pelo classificador de permissões)
+- [ ] Google OAuth expirou em 18/10 (modo "Teste", 7 dias) — reconectar `gcal`/`gtasks`/`gmail` no Windmill e, de vez, publicar o app OAuth em Produção no Google Cloud
+## Bloqueios
+
+---
+
+# Execução anterior — iniciada 2026-10-12 (2ª rodada)
 ## Estado
 - Change atual: — (fila concluída em 2026-10-13)
 - Ordem: evi-promise-context → evi-security-review → evi-contact-knowledge → evi-contact-names → evi-ux-review
