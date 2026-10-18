@@ -361,3 +361,15 @@ def test_evolution_recorded_message_served_by_find_messages(evo):
     assert other["messages"]["records"] == []
     evo.post("/_sim/reset")
     assert evo.post("/chat/findMessages/sim", json=body, headers=EVO).json()["messages"]["records"] == []
+
+
+def test_evolution_connection_state_default_seed_and_change(evo):
+    r = evo.get("/instance/connectionState/sim", headers=EVO)
+    assert r.status_code == 200 and r.json()["instance"]["state"] == "open"
+    evo.post("/_sim/evolution/seed", json={"state": "close"})
+    assert evo.get("/instance/connectionState/sim", headers=EVO).json() == {
+        "instance": {"instanceName": "sim", "state": "close"}
+    }
+    evo.post("/_sim/evolution/state", json={"state": "open"})
+    assert evo.get("/instance/connectionState/sim", headers=EVO).json()["instance"]["state"] == "open"
+    assert evo.get("/instance/connectionState/sim", headers={"apikey": "bad"}).status_code == 401

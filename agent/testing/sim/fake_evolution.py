@@ -4,6 +4,8 @@ Serves exactly what ``messaging.evolution.EvolutionClient`` calls:
 
 * ``POST /message/sendText/<instance>``   captured WITH the recipient
   (``number``) so scenarios can assert that nothing reaches a third party;
+* ``GET  /instance/connectionState/<instance>``  ``{"instance": {"instanceName", "state"}}``;
+  the state is seed ``state`` (default ``open``; e.g. ``close``) or ``set_state``;
 * ``POST /chat/findContacts/<instance>``  from seed ``contacts``;
 * ``POST /chat/findChats/<instance>``     from seed ``chats``;
 * ``POST /chat/findMessages/<instance>``  from seed ``messages`` (``{jid: [..]}``),
@@ -51,6 +53,7 @@ class FakeEvolution:
         self._messages: dict[str, list[dict]] = {}
         self._profiles: dict[str, dict] = {}
         self._seq = 0
+        self.connection_state = "open"
         self._media: dict[str, dict] = {}  # message id -> {"data": bytes, "mimetype": str}
         self.media_requests: list[dict] = []
 
@@ -63,6 +66,11 @@ class FakeEvolution:
         self._chats = [dict(c) for c in data.get("chats") or []]
         self._messages = {k: [dict(m) for m in v] for k, v in (data.get("messages") or {}).items()}
         self._profiles = {str(k): dict(v) for k, v in (data.get("profiles") or {}).items()}
+        self.connection_state = str(data.get("state") or "open")
+
+    def set_state(self, state: str) -> None:
+        """Change the WhatsApp session state mid-scenario (``open`` / ``close`` / ``connecting``)."""
+        self.connection_state = str(state or "open")
 
     def record_message(self, record: dict) -> None:
         """Append a message the runner just delivered by webhook, so findMessages serves it
@@ -80,6 +88,7 @@ class FakeEvolution:
                 "chats": self._chats,
                 "messages": self._messages,
                 "profiles": self._profiles,
+                "connection_state": self.connection_state,
             }
         )
 
@@ -89,6 +98,8 @@ class FakeEvolution:
         if key and {k.lower(): v for k, v in headers.items()}.get("apikey") != key:
             return 401, {"status": 401, "error": "Unauthorized", "response": {"message": "Invalid apikey"}}
         parts = path.strip("/").split("/")
+        if method == "GET" and len(parts) == 3 and parts[:2] == ["instance", "connectionState"]:
+            return 200, {"instance": {"instanceName": parts[2], "state": self.connection_state}}
         if method != "POST" or len(parts) != 3 or "/".join(parts[:2]) not in ENDPOINTS:
             return self._unknown(method, path)
         endpoint = "/".join(parts[:2])

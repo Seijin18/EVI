@@ -418,7 +418,7 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
     elif step.type == "job":
         base = len(_telegram_replies(ctx))
         # briefing runs in the background unless ?wait=true: without it the delivered text is read too early
-        query = {"briefing": "?wait=true", "contact-learn": "?wait=true", "contact-names-sync": "?apply=true&wait=true"}.get(step.value, "")
+        query = {"briefing": "?wait=true", "contact-learn": "?wait=true", "probe": "?wait=true", "contact-names-sync": "?apply=true&wait=true"}.get(step.value, "")
         job_resp = ctx.agent("POST", f"/jobs/{step.value}{query}", {})
         step_obs["job_response"] = json.dumps(job_resp, ensure_ascii=False)
         sr.latency_s = time.monotonic() - t0

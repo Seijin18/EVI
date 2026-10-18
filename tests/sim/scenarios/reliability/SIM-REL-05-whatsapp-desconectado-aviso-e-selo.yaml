@@ -1,0 +1,25 @@
+id: SIM-REL-05
+title: Confiabilidade - WhatsApp desconectado gera um único aviso da sonda e o selo no briefing (SCN-USE-09)
+tags: [reliability]
+source: synthetic
+clock: D0 07:00
+seed:
+  calendar:
+    - {summary: "Standup do time", start: "D0 09:00", end: "D0 09:30"}
+  tasks:
+    - {title: "Pagar boleto do condomínio", due: "D0"}
+  gmail:
+    - {id: mail-w1, from: "Ana Exemplo <ana@exemplo.test>", subject: "Orçamento da reforma", snippet: "Segue o orçamento.", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+  evolution:
+    state: close
+steps:
+  - job: probe
+  - job: probe
+    expect:
+      telegram_sent_count_matching: {regex: "WhatsApp[^\\n]*desconectado[\\s\\S]*QR", count: 1}
+      outbound_to_third_parties: 0
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)\\A.{0,300}?📵 WhatsApp desconectado desde"
+      outbound_to_third_parties: 0

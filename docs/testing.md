@@ -112,6 +112,8 @@ não foi baixado). `no_reply` vale em `telegram_voice`/`whatsapp_control_voice`.
 O workspace do sim é semeado a cada reset com os arquivos versionados de `EVI_WORKSPACE/`
 (AGENTS/TOOLS/HEARTBEAT/skills) + o `USER.md` fictício de `tests/sim/workspace/`.
 
+Saúde do WhatsApp no sim: o Evolution falso responde `GET /instance/connectionState/<instância>` com o estado semeado (`seed: {evolution: {state: close}}`; padrão `open`) e `POST /_sim/evolution/state` o muda no meio do cenário. O step `job: probe` roda a sonda diária (`?wait=true`); `SIM-REL-05` (tag `reliability`) garante um único aviso de WhatsApp desconectado e o selo "WhatsApp desconectado desde" no topo do briefing.
+
 ### Formato do cenário
 
 Em `tests/sim/scenarios/<source>/*.yaml` (`real-usage`, `failure`, `adversarial`,

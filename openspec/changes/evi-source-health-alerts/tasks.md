@@ -26,7 +26,7 @@
 
 ## 4. Simulação e fechamento
 
-- [ ] 4.1 Fake Evolution responde `connectionState` (estado semeável); cenário `SIM-REL-05` (WhatsApp `close` → briefing com selo; sonda avisa uma vez); cassetes; `docs/testing.md`
+- [x] 4.1 Fake Evolution responde `connectionState` (estado semeável); cenário `SIM-REL-05` (WhatsApp `close` → briefing com selo; sonda avisa uma vez); cassetes; `docs/testing.md`
   - SCN-BRIEF-05, SCN-USE-09
   - Files: `agent/testing/sim/fake_evolution.py`, `tests/sim/scenarios/reliability/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag reliability --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`

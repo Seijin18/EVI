@@ -31,7 +31,7 @@ STEP_TYPES = (
 )
 VOICE_STEPS = ("telegram_voice", "whatsapp_control_voice", "whatsapp_contact_voice")
 AUDIO_FIXTURE_RE = re.compile(r"^[A-Za-z0-9_.-]+$")  # name inside tests/fixtures/audio/
-JOBS = ("heartbeat", "daily-summary", "briefing", "contact-learn", "contact-names-sync")
+JOBS = ("heartbeat", "daily-summary", "briefing", "contact-learn", "contact-names-sync", "probe")
 # agent tables a scenario may inspect via expect.postgres (never free-form SQL)
 PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log", "reminders", "reminder_fires", "wa_conversation_state")
 
