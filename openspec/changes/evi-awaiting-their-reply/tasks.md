@@ -14,12 +14,12 @@
 
 ## 3. Simulação e fechamento
 
-- [ ] 3.1 Cenário `SIM-AWAIT-01` (você perguntou há 4 dias, sem resposta → aparece na segunda; ✖ → some; mensagem nova sua → volta); cassetes; `docs/testing.md`
+- [x] 3.1 Cenário `SIM-AWAIT-01` (você perguntou há 4 dias, sem resposta → aparece na segunda; ✖ → some; mensagem nova sua → volta); cassetes; `docs/testing.md`
   - SCN-AWAIT-03, SCN-AWAIT-04
   - Files: `tests/sim/scenarios/reply-debts/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --id SIM-AWAIT-01 --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`
 
-- [ ] 3.2 Deploy, gates, BACKLOG + Progress
+- [x] 3.2 Deploy, gates, BACKLOG + Progress
   - SCN-AWAIT-01
   - Files: `openspec/BACKLOG.md`, `Progress.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`, `./scripts/evi-test smoke`, `openspec validate --specs`, `ruff check agent/ --select E,W,F --ignore E501`

@@ -461,7 +461,7 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
         if schema.is_relative(v):
             ctx.set_clock(schema.parse_relative(v, ctx.today(), ctx.tz))
         else:
-            ctx.set_clock(ctx.now() + schema.parse_delta(v))
+            ctx.set_clock(ctx.sim_now() + schema.parse_delta(v))
         if "reply_within_s" in exp or exp.get("no_reply"):
             # proactive output (e.g. the reminder loop): messages sent to the user after the jump
             t0 = time.monotonic()

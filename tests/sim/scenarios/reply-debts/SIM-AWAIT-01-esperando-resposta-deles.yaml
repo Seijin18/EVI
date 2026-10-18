@@ -1,0 +1,58 @@
+id: SIM-AWAIT-01
+title: Esperando resposta deles - pergunta sua sem resposta aparece na segunda; ✖ some; mensagem nova volta; 🔔 cria lembrete (SCN-AWAIT-01..04)
+tags: [reply-debts, briefing]
+source: synthetic
+clock: M-1 06:00
+steps:
+  # Carla: the user's last message is a closing, 5 days before the Monday -> never listed
+  - clock: +2d
+  - whatsapp_contact: {text: "valeu, abraço!", from_me: true, jid: "5511955550811@s.whatsapp.net", push_name: "Carla Exemplo"}
+    expect:
+      postgres:
+        - {table: wa_conversation_state, count: 1, within_s: 10}
+      outbound_to_third_parties: 0
+  # Bruno: the user asks for the contract 4 days before the Monday and Bruno never answers
+  - clock: +1d
+  - whatsapp_contact: {text: "consegue me mandar o contrato até quinta?", from_me: true, jid: "5511955550812@s.whatsapp.net", push_name: "Bruno Exemplo"}
+    expect:
+      postgres:
+        - {table: wa_conversation_state, count: 2, within_s: 10}
+      outbound_to_third_parties: 0
+  - clock: M0 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)esperando resposta deles.*1\\. .*Bruno.*h[aá] 4 d.*contrato"
+      reply_not_matches: "Carla"
+      telegram_message:
+        has_keyboard: true
+      outbound_to_third_parties: 0
+  # ✖ on Bruno: answered, button gone, dismissal stored for that message
+  - telegram_tap: {item: 1, action: "no"}
+    expect:
+      reply_within_s: 30
+      reply_matches: "não pergunto"
+      telegram_keyboard: {not_contains: "1 ✖"}
+      postgres:
+        - {table: awaiting_dismissed, count: 1}
+      outbound_to_third_parties: 0
+  # a new message from the user reopens the conversation on the next Monday
+  - clock: M0 10:00
+  - whatsapp_contact: {text: "e aí, conseguiu?", from_me: true, jid: "5511955550812@s.whatsapp.net", push_name: "Bruno Exemplo"}
+    expect:
+      outbound_to_third_parties: 0
+  - clock: M1 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)esperando resposta deles.*1\\. .*Bruno.*conseguiu"
+      reply_not_matches: "Carla"
+      outbound_to_third_parties: 0
+  # 🔔 on Bruno: reminder for tomorrow naming Bruno; nothing is sent to him
+  - telegram_tap: {item: 1, action: rm}
+    expect:
+      reply_within_s: 30
+      reply_matches: "lembrar|lembro"
+      postgres:
+        - {table: reminders, where: {status: pending, text: {contains: "Bruno"}}, count: 1}
+      outbound_to_third_parties: 0
