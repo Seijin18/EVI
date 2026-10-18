@@ -66,6 +66,20 @@ class FakeIntegration:
         return r
 
 
+@pytest.fixture(autouse=True)
+def source_status(monkeypatch):
+    """Fake source_status table + Evolution state: no real DB/Evolution in these tests."""
+    st = SimpleNamespace(down=[], recorded=[], wa_state=None)
+    monkeypatch.setattr(db, "record_source", lambda *a, **k: st.recorded.append(a))
+    monkeypatch.setattr(db, "list_sources_down", lambda: list(st.down))
+    from services import health
+
+    monkeypatch.setattr(health, "whatsapp_connection_state", lambda: st.wa_state)
+    monkeypatch.delenv("EVI_SOURCE_ALERTS_ENABLED", raising=False)
+    monkeypatch.delenv("EVOLUTION_API_KEY", raising=False)
+    return st
+
+
 @pytest.fixture
 def setup(monkeypatch):
     def _setup(responses=None, commitments=None):
@@ -857,3 +871,108 @@ def test_numbering_covers_only_visible_items(monkeypatch):
     for it in b.items:
         assert f"{it.n}. " in b.text_user and f"\n{it.n}. " in b.text_model
     assert f"\n{len(b.items) + 1}. " not in b.text_model
+
+
+# ---- source-down banner (SCN-BRIEF-05) ------------------------------------------------
+
+TZ = ZoneInfo("America/Sao_Paulo")
+D18 = datetime(2026, 10, 18, 7, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))
+WA_LINE = ("📵 WhatsApp desconectado desde 14/10 — o EVI não está lendo suas conversas; "
+           "gere o QR no manager da Evolution")
+GOOGLE_LINE = ("⚠️ Google (agenda, tarefas, e-mail): acesso expirado desde 18/10 — "
+               "reconecte no Windmill (Resources)")
+
+
+def _down(source, since, reason):
+    return {"source": source, "ok": False, "reason": reason, "down_since": since, "checked_at": since}
+
+
+def _all_down(st):
+    st.down = [
+        _down("whatsapp", datetime(2026, 10, 14, 6, 0, tzinfo=TZ), "disconnected"),
+        _down("calendar", datetime(2026, 10, 18, 6, 55, tzinfo=TZ), "oauth"),
+        _down("tasks", datetime(2026, 10, 18, 6, 55, tzinfo=TZ), "oauth"),
+        _down("gmail", datetime(2026, 10, 18, 6, 55, tzinfo=TZ), "oauth"),
+    ]
+
+
+def test_scn_brief_05_banner_right_after_header(setup, source_status):
+    setup({"list_events": OAUTH_ERR, "list_tasks": OAUTH_ERR, "summarize_inbox": OAUTH_ERR})
+    _all_down(source_status)
+    b = briefing.assemble_briefing(now=D18)
+    model = b.text_model.splitlines()
+    assert model[0].startswith("Bom dia!")
+    assert model[1:3] == [WA_LINE, GOOGLE_LINE]
+    user = b.text_user.splitlines()
+    assert user[1:3] == [WA_LINE, GOOGLE_LINE]
+    _assert_valid_html(b.text_user)
+    assert not untrusted.has_marker(b.text_user)
+    # the affected sections stay, short, without repeating the reason
+    assert "⚠ E-mail indisponível (ver aviso acima)" in b.text_user
+    assert "⚠ E-mail indisponível (ver aviso acima)" in b.text_model
+    assert "credencial expirada" not in b.text_user and "credencial expirada" not in b.text_model
+
+
+def test_banner_lists_only_sources_down_now_and_other_sources(setup, source_status):
+    setup()
+    source_status.down = [_down("telegram", datetime(2026, 10, 17, 9, 0, tzinfo=TZ), "http_error")]
+    b = briefing.assemble_briefing(now=D18)
+    assert b.text_model.splitlines()[1] == "⚠️ Telegram fora desde 17/10 — erro de comunicação"
+    source_status.down = []
+    assert briefing.assemble_briefing(now=D18).text_model.splitlines()[1] != WA_LINE
+    assert "⚠️" not in briefing.assemble_briefing(now=D18).text_user
+
+
+def test_banner_date_uses_evi_timezone(setup, source_status, monkeypatch):
+    setup()
+    monkeypatch.setenv("EVI_TIMEZONE", "America/Sao_Paulo")
+    # 02:00 UTC on the 15th is still the 14th in Sao Paulo
+    source_status.down = [_down("whatsapp", datetime(2026, 10, 15, 2, 0, tzinfo=ZoneInfo("UTC")), "disconnected")]
+    assert "desde 14/10" in briefing.assemble_briefing(now=D18).text_user
+
+
+def test_banner_survives_heavy_day_collapse(monkeypatch, source_status):
+    _all_down(source_status)
+    plain = _fixture_briefing(monkeypatch, "morning_heavy")
+    assert any(s.collapsed for s in plain.sections)  # still collapses, banner untouched
+    assert plain.text_user.splitlines()[1:3] == [WA_LINE, GOOGLE_LINE]
+    assert plain.text_model.splitlines()[1:3] == [WA_LINE, GOOGLE_LINE]
+    assert len([ln for ln in plain.text_user.splitlines() if ln]) <= briefing.MAX_LINES
+    _golden("morning_heavy_banner", "user.html", plain.text_user)
+    _golden("morning_heavy_banner", "model.txt", plain.text_model)
+
+
+def test_flag_off_has_no_banner_and_records_nothing(setup, source_status, monkeypatch):
+    monkeypatch.setenv("EVI_SOURCE_ALERTS_ENABLED", "false")
+    setup({"summarize_inbox": OAUTH_ERR})
+    _all_down(source_status)
+    b = briefing.assemble_briefing(now=NOW)
+    assert WA_LINE not in b.text_model and "Google" not in b.text_model
+    assert "⚠ E-mail indisponível — credencial expirada — reconecte no Windmill" in b.text_model
+    assert source_status.recorded == []
+
+
+def test_each_source_result_is_recorded(setup, source_status, monkeypatch):
+    monkeypatch.setenv("EVOLUTION_API_KEY", "k")
+    source_status.wa_state = "close"
+    setup({"summarize_inbox": OAUTH_ERR})
+    briefing.assemble_briefing(now=NOW)
+    rec = {a[0]: a[1:] for a in source_status.recorded}
+    assert rec["calendar"] == (True, None) and rec["tasks"] == (True, None)
+    assert rec["gmail"] == (False, "oauth")
+    assert rec["whatsapp"] == (False, "disconnected")  # stored data fine, session closed
+
+
+def test_whatsapp_open_clears_and_status_failures_never_break_the_briefing(setup, source_status, monkeypatch):
+    monkeypatch.setenv("EVOLUTION_API_KEY", "k")
+    source_status.wa_state = "open"
+    setup()
+    briefing.assemble_briefing(now=NOW)
+    assert ("whatsapp", True) in source_status.recorded
+
+    def boom(*a, **k):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db, "record_source", boom)
+    b = briefing.assemble_briefing(now=NOW)
+    assert "Bom dia!" in b.text_model and len(b.items) == 6

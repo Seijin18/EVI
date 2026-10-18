@@ -1,0 +1,28 @@
+Bom dia! Terça, 13/10
+📵 WhatsApp desconectado desde 14/10 — o EVI não está lendo suas conversas; gere o QR no manager da Evolution
+⚠️ Google (agenda, tarefas, e-mail): acesso expirado desde 18/10 — reconecte no Windmill (Resources)
+
+Agenda
+8 eventos — peça "minha agenda"
+
+Tarefas
+5 tarefas — peça "minhas tarefas"
+
+E-mail
+9 e-mails — peça "resumo dos e-mails"
+
+WhatsApp
+Esperando sua resposta:
+1. «externo:whatsapp» Pessoa 0 «/externo» — há 6 h: «externo:whatsapp» oi «/externo»
+2. «externo:whatsapp» Pessoa 1 «/externo» — há 7 h: «externo:whatsapp» oi «/externo»
+3. «externo:whatsapp» Pessoa 2 «/externo» — há 8 h: «externo:whatsapp» oi «/externo»
++1
+Suas promessas:
+4. «externo:whatsapp» Promessa 0 «/externo» — «externo:whatsapp» Contato 0 «/externo»
+5. «externo:whatsapp» Promessa 1 «/externo» — «externo:whatsapp» Contato 1 «/externo»
+6. «externo:whatsapp» Promessa 2 «/externo» — «externo:whatsapp» Contato 2 «/externo»
++5
+Combinados:
+7. «externo:whatsapp» Promessa 8 «/externo» — «externo:whatsapp» Contato 8 «/externo»
+8. «externo:whatsapp» Promessa 9 «/externo» — «externo:whatsapp» Contato 9 «/externo»
+9. «externo:whatsapp» Promessa 10 «/externo» — «externo:whatsapp» Contato 10 «/externo»

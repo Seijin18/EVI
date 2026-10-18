@@ -70,6 +70,8 @@ class Section:
     group_more: dict = field(default_factory=dict)  # grupo -> omitidos ("+N" por grupo)
     collapsed: bool = False  # regra de volume: a seção vira uma linha-resumo
     total: int = 0  # itens da seção antes de colapsar (só vale com ``collapsed``)
+    reason: str = ""  # motivo de máquina da falha ("oauth", "http_error"…); "" = desconhecido
+    in_banner: bool = False  # a falha já está no selo do topo: a seção não repete o motivo
 
     def count(self) -> int:
         """Todos os itens da seção, visíveis ou não."""
@@ -165,7 +167,9 @@ def _reason_text(out: ToolResult) -> str:
 
 
 class _SourceError(Exception):
-    pass
+    def __init__(self, message: str = "", reason: str = ""):
+        super().__init__(message)
+        self.reason = reason
 
 
 def _call(op: str, payload: dict[str, Any], *, action: str, env: str, timeout: int) -> dict:
@@ -177,7 +181,7 @@ def _call(op: str, payload: dict[str, Any], *, action: str, env: str, timeout: i
         raw = get_integration().post(op, payload, timeout=timeout, wait_result=True)
         out = parse_windmill_result(raw, action=action, resource_env=env)
     if not out.ok:
-        raise _SourceError(_reason_text(out))
+        raise _SourceError(_reason_text(out), out.reason or "")
     return out.data or {}
 
 
@@ -406,7 +410,7 @@ def _run_source(key: str, fn: Callable[[], list]) -> Section:
     try:
         rows = [_as_row(r, key) for r in fn()]
     except _SourceError as exc:
-        return Section(key, title, error=str(exc))
+        return Section(key, title, error=str(exc), reason=getattr(exc, "reason", ""))
     except Exception as exc:  # isolada: nunca derruba as outras fontes
         soft_fail(f"briefing.{key}", exc)
         return Section(key, title, error=f"falha inesperada ({str(exc)[:100]})")
@@ -485,6 +489,8 @@ def _item_user_line(it: BriefItem) -> str:
 
 def _user_section_lines(sec: Section) -> list[str]:
     """Linhas do usuário (HTML do Telegram) de uma seção; [] se vazia."""
+    if sec.error and sec.in_banner:
+        return [f"⚠ {_esc(_PLAIN_TITLES[sec.key])} indisponível ({_SEE_BANNER})"]
     if sec.error:
         return [f"⚠ {_esc(_PLAIN_TITLES[sec.key])} indisponível — {_esc(strip_markers(sec.error))}"]
     if sec.collapsed:
@@ -545,13 +551,15 @@ def _footer(items: list[BriefItem]) -> str:
     return f"<i>Responda: {_esc(' · '.join(parts))}</i>" if parts else ""
 
 
-def _render_model(header: str, sections: list[Section], free_day: bool) -> str:
+def _render_model(header: str, sections: list[Section], free_day: bool, banner: list[str] = ()) -> str:
     """Texto para a sessão/LLM: terceiros delimitados por ``wrap_external``."""
-    lines = [header]
+    lines = [header, *banner]
     if free_day:
         lines.append(_FREE_DAY)
     for sec in sections:
-        if sec.error:
+        if sec.error and sec.in_banner:
+            lines.append(f"⚠ {sec.title} indisponível ({_SEE_BANNER})")
+        elif sec.error:
             lines.append(f"⚠ {sec.title} indisponível — {sec.error}")
         elif sec.collapsed:
             lines.append(f"\n{sec.title}")
@@ -573,10 +581,10 @@ def _render_model(header: str, sections: list[Section], free_day: bool) -> str:
 
 
 def _render_user(day: date, kind: str, sections: list[Section], items: list[BriefItem],
-                 free_day: bool) -> str:
+                 free_day: bool, banner: list[str] = ()) -> str:
     """Texto para o usuário: HTML do Telegram, sem marcadores, dinâmico escapado."""
     greeting, rest = _header_parts(day, kind)
-    lines = [f"{_bold(greeting)} {_esc(rest)}"]
+    lines = [f"{_bold(greeting)} {_esc(rest)}", *(_esc(ln) for ln in banner)]
     if free_day:
         lines.append(_esc(_FREE_DAY))
     prev_short = False  # avisos e resumos de uma linha ficam colados, sem linha em branco
@@ -592,6 +600,93 @@ def _render_user(day: date, kind: str, sections: list[Section], items: list[Brie
     if footer:
         lines += ["", footer]
     return _truncate("\n".join(lines))
+
+
+# ---------------------------------------------------------------- selo de fontes fora
+
+_SEE_BANNER = "ver aviso acima"
+_SOURCE_KEYS = {"calendar": "calendar", "tasks": "tasks", "email": "gmail", "whatsapp": "whatsapp"}
+_GOOGLE = (("calendar", "agenda"), ("tasks", "tarefas"), ("gmail", "e-mail"))
+_SOURCE_LABELS = {"calendar": "Agenda", "tasks": "Tarefas", "gmail": "E-mail", "telegram": "Telegram",
+                  "whatsapp": "WhatsApp"}
+_SHORT_REASONS = {
+    "not_configured": "não configurado",
+    "http_error": "erro de comunicação",
+    "upstream_error": "sem resposta",
+    "unparseable": "resposta ilegível",
+}
+
+
+def _record_sources(sections: list[Section]) -> None:
+    """Grava o resultado de cada fonte em ``source_status`` (e o estado da sessão WhatsApp)."""
+    wa_failed = False
+    for sec in sections:
+        key = _SOURCE_KEYS.get(sec.key)
+        if not key:
+            continue
+        if key == "whatsapp":  # os dados guardados podem vir com a sessão fechada: vale o estado
+            wa_failed = bool(sec.error)
+            continue
+        db.record_source(key, not sec.error, (sec.reason or "error") if sec.error else None)
+    from services.health import whatsapp_connection_state
+
+    state = whatsapp_connection_state() if os.getenv("EVOLUTION_API_KEY", "").strip() else None
+    if state == "open":
+        db.record_source("whatsapp", True)
+    elif state is not None:
+        db.record_source("whatsapp", False, "disconnected")
+    elif wa_failed:
+        db.record_source("whatsapp", False, "error")
+
+
+def _since(row: dict) -> str:
+    ts = row.get("down_since")
+    if not isinstance(ts, datetime):
+        return ""
+    return f" desde {ts.astimezone(_tz()).strftime('%d/%m')}"
+
+
+def _banner_lines(down: list[dict]) -> list[str]:
+    """Uma linha por fonte fora (Google agrupado); só texto nosso, sem conteúdo de terceiros."""
+    google = [r for r in down if r["source"] in dict(_GOOGLE) and r.get("reason") == "oauth"]
+    lines: list[str] = []
+    google_done = False
+    for r in down:
+        if r in google:
+            if google_done:
+                continue
+            google_done = True
+            names = ", ".join(n for k, n in _GOOGLE if any(g["source"] == k for g in google))
+            lines.append(f"⚠️ Google ({names}): acesso expirado{_since(google[0])} — "
+                         "reconecte no Windmill (Resources)")
+        elif r["source"] == "whatsapp":
+            lines.append(f"📵 WhatsApp desconectado{_since(r)} — o EVI não está lendo suas conversas; "
+                         "gere o QR no manager da Evolution")
+        else:
+            label = _SOURCE_LABELS.get(r["source"], r["source"])
+            why = _SHORT_REASONS.get(r.get("reason") or "", "indisponível")
+            lines.append(f"⚠️ {label} fora{_since(r)} — {why}")
+    return lines
+
+
+def _source_health(sections: list[Section]) -> tuple[list[str], list[Section]]:
+    """Registra as fontes e devolve (linhas do selo, seções marcadas como cobertas pelo selo).
+    Nunca propaga: sem DB/Evolution o briefing sai sem selo."""
+    from services.health import source_alerts_enabled
+
+    if not source_alerts_enabled():
+        return [], sections
+    try:
+        _record_sources(sections)
+        down = db.list_sources_down()
+    except Exception as exc:
+        soft_fail("briefing.source_health", exc)
+        return [], sections
+    banner = _banner_lines(down)
+    down_keys = {r["source"] for r in down}
+    covered = [replace(s, in_banner=True) if s.error and _SOURCE_KEYS.get(s.key) in down_keys else s
+               for s in sections]
+    return banner, covered
 
 
 def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Briefing:
@@ -611,8 +706,9 @@ def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Bri
         futures = [pool.submit(_run_source, key, fn) for key, fn in sources]
         raw_sections = [f.result() for f in futures]
 
+    banner, raw_sections = _source_health(raw_sections)
     free_day = not any(s.items for s in raw_sections) and not any(s.error for s in raw_sections)
-    fitted = fit_volume(raw_sections)  # antes de numerar: só o que aparece recebe número
+    fitted = fit_volume(raw_sections, MAX_LINES - len(banner))  # o selo conta primeiro e não colapsa  # antes de numerar: só o que aparece recebe número
     n = 0
     sections: list[Section] = []
     for sec in fitted:
@@ -623,8 +719,8 @@ def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Bri
         sections.append(replace(sec, items=numbered))
     items = [it for sec in sections for it in sec.items]
 
-    text_model = _render_model(_header(now, day, kind), sections, free_day)
-    text_user = _render_user(day, kind, sections, items, free_day)
+    text_model = _render_model(_header(now, day, kind), sections, free_day, banner)
+    text_user = _render_user(day, kind, sections, items, free_day, banner)
     return Briefing(text_model, sections, items, text_user)
 
 

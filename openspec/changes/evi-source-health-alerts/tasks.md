@@ -19,7 +19,7 @@
 
 ## 3. Briefing
 
-- [ ] 3.1 Selo de fontes fora no topo do briefing (agrupa Google; WhatsApp com desde quando), não colapsável, sem repetir o motivo na seção
+- [x] 3.1 Selo de fontes fora no topo do briefing (agrupa Google; WhatsApp com desde quando), não colapsável, sem repetir o motivo na seção
   - SCN-BRIEF-02, SCN-BRIEF-05
   - Files: `agent/services/briefing.py`, `tests/unit/test_briefing.py`, `tests/fixtures/briefing/`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py -q` e `./scripts/evi-test briefing`
