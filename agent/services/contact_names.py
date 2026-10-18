@@ -229,6 +229,15 @@ def prompt_rows(now: datetime | None = None) -> list[tuple[str, dict]]:
     return rows
 
 
+def ignore_name_prompt(jid: str) -> str:
+    """Stop asking about this conversation for ``IGNORE_DAYS`` (text reply and ✖ button)."""
+    import db
+
+    db.init_db()
+    db.set_name_prompt_ignored(jid, datetime.now(timezone.utc) + timedelta(days=IGNORE_DAYS))
+    return f"Ok, não pergunto sobre essa conversa por {IGNORE_DAYS} dias."
+
+
 def try_name_reply(text: str, session_id: str | None = None) -> str | None:
     """Deterministic "nomeia N <nome>" / "ignora N" against the last briefing (no LLM).
 
@@ -254,11 +263,7 @@ def try_name_reply(text: str, session_id: str | None = None) -> str | None:
 
             assign_contact_name(jid, display_name=name, name_source="user")
             return f"Ok, {name} anotado."
-        import db
-
-        db.init_db()
-        db.set_name_prompt_ignored(jid, datetime.now(timezone.utc) + timedelta(days=IGNORE_DAYS))
-        return f"Ok, não pergunto sobre essa conversa por {IGNORE_DAYS} dias."
+        return ignore_name_prompt(jid)
     except Exception as exc:  # noqa: BLE001
         soft_fail("contact_names.try_name_reply", exc)
         return "Não consegui salvar agora. Tente de novo mais tarde."

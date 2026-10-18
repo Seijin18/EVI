@@ -185,6 +185,162 @@ def _voice_turn(
         return fail(tr.MSG_FAILED, type(exc).__name__)
 
 
+# --------------------------------------------------- briefing buttons (evi-briefing-buttons)
+
+_CB_ERROR = "Não consegui; responda 'respondido N'."
+_CB_OLD = "Esse briefing é antigo — use o de hoje."
+_CB_DONE = "Já estava feito."
+_CB_KINDS = {"reply_debt": ("ok", "no"), "commitment": ("ok", "no"), "name_prompt": ("no",)}
+
+
+def handle_briefing_callback(cq: Dict[str, Any]) -> Dict[str, Any]:
+    """Run a briefing button tap deterministically (never the LLM).
+
+    Chat and sender must be on the allowlist; the day in the button must be today's
+    briefing (and the tapped message that very briefing); a malformed tap changes nothing.
+    """
+    import time
+
+    from services import briefing
+    from services import telegram_notify as tn
+
+    started = time.monotonic()
+    msg = cq.get("message") or {}
+    chat_id = (msg.get("chat") or {}).get("id")
+    from_id = (cq.get("from") or {}).get("id")
+    if chat_id is None or from_id is None or not (_chat_allowed(chat_id) and _chat_allowed(from_id)):
+        _log.info("telegram callback from disallowed chat/sender ignored")
+        return {"ok": True, "skipped": "chat not allowed"}
+
+    cq_id = str(cq.get("id") or "")
+    message_id = msg.get("message_id")
+    parsed = briefing.parse_callback_data(cq.get("data"))
+
+    def reply(text: str, outcome: str, *, markup: Any = None, action: str = "?") -> Dict[str, Any]:
+        tn.answer_callback(cq_id, text)
+        if markup is not None and message_id is not None:
+            tn.edit_reply_markup(chat_id, message_id, markup)
+        if outcome == "done":
+            _record_button_turn(chat_id, action, text, started)
+        return {"ok": True, "callback": outcome, "answer": text}
+
+    if parsed is None:
+        return reply(_CB_ERROR, "invalid")
+    day8, n, action = parsed
+    session_id = f"telegram-{chat_id}"
+    try:
+        payload = briefing.today_snapshot(session_id)
+        if (
+            payload is None
+            or str(payload.get("day") or "").replace("-", "") != day8
+            or (payload.get("message_id") and payload.get("message_id") != message_id)
+        ):
+            return reply(_CB_OLD, "stale")
+        return _run_briefing_action(payload, session_id, n, action, reply)
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+
+        soft_fail("telegram_handler.briefing_callback", exc)
+        return reply(_CB_ERROR, "error")
+
+
+def _run_briefing_action(payload: Dict[str, Any], session_id: str, n: int, action: str, reply) -> Dict[str, Any]:
+    import db
+    from datetime import date as _date
+
+    from services import briefing
+
+    day_iso = str(payload["day"])
+    day = _date.fromisoformat(day_iso)
+    bkind = str(payload.get("kind") or "morning")
+    refs = payload.get("refs") or {}
+    actionable = briefing.actionable_from_refs(refs)
+    done = {int(x) for x in payload.get("done") or []}
+    row = db.get_briefing(day, bkind) or {}
+    feedback = row.get("feedback")
+
+    def keyboard() -> dict:
+        return briefing.build_keyboard(day_iso, actionable, done, feedback)
+
+    if action in ("up", "dn"):
+        feedback = "up" if action == "up" else "down"
+        db.set_briefing_feedback(day, bkind, feedback)  # last tap wins
+        db.mark_briefing_replied(day, bkind)
+        return reply("Obrigado!", "done", markup=keyboard(), action=action)
+
+    kind, _, ref_id = str(refs.get(str(n)) or "").partition(":")
+    if n not in actionable or action not in _CB_KINDS.get(kind, ()) or not ref_id:
+        return reply(_CB_ERROR, "invalid")
+    if n in done:
+        return reply(_CB_DONE, "already", markup=keyboard())
+
+    text = _CB_ERROR
+    if kind == "reply_debt":
+        from tools.reply_debt_tools import acknowledge_debts
+
+        acknowledge_debts([ref_id])
+        text = "Ok, marcado como respondido."
+    elif kind == "name_prompt":
+        from services.contact_names import ignore_name_prompt
+
+        ignore_name_prompt(ref_id)
+        text = "Ok, não pergunto mais sobre essa conversa."
+    elif kind == "commitment":
+        text = _commitment_action(db, int(ref_id), action)
+        if text is None:
+            return reply(_CB_ERROR, "error")
+    done.add(n)
+    new_payload = dict(payload)
+    new_payload["done"] = sorted(done)
+    db.save_tool_snapshot(session_id, "morning_briefing", new_payload)
+    db.mark_briefing_replied(day, bkind)
+    return reply(text, "done", markup=keyboard(), action=action)
+
+
+def _commitment_action(db, cid: int, action: str) -> str | None:
+    """✅ confirms (calendar/tasks; a promise is marked done), ✖ dismisses. None = failed."""
+    from tools.commitment_tools import confirm_commitment_ids, dismiss_commitment_ids
+
+    db.init_db()
+    pending = {r["id"]: r for r in db.list_pending_commitments(limit=100, include_past=True)}
+    row = pending.get(cid)
+    if row is None:
+        return _CB_DONE
+    if action == "no":
+        dismiss_commitment_ids([cid])
+        return "Ok, dispensado."
+    if row.get("type") == "promise":
+        # confirm_commitments has no meaning for a promise: ✅ = "fiz", closes it.
+        return "Ok, promessa concluída." if db.finish_pending_promise(cid, "done", "telegram_button") else None
+    confirm_commitment_ids([cid], "telegram_button")
+    still = any(r["id"] == cid for r in db.list_pending_commitments(limit=100, include_past=True))
+    return None if still else "Ok, confirmado."
+
+
+def _record_button_turn(chat_id: Any, action: str, answer: str, started: float) -> None:
+    """One turn_log row per handled tap (no third-party text: only the action word)."""
+    import time
+
+    try:
+        from services.turn_log import TurnCollector, record_turn
+
+        session_id = f"telegram-{chat_id}"
+        collector = TurnCollector("telegram", session_id=session_id, input_kind="button")
+        record_turn(
+            collector,
+            session_id=session_id,
+            channel="telegram",
+            user_text=f"[botão {action}]",
+            reply_text=answer,
+            latency_ms=int((time.monotonic() - started) * 1000),
+        )
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+
+        soft_fail("telegram_handler.button_turn", exc)
+
+
+
 def process_telegram_update(
     update: Dict[str, Any],
     invoke_chat: ChatInvoke,
@@ -193,6 +349,8 @@ def process_telegram_update(
     compact_session: Callable[[str], None] | None = None,
 ) -> Dict[str, Any]:
     """Process one Telegram update dict; invoke_chat(message, session_id) -> {response: ...}."""
+    if update.get("callback_query"):
+        return handle_briefing_callback(update["callback_query"])
     message = update.get("message") or {}
     sender = (message.get("chat") or {}).get("id", "telegram")
     if not _chat_allowed(sender):

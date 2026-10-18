@@ -81,28 +81,14 @@ def _merge_briefing_ids(
     return ids, errors
 
 
-@tool
-@guarded_write
-def confirm_commitments(
-    commitment_ids: Optional[List[int]] = None,
-    confirmed_via: str = "chat",
-    briefing_items: Optional[List[int]] = None,
-) -> str:
-    """
-    Confirm selected pending commitments: events → Google Calendar, tasks → Google Tasks.
-    Marks rows as scheduled on success.
-    If the user refers to numbers from the last briefing ('confirma 2', 'dispensa 1 e 3'),
-    pass them in briefing_items — never as commitment_ids. Otherwise (ids from
-    list_pending_commitments, or the commitment named by title) use commitment_ids and
-    leave briefing_items empty. Never guess numbers: if the user named a commitment by
-    title, call list_pending_commitments first to get its id.
-    """
+def confirm_commitment_ids(commitment_ids: List[int], confirmed_via: str) -> List[str]:
+    """Confirm pending commitments by id (events → Calendar, tasks → Tasks) and return one
+    result line per id. Shared by ``confirm_commitments`` and the briefing's ✅ button."""
     from db import init_db, list_pending_commitments, update_commitment_status
 
     init_db()
-    commitment_ids, resolve_errors = _merge_briefing_ids(commitment_ids, briefing_items)
     pending = {r["id"]: r for r in list_pending_commitments(limit=100, include_past=True)}
-    results = list(resolve_errors)
+    results: List[str] = []
     for cid in commitment_ids:
         row = pending.get(int(cid))
         if not row:
@@ -139,7 +125,39 @@ def confirm_commitments(
             results.append(f"#{cid}: {str(out)[:120]}")
         else:
             results.append(f"#{cid}: failed — {str(out)[:200]}")
+    return results
+
+
+@tool
+@guarded_write
+def confirm_commitments(
+    commitment_ids: Optional[List[int]] = None,
+    confirmed_via: str = "chat",
+    briefing_items: Optional[List[int]] = None,
+) -> str:
+    """
+    Confirm selected pending commitments: events → Google Calendar, tasks → Google Tasks.
+    Marks rows as scheduled on success.
+    If the user refers to numbers from the last briefing ('confirma 2', 'dispensa 1 e 3'),
+    pass them in briefing_items — never as commitment_ids. Otherwise (ids from
+    list_pending_commitments, or the commitment named by title) use commitment_ids and
+    leave briefing_items empty. Never guess numbers: if the user named a commitment by
+    title, call list_pending_commitments first to get its id.
+    """
+    from db import init_db
+
+    init_db()
+    commitment_ids, resolve_errors = _merge_briefing_ids(commitment_ids, briefing_items)
+    results = list(resolve_errors) + confirm_commitment_ids(commitment_ids, confirmed_via)
     return format_confirm_results("\n".join(results))
+
+
+def dismiss_commitment_ids(commitment_ids: List[int]) -> int:
+    """Dismiss pending commitments by id; returns how many changed (ids already handled
+    count 0). Shared by ``dismiss_commitments`` and the briefing's ✖ button."""
+    from db import update_commitment_status
+
+    return sum(1 for cid in commitment_ids if update_commitment_status(int(cid), "dismissed"))
 
 
 @tool
@@ -154,13 +172,10 @@ def dismiss_commitments(
     list_pending_commitments, or the commitment named by title) use commitment_ids and
     leave briefing_items empty.
     """
-    from db import init_db, update_commitment_status
+    from db import init_db
 
     init_db()
     commitment_ids, errors = _merge_briefing_ids(commitment_ids, briefing_items)
-    n = 0
-    for cid in commitment_ids:
-        if update_commitment_status(int(cid), "dismissed"):
-            n += 1
+    n = dismiss_commitment_ids(commitment_ids)
     msg = f"Dismissed {n} commitment(s)."
     return "\n".join([msg, *errors]) if errors else msg

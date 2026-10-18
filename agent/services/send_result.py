@@ -38,13 +38,14 @@ class SendResult:
     reason: str = ""
     attempts: int = 0
     detail: str = ""
+    message_id: int | None = None  # id of the delivered message, when the provider returns it
 
     def __bool__(self) -> bool:
         return self.sent
 
     @classmethod
-    def ok(cls, attempts: int = 1) -> "SendResult":
-        return cls(sent=True, attempts=attempts)
+    def ok(cls, attempts: int = 1, message_id: int | None = None) -> "SendResult":
+        return cls(sent=True, attempts=attempts, message_id=message_id)
 
     @classmethod
     def fail(cls, reason: str, *, attempts: int = 0, detail: str = "") -> "SendResult":
@@ -85,6 +86,7 @@ def post_with_retry(
     timeout: int,
     context: str,
     body_hint: bool = False,
+    capture_message_id: bool = False,
 ) -> SendResult:
     """POST with a bounded retry. Never raises.
 
@@ -93,6 +95,8 @@ def post_with_retry(
     retrying only delays the (now visible) error. With ``body_hint`` a 4xx detail
     also carries a short sanitised excerpt of the error body (Telegram's
     "can't parse entities" tells a formatting rejection from a bad chat id).
+    With ``capture_message_id`` a 2xx body ``{"result": {"message_id": N}}`` is read
+    into ``SendResult.message_id`` (best effort: an unreadable body still counts as sent).
     """
     attempts = _attempts()
     backoff = _backoff()
@@ -103,7 +107,8 @@ def post_with_retry(
         try:
             with urllib.request.urlopen(request, timeout=timeout) as resp:
                 if 200 <= resp.status < 300:
-                    return SendResult.ok(attempts=attempt)
+                    mid = _read_message_id(resp) if capture_message_id else None
+                    return SendResult.ok(attempts=attempt, message_id=mid)
                 last_reason = HTTP_5XX if resp.status >= 500 else HTTP_4XX
                 last_detail = f"http {resp.status}"
                 if last_reason == HTTP_4XX:
@@ -127,6 +132,16 @@ def post_with_retry(
     result = SendResult.fail(last_reason, attempts=attempts, detail=last_detail)
     _report(context, result)
     return result
+
+
+def _read_message_id(resp) -> int | None:
+    try:
+        import json
+
+        mid = ((json.loads(resp.read()) or {}).get("result") or {}).get("message_id")
+        return int(mid) if mid is not None else None
+    except Exception:  # noqa: BLE001 - delivery already succeeded
+        return None
 
 
 def _body_excerpt(exc: urllib.error.HTTPError) -> str:

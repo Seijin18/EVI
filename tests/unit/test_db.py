@@ -635,6 +635,22 @@ def test_briefing_sent_today_scoped_by_day_and_kind(briefing_days):
 
 
 @pytest.mark.ephemeral_db
+def test_briefing_feedback_last_tap_wins_scn_ux_09(briefing_days):
+    import db
+
+    day = briefing_days[0]
+    assert db.set_briefing_feedback(day, "morning", "down") is False  # no such row yet
+    db.record_briefing(day, "morning", True, {})
+    assert db.get_briefing(day, "morning")["feedback"] is None
+    assert db.set_briefing_feedback(day, "morning", "down") is True
+    assert db.set_briefing_feedback(day, "morning", "up") is True
+    assert db.get_briefing(day, "morning")["feedback"] == "up"
+    assert db.set_briefing_feedback(day, "morning", "meh") is False  # only up/down
+    assert db.get_briefing(day, "morning")["feedback"] == "up"
+    assert db.get_briefing(day, "evening") is None  # other kind untouched
+
+
+@pytest.mark.ephemeral_db
 def test_mark_briefing_replied_first_mark_only(briefing_days):
     import db
 

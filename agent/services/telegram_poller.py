@@ -17,6 +17,8 @@ from services.telegram_notify import telegram_api_base
 
 logger = logging.getLogger("evi.telegram_poller")
 
+ALLOWED_UPDATES = ["message", "callback_query"]  # callback_query: briefing buttons
+
 _stop = threading.Event()
 _thread: Optional[threading.Thread] = None
 
@@ -85,7 +87,7 @@ def fetch_updates(token: str, offset: int = 0, timeout: int = 30) -> List[Dict[s
     data = _api_get(
         token,
         "getUpdates",
-        {"offset": offset, "timeout": timeout},
+        {"offset": offset, "timeout": timeout, "allowed_updates": json.dumps(ALLOWED_UPDATES)},
     )
     return data.get("result") or []
 

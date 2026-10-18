@@ -1,18 +1,18 @@
 ## 1. Envio
 
-- [ ] 1.1 `telegram_notify`: `reply_markup` em `send_telegram_message` (com fallback sem teclado), `answer_callback(query_id, text)`, `edit_reply_markup(chat_id, message_id, markup)`
+- [x] 1.1 `telegram_notify`: `reply_markup` em `send_telegram_message` (com fallback sem teclado), `answer_callback(query_id, text)`, `edit_reply_markup(chat_id, message_id, markup)`
   - SCN-UX-06
   - Files: `agent/services/telegram_notify.py`, `tests/unit/test_telegram_notify.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_notify.py -q`
 
-- [ ] 1.2 Briefing monta o teclado (itens acionáveis visíveis + 👍/👎) e envia com ele; `briefing_log.feedback`; flag `EVI_BRIEFING_BUTTONS`
+- [x] 1.2 Briefing monta o teclado (itens acionáveis visíveis + 👍/👎) e envia com ele; `briefing_log.feedback`; flag `EVI_BRIEFING_BUTTONS`
   - SCN-UX-06
   - Files: `agent/services/briefing.py`, `agent/db.py`, `tests/unit/test_briefing.py`, `.env.example`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py -q` e `./scripts/evi-test briefing`
 
 ## 2. Toque
 
-- [ ] 2.1 `getUpdates` com `allowed_updates`; `process_telegram_update` trata `callback_query`: allowlist, parse estrito, dia do snapshot, ação determinística, `answerCallbackQuery`, edição do teclado, `replied_at`, `turn_log`
+- [x] 2.1 `getUpdates` com `allowed_updates`; `process_telegram_update` trata `callback_query`: allowlist, parse estrito, dia do snapshot, ação determinística, `answerCallbackQuery`, edição do teclado, `replied_at`, `turn_log`
   - SCN-UX-07, SCN-UX-08
   - Files: `agent/services/telegram_poller.py`, `agent/services/telegram_handler.py`, `agent/services/briefing.py`, `tests/unit/test_telegram_handler.py`, `tests/unit/test_telegram_poller.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_handler.py tests/unit/test_telegram_poller.py -q`

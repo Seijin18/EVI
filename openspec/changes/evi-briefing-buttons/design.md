@@ -46,6 +46,14 @@ Callback com erro → resposta "Não consegui; responda 'respondido N'".
 ### 6. Flag
 `EVI_BRIEFING_BUTTONS` (padrão `true`).
 
+### 7. As-built (sincronização)
+- ✅ numa **promessa** marca a promessa como feita (`done`, `confirmed_via='telegram_button'`); em
+  combinado datado confirma pelo mesmo caminho da tool. ✖ dispensa os dois.
+- A linha 👍/👎 fica no teclado com ✓ no escolhido (permite trocar a nota; o último toque vale).
+- Guarda extra: o `message_id` do toque tem de ser o do briefing gravado no snapshot (evita que o
+  teclado da manhã use os números de outro briefing do mesmo dia).
+- Idempotência por lista `done` de números no snapshot mais recente.
+
 ## Riscos
 
 - Botão em briefing de outro dia: resolvido pelo dia no `callback_data`.

@@ -400,3 +400,156 @@ def test_scn_ux_02_direct_list_sends_clean_text_and_persists_marked(monkeypatch)
     assert out.get("review_direct") is True
     assert sent and not has_marker(sent[0]) and "Eliana · Mandar a modelagem" in sent[0]
     assert persisted and has_marker(persisted[0])
+
+
+# --- briefing buttons (SCN-UX-07/08/09) -----------------------------------------------
+
+import json  # noqa: E402
+from datetime import datetime  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
+
+TODAY = datetime(2026, 10, 12, 7, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))
+OWNER = 933619568
+
+
+@pytest.fixture
+def buttons(monkeypatch):
+    import db
+    from services import briefing, telegram_notify as tn, turn_log
+
+    st = SimpleNamespace(
+        snaps=[{"tool_name": "morning_briefing", "created_at": "2026-10-12T10:00:00+00:00", "payload": {
+            "kind": "morning", "day": "2026-10-12", "message_id": 77,
+            "refs": {"1": "reply_debt:5511@s.whatsapp.net", "2": "commitment:12", "3": "name_prompt:9@lid"},
+        }}],
+        acked=[], commitments={12: "event"}, status={}, ignored=[], feedback=None, replied=[],
+        answers=[], edits=[], turns=[], confirmed=[], promises=[],
+    )
+    monkeypatch.setattr(briefing, "now_local", lambda: TODAY)
+    monkeypatch.setattr(db, "init_db", lambda: None)
+    monkeypatch.setattr(db, "load_tool_snapshots", lambda sid, limit=5: list(st.snaps))
+    monkeypatch.setattr(db, "save_tool_snapshot",
+                        lambda sid, name, payload: st.snaps.insert(0, {"tool_name": name, "payload": payload}))
+    monkeypatch.setattr(db, "get_briefing", lambda day, kind: {"feedback": st.feedback})
+    monkeypatch.setattr(db, "set_briefing_feedback", lambda day, kind, v: setattr(st, "feedback", v) or True)
+    monkeypatch.setattr(db, "mark_briefing_replied", lambda day, kind: st.replied.append((str(day), kind)) or True)
+    monkeypatch.setattr(db, "acknowledge", lambda jid, ts: st.acked.append(jid))
+    monkeypatch.setattr(db, "set_name_prompt_ignored", lambda jid, until: st.ignored.append(jid))
+    monkeypatch.setattr(db, "list_pending_commitments", lambda limit=50, **kw: [
+        {"id": i, "type": t} for i, t in st.commitments.items() if i not in st.status])
+    monkeypatch.setattr(db, "update_commitment_status",
+                        lambda i, status, confirmed_via=None: st.status.setdefault(i, status) == status
+                        if i not in st.status else False)
+    monkeypatch.setattr(db, "finish_pending_promise",
+                        lambda i, s, via: st.status.setdefault(i, s) and st.promises.append(i) or True)
+    monkeypatch.setattr("tools.reply_debt_tools._debt_names", lambda jids: ["Ana" for _ in jids])
+    import tools.commitment_tools as ct
+
+    def _confirm(ids, via):
+        st.confirmed.append((list(ids), via))
+        for i in ids:
+            st.status[i] = "scheduled"
+        return ["ok"]
+
+    monkeypatch.setattr(ct, "confirm_commitment_ids", _confirm)
+    monkeypatch.setattr(tn, "answer_callback", lambda qid, text="": st.answers.append(text) or True)
+    monkeypatch.setattr(tn, "edit_reply_markup", lambda c, m, kb: st.edits.append((c, m, kb)) or True)
+    monkeypatch.setattr(turn_log, "record_turn", lambda collector, **kw: st.turns.append((collector, kw)))
+    import llm
+
+    monkeypatch.setattr(llm, "build_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("LLM")))
+    return st
+
+
+def _tap(data, chat=OWNER, sender=OWNER, message_id=77):
+    return {"update_id": 1, "callback_query": {
+        "id": "cq1", "from": {"id": sender}, "data": data,
+        "message": {"message_id": message_id, "chat": {"id": chat, "type": "private"}}}}
+
+
+def _go(update):
+    def no_chat(*a, **k):
+        raise AssertionError("button taps never reach the LLM")
+
+    return process_telegram_update(update, no_chat)
+
+
+def _rows(edit):
+    return [[b["text"] for b in row] for row in edit[2]["inline_keyboard"]]
+
+
+def test_scn_ux_07_tap_ok_on_debt_acknowledges_and_edits_markup(buttons):
+    out = _go(_tap("b1:20261012:1:ok"))
+    assert out["callback"] == "done"
+    assert buttons.acked == ["5511@s.whatsapp.net"]
+    assert buttons.answers == ["Ok, marcado como respondido."]
+    assert buttons.replied == [("2026-10-12", "morning")]
+    assert _rows(buttons.edits[-1]) == [["2 ✅", "2 ✖"], ["3 ✖ ignorar"], ["👍", "👎"]]  # item 1 gone
+    assert buttons.edits[-1][:2] == (OWNER, 77)
+    collector, kw = buttons.turns[-1]
+    assert collector.input_kind == "button" and "5511" not in kw["user_text"]
+
+
+def test_scn_ux_08_old_day_changes_nothing_and_says_old(buttons):
+    out = _go(_tap("b1:20261011:1:ok"))
+    assert out["callback"] == "stale" and buttons.answers == ["Esse briefing é antigo — use o de hoje."]
+    assert not buttons.acked and not buttons.edits and not buttons.replied
+
+
+def test_scn_ux_08_other_message_than_the_current_briefing_is_old(buttons):
+    _go(_tap("b1:20261012:1:ok", message_id=70))
+    assert not buttons.acked and buttons.answers == ["Esse briefing é antigo — use o de hoje."]
+
+
+def test_scn_ux_08_foreign_chat_or_sender_changes_nothing(buttons):
+    for update in (_tap("b1:20261012:1:ok", chat=555), _tap("b1:20261012:1:ok", sender=555)):
+        assert _go(update)["skipped"] == "chat not allowed"
+    assert not buttons.acked and not buttons.answers and not buttons.edits and not buttons.replied
+
+
+@pytest.mark.parametrize("data", [None, "", "x", "b1:20261012:1:rm", "b1:20261012:99:ok", "b1:20261012:2:ok ",
+                                  "b1:20261012:3:ok"])  # 3 = name prompt: only ✖ exists
+def test_malformed_or_impossible_data_answers_error_and_changes_nothing(buttons, data):
+    out = _go(_tap(data))
+    assert out["callback"] == "invalid" and "Não consegui" in buttons.answers[0]
+    assert not buttons.acked and not buttons.status and not buttons.ignored and not buttons.replied
+
+
+def test_second_tap_on_same_item_is_idempotent(buttons):
+    _go(_tap("b1:20261012:1:ok"))
+    out = _go(_tap("b1:20261012:1:ok"))
+    assert out["callback"] == "already" and buttons.answers[-1] == "Já estava feito."
+    assert buttons.acked == ["5511@s.whatsapp.net"]  # no second action
+
+
+def test_commitment_ok_confirms_with_button_provenance_and_no_dismisses(buttons):
+    _go(_tap("b1:20261012:2:ok"))
+    assert buttons.confirmed == [([12], "telegram_button")]
+    assert buttons.answers == ["Ok, confirmado."]
+
+
+def test_commitment_no_dismisses_and_second_tap_changes_nothing(buttons):
+    _go(_tap("b1:20261012:2:no"))
+    assert buttons.status == {12: "dismissed"} and not buttons.confirmed
+    _go(_tap("b1:20261012:2:ok"))
+    assert buttons.status == {12: "dismissed"} and buttons.answers[-1] == "Já estava feito."
+
+
+def test_promise_ok_marks_it_done(buttons):
+    buttons.commitments[12] = "promise"
+    _go(_tap("b1:20261012:2:ok"))
+    assert buttons.promises == [12] and not buttons.confirmed
+
+
+def test_name_prompt_no_ignores_conversation(buttons):
+    _go(_tap("b1:20261012:3:no"))
+    assert buttons.ignored == ["9@lid"]
+
+
+def test_scn_ux_09_feedback_last_tap_wins_and_keeps_row(buttons):
+    _go(_tap("b1:20261012:0:dn"))
+    assert buttons.feedback == "down" and _rows(buttons.edits[-1])[-1] == ["👍", "👎 ✓"]
+    _go(_tap("b1:20261012:0:up"))
+    assert buttons.feedback == "up" and _rows(buttons.edits[-1])[-1] == ["👍 ✓", "👎"]
+    assert buttons.answers == ["Obrigado!", "Obrigado!"]

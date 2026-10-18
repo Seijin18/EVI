@@ -311,22 +311,25 @@ def delivery(monkeypatch):
     sec = [briefing.Section("tasks", "Tarefas", items=items), briefing.Section("email", "E-mail", error="x")]
     monkeypatch.setattr(briefing, "assemble_briefing",
                         lambda kind="morning", now=None: briefing.Briefing("TEXTO", sec, items))
-    sent = []
+    sent, markups = [], []
     result = {"r": SimpleNamespace(sent=True, reason="")}
 
     class R:
+        message_id = 555
+
         def __bool__(self):
             return result["r"].sent
 
         reason = property(lambda self: result["r"].reason)
 
-    def _send(text, chat_id=None, parse_mode=None):
+    def _send(text, chat_id=None, parse_mode=None, reply_markup=None):
         sent.append((text, chat_id) if parse_mode is None else (text, chat_id, parse_mode))
+        markups.append(reply_markup)
         return R()
 
     monkeypatch.setattr("services.telegram_notify.send_telegram_message", _send)
     reset_for_tests()
-    return SimpleNamespace(db=fake, sent=sent, result=result)
+    return SimpleNamespace(db=fake, sent=sent, result=result, markups=markups)
 
 
 def _sent(kind="morning", ok="true"):
@@ -976,3 +979,59 @@ def test_whatsapp_open_clears_and_status_failures_never_break_the_briefing(setup
     monkeypatch.setattr(db, "record_source", boom)
     b = briefing.assemble_briefing(now=NOW)
     assert "Bom dia!" in b.text_model and len(b.items) == 6
+
+
+# inline buttons (SCN-UX-06) ---------------------------------------------------------
+
+
+def _button_items(kinds):
+    return [briefing.BriefItem(i, f"t{i}", {"kind": k, "id": f"x{i}@s.whatsapp.net"}, "", f"t{i}")
+            for i, k in enumerate(kinds, 1)]
+
+
+def _deliver_with(delivery, monkeypatch, items):
+    monkeypatch.setattr(briefing, "assemble_briefing", lambda kind="morning", now=None: briefing.Briefing(
+        "TEXTO", [briefing.Section("whatsapp", "WhatsApp", items=items)], items, "<b>a</b>"))
+    briefing.deliver_briefing("morning", now=NOW)
+    return delivery.markups[-1]
+
+
+def _labels(markup):
+    return [[b["text"] for b in row] for row in markup["inline_keyboard"]]
+
+
+def test_scn_ux_06_rows_labels_and_opaque_callback_data(delivery, monkeypatch):
+    items = _button_items(["reply_debt", "commitment", "name_prompt", "email"])
+    markup = _deliver_with(delivery, monkeypatch, items)
+    assert _labels(markup) == [["1 ✅", "1 ✖"], ["2 ✅", "2 ✖"], ["3 ✖ ignorar"], ["👍", "👎"]]
+    day = NOW.date().strftime("%Y%m%d")
+    datas = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
+    assert datas == [f"b1:{day}:1:ok", f"b1:{day}:1:no", f"b1:{day}:2:ok", f"b1:{day}:2:no",
+                     f"b1:{day}:3:no", f"b1:{day}:0:up", f"b1:{day}:0:dn"]
+    for d in datas:
+        assert len(d.encode()) <= 64 and "@" not in d and "x1" not in d and "t1" not in d
+    # the sent message id is kept in the snapshot (to edit it later)
+    assert delivery.db.snaps[-1][2]["message_id"] == 555
+
+
+def test_buttons_flag_off_sends_no_markup(delivery, monkeypatch):
+    monkeypatch.setenv("EVI_BRIEFING_BUTTONS", "false")
+    assert _deliver_with(delivery, monkeypatch, _button_items(["reply_debt"])) is None
+
+
+def test_heavy_day_keeps_at_most_ten_item_rows(delivery, monkeypatch):
+    markup = _deliver_with(delivery, monkeypatch, _button_items(["reply_debt"] * 14))
+    rows = _labels(markup)
+    assert len(rows) == 11 and rows[-1] == ["👍", "👎"] and rows[9] == ["10 ✅", "10 ✖"]
+
+
+def test_keyboard_hides_done_items_and_marks_feedback():
+    kb = briefing.build_keyboard("2026-10-12", {1: "reply_debt", 2: "commitment"}, done=[1], feedback="down")
+    assert _labels(kb) == [["2 ✅", "2 ✖"], ["👍", "👎 ✓"]]
+
+
+def test_parse_callback_data_is_strict():
+    assert briefing.parse_callback_data("b1:20261012:3:ok") == ("20261012", 3, "ok")
+    for bad in ("b2:20261012:3:ok", "b1:20261012:3:rm", "b1:2026:3:ok", "b1:20261012:3:ok ", None,
+                "b1:20261012:-1:ok", "b1:20261012:3:ok\nx"):
+        assert briefing.parse_callback_data(bad) is None

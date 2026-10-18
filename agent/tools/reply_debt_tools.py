@@ -57,6 +57,21 @@ def list_reply_debts() -> str:
     return "\n".join(lines)
 
 
+def acknowledge_debts(jids: list[str]) -> list[str]:
+    """Acknowledge the conversations and return their readable names (same code for the
+    ``dismiss_reply_debt`` tool and the briefing's ✅ button)."""
+    import db
+    from tools.calendar_time import now_local
+
+    names = _debt_names(jids) if jids else []
+    if jids:
+        db.init_db()
+        now = now_local()
+        for jid in jids:
+            db.acknowledge(jid, now)
+    return names
+
+
 @tool
 @guarded_write
 def dismiss_reply_debt(jid_or_name: str = "", briefing_items: list[int] | None = None) -> str:
@@ -74,14 +89,7 @@ def dismiss_reply_debt(jid_or_name: str = "", briefing_items: list[int] | None =
         from services.briefing import resolve_briefing_items
 
         jids, errors = resolve_briefing_items(list(briefing_items), kind="reply_debt")
-        names = _debt_names(jids) if jids else []
-        if jids:
-            import db
-
-            db.init_db()
-            now = now_local()
-            for jid in jids:
-                db.acknowledge(jid, now)
+        names = acknowledge_debts(jids)
         parts = [_ack_text(names, len(jids))] if jids else []
         return "\n".join(parts + errors)
     q = (jid_or_name or "").strip()

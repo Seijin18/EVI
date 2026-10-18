@@ -111,3 +111,65 @@ def test_long_html_is_cut_on_a_line_boundary(sent):
     sent_text = sent.payloads[0]["text"]
     assert len(sent_text) <= tn.MAX_LEN
     assert sent_text.count("<b>") == sent_text.count("</b>")
+
+
+# --- inline keyboard (SCN-UX-06) ---------------------------------------------------
+
+_KB = {"inline_keyboard": [[{"text": "1 ✅", "callback_data": "b1:20260101:1:ok"}]]}
+
+
+class _OkResp(_Resp):
+    def __init__(self, message_id):
+        self._body = json.dumps({"ok": True, "result": {"message_id": message_id}}).encode()
+
+    def read(self):
+        return self._body
+
+
+def test_reply_markup_is_sent_json_encoded_and_message_id_returned(sent):
+    sent.outcomes.append(_OkResp(77))
+    out = tn.send_telegram_message("oi", reply_markup=_KB)
+    assert bool(out) is True and out.message_id == 77
+    assert sent.payloads[0]["reply_markup"] == _KB
+
+
+def test_no_markup_means_no_reply_markup_key_and_no_message_id_is_fine(sent):
+    out = tn.send_telegram_message("oi")  # the fake response has no readable body
+    assert bool(out) is True and out.message_id is None
+    assert "reply_markup" not in sent.payloads[0]
+
+
+def test_markup_rejected_resends_text_without_it(sent):
+    sent.outcomes.append(_http_400("Bad Request: BUTTON_DATA_INVALID"))
+    out = tn.send_telegram_message("<b>oi</b>", parse_mode="HTML", reply_markup=_KB)
+    assert bool(out) is True
+    first, second = sent.payloads
+    assert first["reply_markup"] == _KB
+    assert "reply_markup" not in second and second["parse_mode"] == "HTML"
+
+
+def test_html_rejected_keeps_the_keyboard_on_the_plain_resend(sent):
+    sent.outcomes.append(_http_400("Bad Request: can't parse entities"))
+    out = tn.send_telegram_message("<b>oi</b>", parse_mode="HTML", reply_markup=_KB)
+    assert bool(out) is True
+    assert sent.payloads[1]["reply_markup"] == _KB and "parse_mode" not in sent.payloads[1]
+
+
+def test_marker_guard_applies_to_text_not_markup(sent):
+    tn.send_telegram_message("a «externo:x»b«/externo»", reply_markup=_KB)
+    assert "«" not in sent.payloads[0]["text"] and sent.payloads[0]["reply_markup"] == _KB
+
+
+def test_answer_callback_and_edit_reply_markup_post_to_the_bot_api(sent):
+    assert tn.answer_callback("cq1", "Ok") is True
+    assert sent.payloads[-1] == {"callback_query_id": "cq1", "text": "Ok"}
+    assert tn.edit_reply_markup(123, 9, _KB) is True
+    assert sent.payloads[-1] == {"chat_id": "123", "message_id": 9, "reply_markup": _KB}
+    assert tn.edit_reply_markup(123, 9, None) is True
+    assert sent.payloads[-1]["reply_markup"] == {"inline_keyboard": []}
+
+
+def test_answer_callback_failure_is_false_not_raised(sent):
+    sent.outcomes.append(_http_400("Bad Request: query is too old"))
+    assert tn.answer_callback("cq1", "x") is False
+    assert tn.answer_callback("", "x") is False

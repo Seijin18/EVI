@@ -179,6 +179,7 @@ def _run_migrations() -> None:
                     replied_at TIMESTAMPTZ,
                     UNIQUE (day, kind)
                 );
+                ALTER TABLE briefing_log ADD COLUMN IF NOT EXISTS feedback TEXT;
                 CREATE TABLE IF NOT EXISTS reminders (
                     id SERIAL PRIMARY KEY,
                     text TEXT NOT NULL,
@@ -1327,6 +1328,22 @@ def mark_briefing_replied(day, kind: str) -> bool:
             marked = cur.fetchone() is not None
         conn.commit()
     return marked
+
+
+def set_briefing_feedback(day, kind: str, value: str) -> bool:
+    """Store the user's 👍/👎 (``up`` | ``down``) for the (day, kind) briefing; the last
+    tap wins. False when there is no such row or the value is not allowed."""
+    if value not in ("up", "down"):
+        return False
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE briefing_log SET feedback = %s WHERE day = %s AND kind = %s RETURNING 1",
+                (value, day, kind),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
 
 
 # --- reminders (evi-reminders) ------------------------------------------------

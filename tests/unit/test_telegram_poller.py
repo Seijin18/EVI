@@ -284,3 +284,14 @@ def test_download_error_scrubs_token(monkeypatch):
     with pytest.raises(RuntimeError) as ei:
         tp.download_file("TOK999", "p", 10)
     assert "TOK999" not in str(ei.value)
+
+
+def test_fetch_updates_asks_for_callback_queries(monkeypatch):
+    """Briefing buttons arrive as callback_query: getUpdates must list it explicitly."""
+    import json
+    import urllib.parse
+
+    calls = _urlopen(monkeypatch, [{"ok": True, "result": []}])
+    tp.fetch_updates("TOK", offset=5)
+    qs = urllib.parse.parse_qs(urllib.parse.urlparse(calls["urls"][0]).query)
+    assert json.loads(qs["allowed_updates"][0]) == ["message", "callback_query"]
