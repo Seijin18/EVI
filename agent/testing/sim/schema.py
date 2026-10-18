@@ -32,7 +32,7 @@ STEP_TYPES = (
 )
 VOICE_STEPS = ("telegram_voice", "whatsapp_control_voice", "whatsapp_contact_voice")
 AUDIO_FIXTURE_RE = re.compile(r"^[A-Za-z0-9_.-]+$")  # name inside tests/fixtures/audio/
-JOBS = ("heartbeat", "daily-summary", "briefing", "contact-learn", "contact-names-sync", "probe")
+JOBS = ("heartbeat", "daily-summary", "briefing", "briefing-evening", "contact-learn", "contact-names-sync", "probe")
 # agent tables a scenario may inspect via expect.postgres (never free-form SQL)
 PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log", "reminders", "reminder_fires", "wa_conversation_state", "briefing_log")
 
@@ -66,7 +66,7 @@ EVOLUTION_ENDPOINTS = ("chat/findMessages", "chat/findChats", "chat/findContacts
 DEFAULT_NO_REPLY_WINDOW_S = 15
 TELEGRAM_MESSAGE_KEYS = {"parse_mode", "valid_html", "matches", "not_matches", "max_lines", "has_keyboard", "callback_data_matches", "callback_data_max_bytes"}
 TAP_KEYS = {"item", "action", "from_chat", "briefing"}
-TAP_ACTIONS = ("ok", "no", "up", "dn")
+TAP_ACTIONS = ("ok", "no", "up", "dn", "rm")
 HTML_TAGS = ("b", "i", "code")  # the only tags a valid_html message may use
 CALENDAR_KEYS = {"created", "count"}
 TASKS_KEYS = {"created", "count"}
@@ -338,8 +338,8 @@ def parse_scenario(data: Any, path: str = "<memory>") -> Scenario:
             if value.get("action") not in TAP_ACTIONS:
                 raise _err(path, f"{where}.{kind}.action", f"must be one of {TAP_ACTIONS}")
             item = value.get("item")
-            if value["action"] in ("ok", "no") and (not isinstance(item, int) or isinstance(item, bool) or item < 1):
-                raise _err(path, f"{where}.{kind}.item", "must be a positive integer for ok/no")
+            if value["action"] in ("ok", "no", "rm") and (not isinstance(item, int) or isinstance(item, bool) or item < 1):
+                raise _err(path, f"{where}.{kind}.item", "must be a positive integer for ok/no/rm")
             if "from_chat" in value and (isinstance(value["from_chat"], bool) or not isinstance(value["from_chat"], (int, str))):
                 raise _err(path, f"{where}.{kind}.from_chat", "must be a chat id")
             if value.get("briefing", "last") not in ("last", "first"):

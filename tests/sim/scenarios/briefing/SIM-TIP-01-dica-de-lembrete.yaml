@@ -1,0 +1,55 @@
+id: SIM-TIP-01
+title: Dica de descoberta - sem lembretes, a dica de lembrete aparece 1 vez em 4 manhãs seguidas (última linha); depois de criar um lembrete, não volta (SCN-TIP-01, SCN-TIP-02)
+tags: [briefing]
+source: synthetic
+# The tip rotates by calendar day among the unused capabilities, so which morning shows the reminder
+# tip depends on the day the sim runs: with 4 unused tips, exactly one of 4 consecutive mornings does.
+# The scenario counts it across 4 mornings (day-independent), creates a reminder, then proves that
+# 4 more consecutive mornings never show it (a regression would show it on one of them).
+clock: D0 07:00
+steps:
+  - clock: D0 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)💡 Dica[^\\n]*\\s*$"
+  - clock: D1 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)💡 Dica[^\\n]*\\s*$"
+  - clock: D2 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)💡 Dica[^\\n]*\\s*$"
+  - clock: D3 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)💡 Dica[^\\n]*\\s*$"
+      telegram_sent_count_matching: {regex: "💡[^\\n]*me lembra às 18h", count: 1}
+  - telegram: "me lembra amanhã às 18h de pagar o boleto"
+    expect:
+      reply_within_s: 90
+      tools_called_any: [create_reminder]
+      postgres:
+        - {table: reminders, where: {status: pending}, count: 1}
+      outbound_to_third_parties: 0
+  - clock: D4 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+  - clock: D5 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+  - clock: D6 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+  - clock: D7 07:00
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      telegram_sent_count_matching: {regex: "💡[^\\n]*me lembra às 18h", count: 1}

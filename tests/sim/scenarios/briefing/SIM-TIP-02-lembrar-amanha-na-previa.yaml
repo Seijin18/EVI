@@ -1,0 +1,25 @@
+id: SIM-TIP-02
+title: Prévia da noite - tarefa com prazo amanhã ganha botão 🔔; o toque cria o lembrete das 9h e remove o botão (SCN-TIP-03)
+tags: [briefing]
+source: synthetic
+clock: D0 21:00
+seed:
+  tasks:
+    - {title: "Renovar seguro do carro", due: "D1"}
+steps:
+  - job: briefing-evening
+    expect:
+      reply_within_s: 60
+      reply_matches: "Renovar seguro do carro"
+      telegram_message:
+        has_keyboard: true
+  - telegram_tap: {item: 1, action: rm}
+    expect:
+      reply_within_s: 30
+      reply_matches: "Vou te lembrar amanhã às 9h"
+      # the answered button is removed from the keyboard, so a second tap cannot be replayed here
+      # ("Já estava agendado" is covered by tests/unit/test_telegram_handler.py)
+      telegram_keyboard: {not_contains: "1 🔔"}
+      postgres:
+        - {table: reminders, where: {status: pending, text: {contains: "Renovar seguro do carro"}}, count: 1}
+      outbound_to_third_parties: 0

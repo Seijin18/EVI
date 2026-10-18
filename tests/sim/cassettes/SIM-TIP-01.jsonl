@@ -1,0 +1,2 @@
+{"key": "f955db2cedeb80e9a3c970dd10224f1c3a16216ce01663f5f7a31da73a0de921", "prompt_tail": "me lembra amanhã às 18h de pagar o boleto", "response": {"content": "", "tool_calls": [{"name": "create_reminder", "args": {"due_at": "@@D+1@@T18:00:00", "text": "pagar o boleto"}, "id": "fc8c9d37-6ed5-4768-b9d6-bdf4ec90f051"}]}}
+{"key": "d853e6d88e9bfa9e7366d0fa6a040aa4ca744cb67548fd98cbbe8fcc7f53d4ba", "prompt_tail": "Lembrete para qui 22/10 às 18:00: pagar o boleto", "response": {"content": "Lembrete criado para amanhã (22/10) às 18h: pagar o boleto.", "tool_calls": []}}

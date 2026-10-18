@@ -151,7 +151,9 @@ def normalize_text(text: str, base: date, dm: bool = False) -> str:
         text = _dm_to_offset(text, base)
     out = []
     for line in text.split("\n"):
-        if _VOLATILE_LINE.match(line):
+        if line.startswith("💡 Dica:"):  # discovery tip: rotates with the calendar day
+            line = "💡 Dica: <TIP>"
+        elif _VOLATILE_LINE.match(line):
             line = _TIME.sub("<T>", _WEEKDAY.sub("<WD>", _PT_DATE.sub("<DATE>", line)))
         out.append(line)
     return "\n".join(out)

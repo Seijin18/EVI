@@ -70,6 +70,7 @@ briefing mais recente (ou o primeiro) e usa o `callback_data` do botão gravado,
 (nunca montado pelo runner); `reply` é o texto do `answerCallbackQuery`. Expectativas novas:
 `telegram_keyboard: {contains, not_contains}` (rótulos do teclado após as edições),
 `telegram_message: {has_keyboard, callback_data_matches, callback_data_max_bytes}`; `postgres` aceita `briefing_log`.
+Dicas de descoberta (SIM-TIP-01/02, tag `briefing`): `job: briefing-evening` chama `/jobs/briefing?kind=evening&wait=true` e `telegram_tap` aceita `action: rm` (botão `N 🔔`, "lembrar amanhã às 9h"). A dica do briefing da manhã gira pelo dia do calendário entre as capacidades não usadas, então o SIM-TIP-01 conta a dica de lembrete em 4 manhãs seguidas (`telegram_sent_count_matching`, exatamente 1), cria um lembrete e prova que 4 manhãs seguintes não a repetem; o cassete normaliza a linha `💡 Dica:` para não depender do dia. O botão 🔔 respondido sai do teclado, então o segundo toque ("Já estava agendado") só é coberto pelos testes unitários.
 Reply debts: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (sim.env liga
 `EVI_REPLY_DEBTS_ENABLED`; `postgres` aceita `wa_conversation_state`; `reply_not_matches` exige que
 o texto enviado ao Telegram NÃO case com a regex).
