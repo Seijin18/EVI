@@ -5,7 +5,7 @@
 **O porquê de cada item:** [`specs/roadmap.md`](specs/roadmap.md) · revisão de produto:
 [`docs/ux-review-2026-10.md`](../docs/ux-review-2026-10.md)
 
-## Fila atual (revisão de produto — 10 Out 2026)
+## Fila atual (revisões de produto — 10 e 18 Out 2026)
 
 A base está fechada (Etapas 12–14, 17). A fila agora prioriza o que o usuário
 percebe: o EVI passar a chegar até a pessoa em vez de esperar ser perguntado.
@@ -29,6 +29,12 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 48 | `evi-contact-knowledge` | 26 | **Done** (2026-10-13) | Perfil de contato estruturado (Fatos/Em aberto/Notas) por incremento com evidência; timeline com os dois lados; identidade `@lid`↔telefone; LLM OpenRouter ZDR |
 | 50 | `evi-contact-names` | 28 | **Done** (2026-10-13) | Agenda Google (People API, só leitura) sincronizada diariamente; nome do usuário nunca sobrescrito; pergunta semanal das conversas ativas sem nome |
 | 51 | `evi-ux-review` | 29 | **Done** (2026-10-13) | Revisão curta de usabilidade: nenhum marcador `«externo»` ao usuário (duas renderizações), briefing em HTML pessoa-primeiro com `+N` acionável e teto de linhas, fechamentos v2 nas dívidas |
+| 52 | `evi-source-health-alerts` | 30 | Na fila (roadmap) — **próximo** | Sonda/watchdog do WhatsApp, selo de fonte fora no topo do briefing, aviso de OAuth com a saída definitiva |
+| 53 | `evi-briefing-buttons` | 31 | Na fila (roadmap) | Botões inline nos itens do briefing e 👍/👎 |
+| 54 | `evi-whatsapp-summary-cache` | 32 | Na fila (roadmap) | Resumo de WhatsApp do cache (p95 < 5 s) |
+| 55 | `evi-discovery-tips` | 33 | Na fila (roadmap) | Dica rotativa no briefing; prévia da noite às 21h |
+| 56 | `evi-awaiting-their-reply` | 34 | Na fila (roadmap) | Quem não respondeu você (follow-up) no briefing de segunda |
+| 57 | `evi-scheduled-tasks` | 35 | Na fila (roadmap) | Tarefas agendadas em linguagem natural, só leitura |
 
 ## Itens da revisão de segurança (2026-10-13)
 

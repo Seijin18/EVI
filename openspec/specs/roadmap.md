@@ -233,6 +233,69 @@ As-built: revisão em `docs/ux/review-2026-10.md`; briefing com `text_user` (HTM
 
 ---
 
+### Revisão de 18/10 — próxima fila
+
+Origem: [`docs/product-review-2026-10-18.md`](../../docs/product-review-2026-10-18.md) — uma
+semana de uso real comparada às referências (Google CC, Pulse, Poke, Superhuman, Zapia,
+Perplexity, OpenClaw). Em ordem; cada etapa é um change.
+
+### Etapa 30 — Alertas de indisponibilidade das fontes — `evi-source-health-alerts`
+
+O WhatsApp ficou desconectado 14–18/10 e o OAuth do Google expirou em 18/10 sem o usuário
+saber pelo EVI (Poke: confiança = precisão + pontualidade).
+
+| Item | Escopo |
+|---|---|
+| Sonda do WhatsApp | `connectionState` da Evolution como check da sonda diária e do watchdog (a cada execução do timer); aviso no Telegram em ≤ 10 min, uma vez por queda, com o que fazer (gerar QR) e aviso de volta |
+| Selo no briefing | Fonte fora (WhatsApp, Google por OAuth, Telegram) vira uma linha no **topo** do briefing com desde quando e a ação, em vez de seção vazia ou erro no meio |
+| OAuth recorrente | Texto do aviso explica o ciclo de 7 dias do modo "Teste" e a saída definitiva (publicar o app em Produção) |
+
+### Etapa 31 — Briefing com um toque — `evi-briefing-buttons`
+
+2/8 briefings respondidos: responder exige digitar "confirma N" (Google CC: agir com um toque).
+
+| Item | Escopo |
+|---|---|
+| Botões inline | Itens acionáveis do briefing ganham botões do Telegram (✅ feito/respondido · ✖ dispensar; 🗓 agendar para combinados) que chamam o mesmo código determinístico das respostas por número |
+| 👍/👎 | Botões no rodapé gravam o feedback do briefing (`turn_log.feedback` ou `briefing_log`) |
+| Segurança | `callback_query` só do chat do usuário; dados do botão assinados/curtos, nunca texto de terceiros; idempotente |
+
+### Etapa 32 — Resumo de WhatsApp rápido — `evi-whatsapp-summary-cache`
+
+`list_recent_whatsapp_messages`/`summarize_whatsapp_messages` levam ~46 s e puxam o p95 para 51 s.
+
+| Item | Escopo |
+|---|---|
+| Cache | Resumo por conversa pré-computado no lote noturno e atualizado de forma incremental; a tool responde do cache e só complementa o que chegou depois |
+| Meta | p95 das tools de WhatsApp < 5 s; p95 geral < 15 s |
+
+### Etapa 33 — Descoberta e prévia da noite — `evi-discovery-tips`
+
+Lembretes e voz: 0 usos na primeira semana (Zapia: são o mínimo esperado; aqui ninguém soube).
+
+| Item | Escopo |
+|---|---|
+| Dica rotativa | Uma linha no rodapé do briefing com uma capacidade pouco usada (lembrete, áudio, "o que você sabe sobre X"), escolhida pelo que ainda não foi usado |
+| Prévia da noite | Schedule `kind=evening` às 21h (Pulse/CC) com "quer um lembrete?" para itens com prazo amanhã |
+
+### Etapa 34 — Esperando resposta deles — `evi-awaiting-their-reply`
+
+Superhuman Auto Reminders: lembrar de cobrar quem não respondeu **você**.
+
+| Item | Escopo |
+|---|---|
+| Detecção | Conversa direta em que o usuário foi o último a falar há > N dias e a mensagem dele tem pergunta/pedido (determinístico, sem LLM) |
+| Entrega | Seção semanal do briefing de segunda, até 3 itens, com "cobrar"/"ignorar" |
+
+### Etapa 35 — Tarefas agendadas — `evi-scheduled-tasks`
+
+Perplexity: "toda sexta 18h, resuma meus e-mails da semana".
+
+| Item | Escopo |
+|---|---|
+| Agendamento | Pedido em linguagem natural vira tarefa recorrente (mesmos presets dos lembretes) que roda uma pergunta no horário |
+| Execução | Turno sem usuário, só tools de leitura (allowlist por origem), resultado no Telegram; teto de execuções/dia |
+
 ## Deferido (sem data)
 
 | Item | Notas |
