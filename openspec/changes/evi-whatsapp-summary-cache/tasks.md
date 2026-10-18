@@ -22,7 +22,7 @@
   - Files: `tests/sim/scenarios/whatsapp/`, `tests/sim/cassettes/`, `agent/testing/sim/fake_evolution.py`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --id SIM-WA-04 --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`
 
-- [ ] 2.2 Deploy, gates, BACKLOG + Progress
+- [x] 2.2 Deploy, gates, BACKLOG + Progress
   - SCN-WA-RECENT-01
   - Files: `openspec/BACKLOG.md`, `Progress.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`, `./scripts/evi-test smoke`, `openspec validate --specs`, `ruff check agent/ --select E,W,F --ignore E501`

@@ -266,7 +266,10 @@ As-built: botões inline por item acionável (✅/✖) e 👍/👎 no briefing; 
 | 👍/👎 | Botões no rodapé gravam o feedback do briefing (`turn_log.feedback` ou `briefing_log`) |
 | Segurança | `callback_query` só do chat do usuário; dados do botão assinados/curtos, nunca texto de terceiros; idempotente |
 
-### Etapa 32 — Resumo de WhatsApp rápido — `evi-whatsapp-summary-cache`
+### Etapa 32 — Resumo de WhatsApp rápido — `evi-whatsapp-summary-cache` — **Done** (2026-10-18)
+
+Change: [`evi-whatsapp-summary-cache`](../changes/archive/2026-10-18-evi-whatsapp-summary-cache/proposal.md).
+As-built: `message_timeline.recent_rows` (timeline local, dois lados, leitura do fim do arquivo); Evolution só para grupos da whitelist ou período sem dados locais, em paralelo com orçamento de 8 s; cache do resumo 10 min por (dias, mensagem mais nova).
 
 > Decisão (18/10): em vez de pré-computar no lote noturno, ler a timeline local (já alimentada pelo webhook, dois lados) e ir à Evolution só para grupos e lacunas, em paralelo.
 

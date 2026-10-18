@@ -1,8 +1,8 @@
 # Execução da fila — iniciada 2026-10-18 (3ª rodada)
 ## Estado
-- Change atual: evi-whatsapp-summary-cache (fase: implementar) — task 1.1
+- Change atual: evi-discovery-tips (fase: implementar) — task 1.1
 - Ordem: evi-source-health-alerts → evi-briefing-buttons → evi-whatsapp-summary-cache → evi-discovery-tips → evi-awaiting-their-reply → evi-scheduled-tasks
-- Concluídos: evi-source-health-alerts (arquivado 2026-10-18, commits 891b894..5f83f9b + archive), evi-briefing-buttons (arquivado 2026-10-18, commits 6b878d7..7609d13 + archive)
+- Concluídos: evi-source-health-alerts (arquivado 2026-10-18, commits 891b894..5f83f9b + archive), evi-briefing-buttons (arquivado 2026-10-18, commits 6b878d7..7609d13 + archive), evi-whatsapp-summary-cache (arquivado 2026-10-18, commits 87c39be..a8d943c + archive)
 - Pulados: —
 ## Decisões do usuário no preflight (2026-10-18)
 - Mudanças novas no Telegram entram **ligadas por padrão**, cada uma com flag no `.env` para desligar.
