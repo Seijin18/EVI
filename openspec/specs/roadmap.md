@@ -253,7 +253,10 @@ saber pelo EVI (Poke: confiança = precisão + pontualidade).
 | Selo no briefing | Fonte fora (WhatsApp, Google por OAuth, Telegram) vira uma linha no **topo** do briefing com desde quando e a ação, em vez de seção vazia ou erro no meio |
 | OAuth recorrente | Texto do aviso explica o ciclo de 7 dias do modo "Teste" e a saída definitiva (publicar o app em Produção) |
 
-### Etapa 31 — Briefing com um toque — `evi-briefing-buttons`
+### Etapa 31 — Briefing com um toque — `evi-briefing-buttons` — **Done** (2026-10-18)
+
+Change: [`evi-briefing-buttons`](../changes/archive/2026-10-18-evi-briefing-buttons/proposal.md).
+As-built: botões inline por item acionável (✅/✖) e 👍/👎 no briefing; `callback_data` `b1:<dia>:<m|e>:<n>:<ação>` resolvido pelo snapshot do dia e tipo com `message_id` conferido (falha fechada); mesmas ações determinísticas das respostas por número; `briefing_log.feedback`; webhook aceita `callback_query`.
 
 2/8 briefings respondidos: responder exige digitar "confirma N" (Google CC: agir com um toque).
 
@@ -264,6 +267,8 @@ saber pelo EVI (Poke: confiança = precisão + pontualidade).
 | Segurança | `callback_query` só do chat do usuário; dados do botão assinados/curtos, nunca texto de terceiros; idempotente |
 
 ### Etapa 32 — Resumo de WhatsApp rápido — `evi-whatsapp-summary-cache`
+
+> Decisão (18/10): em vez de pré-computar no lote noturno, ler a timeline local (já alimentada pelo webhook, dois lados) e ir à Evolution só para grupos e lacunas, em paralelo.
 
 `list_recent_whatsapp_messages`/`summarize_whatsapp_messages` levam ~46 s e puxam o p95 para 51 s.
 

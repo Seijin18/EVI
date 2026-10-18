@@ -1,14 +1,16 @@
 # Execução da fila — iniciada 2026-10-18 (3ª rodada)
 ## Estado
-- Change atual: evi-briefing-buttons (fase: implementar) — task 1.1
+- Change atual: evi-whatsapp-summary-cache (fase: implementar) — task 1.1
 - Ordem: evi-source-health-alerts → evi-briefing-buttons → evi-whatsapp-summary-cache → evi-discovery-tips → evi-awaiting-their-reply → evi-scheduled-tasks
-- Concluídos: evi-source-health-alerts (arquivado 2026-10-18, commits 891b894..5f83f9b + archive)
+- Concluídos: evi-source-health-alerts (arquivado 2026-10-18, commits 891b894..5f83f9b + archive), evi-briefing-buttons (arquivado 2026-10-18, commits 6b878d7..7609d13 + archive)
 - Pulados: —
 ## Decisões do usuário no preflight (2026-10-18)
 - Mudanças novas no Telegram entram **ligadas por padrão**, cada uma com flag no `.env` para desligar.
 - Prévia da noite: schedule às 21h **ligado**.
 - Tarefas agendadas: **só leitura** (nunca apaga, cria ou envia), com teto de execuções/dia.
 ## Decisões tomadas sem o usuário
+- 2026-10-18 briefing-buttons: ✅ numa promessa marca como feita (a tool de confirmar não aceita promessa); 👍/👎 fica no teclado com ✓; `callback_data` ganhou o tipo do briefing e a guarda de `message_id` falha fechada (revisão).
+- 2026-10-18 whatsapp-summary-cache: em vez de pré-computar no lote noturno, ler a timeline local (já tem os dois lados desde 13/10) e ir à Evolution só para grupos/lacunas, em paralelo.
 - 2026-10-18 source-health-alerts: WhatsApp entra na sonda só quando `EVOLUTION_API_KEY` está definido; a sonda não pode importar `messaging` (teste de somente-leitura), então lê o estado via `services.health`. Sonda + watchdog podem avisar a mesma queda (até 2 mensagens).
 ## Pendências do usuário (não bloqueantes)
 - [ ] WhatsApp desconectado desde 14/10 — gerar o QR e escanear (a geração foi bloqueada pelo classificador de permissões)

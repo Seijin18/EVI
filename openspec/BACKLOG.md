@@ -30,8 +30,8 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 50 | `evi-contact-names` | 28 | **Done** (2026-10-13) | Agenda Google (People API, só leitura) sincronizada diariamente; nome do usuário nunca sobrescrito; pergunta semanal das conversas ativas sem nome |
 | 51 | `evi-ux-review` | 29 | **Done** (2026-10-13) | Revisão curta de usabilidade: nenhum marcador `«externo»` ao usuário (duas renderizações), briefing em HTML pessoa-primeiro com `+N` acionável e teto de linhas, fechamentos v2 nas dívidas |
 | 52 | `evi-source-health-alerts` | 30 | **Done** (2026-10-18) | Sonda/watchdog do WhatsApp, selo de fonte fora no topo do briefing, aviso de OAuth com a saída definitiva |
-| 53 | `evi-briefing-buttons` | 31 | Na fila (roadmap) — **próximo** | Botões inline nos itens do briefing e 👍/👎 |
-| 54 | `evi-whatsapp-summary-cache` | 32 | Na fila (roadmap) | Resumo de WhatsApp do cache (p95 < 5 s) |
+| 53 | `evi-briefing-buttons` | 31 | **Done** (2026-10-18) | Botões inline nos itens do briefing e 👍/👎 |
+| 54 | `evi-whatsapp-summary-cache` | 32 | Ativo | Resumo de WhatsApp do cache (p95 < 5 s) |
 | 55 | `evi-discovery-tips` | 33 | Na fila (roadmap) | Dica rotativa no briefing; prévia da noite às 21h |
 | 56 | `evi-awaiting-their-reply` | 34 | Na fila (roadmap) | Quem não respondeu você (follow-up) no briefing de segunda |
 | 57 | `evi-scheduled-tasks` | 35 | Na fila (roadmap) | Tarefas agendadas em linguagem natural, só leitura |
