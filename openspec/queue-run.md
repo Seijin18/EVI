@@ -1,14 +1,15 @@
 # Execução da fila — iniciada 2026-10-18 (3ª rodada)
 ## Estado
-- Change atual: evi-source-health-alerts (fase: propor)
+- Change atual: evi-briefing-buttons (fase: implementar) — task 1.1
 - Ordem: evi-source-health-alerts → evi-briefing-buttons → evi-whatsapp-summary-cache → evi-discovery-tips → evi-awaiting-their-reply → evi-scheduled-tasks
-- Concluídos: —
+- Concluídos: evi-source-health-alerts (arquivado 2026-10-18, commits 891b894..5f83f9b + archive)
 - Pulados: —
 ## Decisões do usuário no preflight (2026-10-18)
 - Mudanças novas no Telegram entram **ligadas por padrão**, cada uma com flag no `.env` para desligar.
 - Prévia da noite: schedule às 21h **ligado**.
 - Tarefas agendadas: **só leitura** (nunca apaga, cria ou envia), com teto de execuções/dia.
 ## Decisões tomadas sem o usuário
+- 2026-10-18 source-health-alerts: WhatsApp entra na sonda só quando `EVOLUTION_API_KEY` está definido; a sonda não pode importar `messaging` (teste de somente-leitura), então lê o estado via `services.health`. Sonda + watchdog podem avisar a mesma queda (até 2 mensagens).
 ## Pendências do usuário (não bloqueantes)
 - [ ] WhatsApp desconectado desde 14/10 — gerar o QR e escanear (a geração foi bloqueada pelo classificador de permissões)
 - [ ] Google OAuth expirou em 18/10 (modo "Teste", 7 dias) — reconectar `gcal`/`gtasks`/`gmail` no Windmill e, de vez, publicar o app OAuth em Produção no Google Cloud
