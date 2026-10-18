@@ -32,8 +32,8 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 52 | `evi-source-health-alerts` | 30 | **Done** (2026-10-18) | Sonda/watchdog do WhatsApp, selo de fonte fora no topo do briefing, aviso de OAuth com a saída definitiva |
 | 53 | `evi-briefing-buttons` | 31 | **Done** (2026-10-18) | Botões inline nos itens do briefing e 👍/👎 |
 | 54 | `evi-whatsapp-summary-cache` | 32 | **Done** (2026-10-18) | Resumo de WhatsApp do cache (p95 < 5 s) |
-| 55 | `evi-discovery-tips` | 33 | Ativo | Dica rotativa no briefing; prévia da noite às 21h |
-| 56 | `evi-awaiting-their-reply` | 34 | Na fila (roadmap) | Quem não respondeu você (follow-up) no briefing de segunda |
+| 55 | `evi-discovery-tips` | 33 | **Done** (2026-10-18) | Dica rotativa no briefing; prévia da noite às 21h |
+| 56 | `evi-awaiting-their-reply` | 34 | Ativo | Quem não respondeu você (follow-up) no briefing de segunda |
 | 57 | `evi-scheduled-tasks` | 35 | Na fila (roadmap) | Tarefas agendadas em linguagem natural, só leitura |
 
 ## Itens da revisão de segurança (2026-10-13)

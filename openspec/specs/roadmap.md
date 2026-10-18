@@ -280,7 +280,10 @@ As-built: `message_timeline.recent_rows` (timeline local, dois lados, leitura do
 | Cache | Resumo por conversa pré-computado no lote noturno e atualizado de forma incremental; a tool responde do cache e só complementa o que chegou depois |
 | Meta | p95 das tools de WhatsApp < 5 s; p95 geral < 15 s |
 
-### Etapa 33 — Descoberta e prévia da noite — `evi-discovery-tips`
+### Etapa 33 — Descoberta e prévia da noite — `evi-discovery-tips` — **Done** (2026-10-18)
+
+Change: [`evi-discovery-tips`](../changes/archive/2026-10-18-evi-discovery-tips/proposal.md).
+As-built: dica rotativa no rodapé do briefing da manhã (capacidade não usada em 14 dias, primeira linha a sair no teto); prévia da noite às 21h publicada; botão 🔔 / "lembra N" cria lembrete amanhã 9h.
 
 Lembretes e voz: 0 usos na primeira semana (Zapia: são o mínimo esperado; aqui ninguém soube).
 

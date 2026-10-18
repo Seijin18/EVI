@@ -150,6 +150,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **21** | **Voz** | **Done** | `evi-voice-input` — Telegram + controle WhatsApp via Gemini |
 | **22** | **Confiabilidade percebida** | **Done** | `evi-perceived-reliability` — watchdog, `/ajuda`, ack, OAuth no turno |
 | **23** | **Injeção (restante)** | **Done** | `evi-prompt-injection-model` — confirmação de exclusão, allowlist por origem, chat do Telegram restrito |
+| **33** | **Descoberta e prévia da noite** | **Done** | `evi-discovery-tips` — dica rotativa, prévia às 21h, 🔔 lembrar amanhã |
 | **32** | **Resumo de WhatsApp rápido** | **Done** | `evi-whatsapp-summary-cache` — timeline local primeiro, Evolution em paralelo com orçamento, cache do resumo |
 | **31** | **Briefing com um toque** | **Done** | `evi-briefing-buttons` — botões inline (✅/✖) e 👍/👎 no briefing, toque determinístico e com falha fechada |
 | **30** | **Alertas de fonte fora** | **Done** | `evi-source-health-alerts` — WhatsApp no watchdog/sonda/`/health`, selo no topo do briefing, OAuth com ciclo de 7 dias explicado |
