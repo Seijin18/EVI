@@ -1,8 +1,8 @@
 # Execução da fila — iniciada 2026-10-18 (3ª rodada)
 ## Estado
-- Change atual: evi-awaiting-their-reply (fase: implementar) — task 1.1
+- Change atual: evi-scheduled-tasks (fase: implementar) — task 1.1
 - Ordem: evi-source-health-alerts → evi-briefing-buttons → evi-whatsapp-summary-cache → evi-discovery-tips → evi-awaiting-their-reply → evi-scheduled-tasks
-- Concluídos: evi-source-health-alerts (arquivado 2026-10-18, commits 891b894..5f83f9b + archive), evi-briefing-buttons (arquivado 2026-10-18, commits 6b878d7..7609d13 + archive), evi-whatsapp-summary-cache (arquivado 2026-10-18, commits 87c39be..a8d943c + archive), evi-discovery-tips (arquivado 2026-10-18, commits 37ae95d..cc09b3a + archive)
+- Concluídos: evi-source-health-alerts (arquivado 2026-10-18, commits 891b894..5f83f9b + archive), evi-briefing-buttons (arquivado 2026-10-18, commits 6b878d7..7609d13 + archive), evi-whatsapp-summary-cache (arquivado 2026-10-18, commits 87c39be..a8d943c + archive), evi-discovery-tips (arquivado 2026-10-18, commits 37ae95d..cc09b3a + archive), evi-awaiting-their-reply (arquivado 2026-10-18, commits b889352..96c0509 + archive)
 - Pulados: —
 ## Decisões do usuário no preflight (2026-10-18)
 - Mudanças novas no Telegram entram **ligadas por padrão**, cada uma com flag no `.env` para desligar.
@@ -15,6 +15,7 @@
 ## Pendências do usuário (não bloqueantes)
 - [ ] WhatsApp desconectado desde 14/10 — gerar o QR e escanear (a geração foi bloqueada pelo classificador de permissões)
 - [ ] Google OAuth expirou em 18/10 (modo "Teste", 7 dias) — reconectar `gcal`/`gtasks`/`gmail` no Windmill e, de vez, publicar o app OAuth em Produção no Google Cloud
+- [ ] Teste dependente de ordem (pré-existente): `tests/unit/test_reply_debts.py::test_scn_ux_01_missing_item_error_states_the_valid_range` falha rodando sozinho, passa na suíte completa
 ## Bloqueios
 
 ---

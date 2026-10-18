@@ -292,7 +292,10 @@ Lembretes e voz: 0 usos na primeira semana (Zapia: são o mínimo esperado; aqui
 | Dica rotativa | Uma linha no rodapé do briefing com uma capacidade pouco usada (lembrete, áudio, "o que você sabe sobre X"), escolhida pelo que ainda não foi usado |
 | Prévia da noite | Schedule `kind=evening` às 21h (Pulse/CC) com "quer um lembrete?" para itens com prazo amanhã |
 
-### Etapa 34 — Esperando resposta deles — `evi-awaiting-their-reply`
+### Etapa 34 — Esperando resposta deles — `evi-awaiting-their-reply` — **Done** (2026-10-18)
+
+Change: [`evi-awaiting-their-reply`](../changes/archive/2026-10-18-evi-awaiting-their-reply/proposal.md).
+As-built: seção de segunda "⏳ Esperando resposta deles" (você falou por último há 3–30 dias com pergunta/pedido), ✖ ignora aquela mensagem, 🔔 lembra amanhã 9h; nada é enviado ao contato.
 
 Superhuman Auto Reminders: lembrar de cobrar quem não respondeu **você**.
 
