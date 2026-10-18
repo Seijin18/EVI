@@ -90,13 +90,13 @@
 - [ ] Avaliar em 2026-10-24 a validação do briefing (entregue ≥ 13/14 dias, resposta ≥ 50% dos dias, sucesso por turno sem queda) — relatório semanal
 - [x] Teste instável observado (ordem): `tests/unit/test_payload_shapes.py::test_scn_use_08_written_file_has_no_original_values[find_messages.json]` falhou uma vez na suíte completa e passa isolado — investigar — feito em 2026-10-11
 - [x] Ligar lembretes: `EVI_REMINDERS_ENABLED=true` no `.env` e recriar `agent-api` — feito em 2026-10-11
-- [ ] Avaliar em 2026-10-17 a validação dos lembretes (desvio < 60 s em ≥ 95%, nenhum vencido sem envio, ≥ 3 lembretes criados) — relatório semanal
+- [x] (2026-10-18: 0 criados — registrado no BACKLOG) Avaliar em 2026-10-17 a validação dos lembretes (desvio < 60 s em ≥ 95%, nenhum vencido sem envio, ≥ 3 lembretes criados) — relatório semanal
 - [x] Decidir se a produção usa `EVI_GEMINI_THINKING_BUDGET=0` (a simulação inteira passou com 0; custo cai ~50%) — `.env` — feito em 2026-10-11
 - [x] Ligar pendências de resposta: `EVI_REPLY_DEBTS_ENABLED=true` (para de mandar notificação avulsa de compromisso; o briefing passa a ter 3 grupos) — feito em 2026-10-11
 - [ ] Avaliar em 2026-10-24 a validação do evi-reply-debts (ação ≥ 30% em "esperando resposta"; se promessas+combinados < 30%, desligar `EVI_WHATSAPP_LLM_EXTRACT`) — relatório semanal
 - [x] Flake da simulação: `getUpdates error: TimeoutError` no poller dentro do evi-sim (SIM-VOICE-03 1/3, VOICE-01 ~60 s). O fake usa relógio monotônico; investigar o servidor de fakes (threads) — `agent/testing/sim/fake_telegram.py` — feito em 2026-10-11
 - [x] Ligar voz: `EVI_VOICE_ENABLED=true` no `.env` e recriar `agent-api` — feito em 2026-10-11
-- [ ] Avaliar em 2026-10-17 a validação da voz (≥ 3 turnos por voz; sucesso ≥ texto − 10 pontos; nenhuma voz sem resposta)
+- [x] (2026-10-18: 0 turnos — registrado no BACKLOG) Avaliar em 2026-10-17 a validação da voz (≥ 3 turnos por voz; sucesso ≥ texto − 10 pontos; nenhuma voz sem resposta)
 - [x] Instalar o watchdog (timer de usuário, sem sudo) — `docs/operations.md` — feito em 2026-10-11
 - [x] Ligar o ack de tool lenta: `EVI_SLOW_ACK_SEC=5` no `.env` — feito em 2026-10-11
 - [x] Publicar o novo script `search_emails` no Windmill (sem ele, apagar e-mail é recusado com segurança) — `wmill sync push` — feito em 2026-10-11

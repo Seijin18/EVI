@@ -46,6 +46,11 @@ F11 (Calendar) escopos mínimos; nomes em `pending_commitments.source_label` (co
 - Botões inline do Telegram (confirma/dispensa por item) — recomendação, fora de escopo (achado 15).
 - `confirmar`/`dispensar` sobre a lista de pendentes usam o id do compromisso como número do item; um snapshot por lista (como o do briefing) daria numeração 1..N estável.
 
+## Resultados de validação em uso real
+
+- 2026-10-18 — `evi-reminders`: 0 lembretes criados até 17/10 (limiar ≥ 3) — recurso não descoberto; `evi-voice-input`: 0 turnos por voz (limiar ≥ 3) — idem. Sem falha técnica. Ver [`docs/product-review-2026-10-18.md`](../docs/product-review-2026-10-18.md) (P3: descoberta no briefing).
+- 2026-10-18 — prévia (janela fecha 24/10): briefing respondido 2/8 dias (limiar 50 %); dívidas de resposta 14 % (limiar 30 %); promessas 0/16 (todas dispensadas pela reavaliação). WhatsApp desconectado 14–18/10 sem alerta e OAuth Google expirado em 18/10 (ciclo de 7 dias) — P0 da revisão.
+
 **Deferido / cortado:** ver [`specs/roadmap.md`](specs/roadmap.md).
 
 ---
