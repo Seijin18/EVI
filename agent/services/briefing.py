@@ -38,10 +38,10 @@ from services.ux_format import who_label as _who_label
 from tools.calendar_time import evi_timezone, now_local
 
 MAX_CHARS = 4000
-LIMITS = {"calendar": 8, "tasks": 5, "email": 3, "whatsapp": 5, "names": 3}
+LIMITS = {"calendar": 8, "tasks": 5, "email": 3, "whatsapp": 5, "awaiting": 3, "names": 3}
 MAX_LINES = 25  # orçamento de linhas do texto do usuário (SCN-UX-04)
 # Seções que viram linha-resumo primeiro (menor prioridade primeiro); a ordem de exibição não muda.
-COLLAPSE_ORDER = ("email", "tasks", "calendar", "names", "whatsapp")
+COLLAPSE_ORDER = ("email", "awaiting", "tasks", "calendar", "names", "whatsapp")
 _EMAIL_FETCH = 15
 _EMAIL_DROP_LABELS = frozenset({"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES"})
 _NOREPLY_RE = re.compile(r"no-?reply", re.IGNORECASE)
@@ -96,6 +96,7 @@ class Briefing:
 
 _TITLES = {
     "calendar": "Agenda", "tasks": "Tarefas", "email": "E-mail", "whatsapp": "WhatsApp",
+    "awaiting": "Esperando resposta deles",
     "names": 'Conversas sem nome (responda "nomeia N <nome>" ou "ignora N")',
 }
 
@@ -403,6 +404,26 @@ def _collect_whatsapp(today: date | None = None) -> list[Row]:
     return debts + promises + rows
 
 
+def _collect_awaiting(now: datetime) -> list[Row]:
+    """Weekly "waiting for their reply" rows (evi-awaiting-their-reply). The excerpt is the
+    user's own text, so it needs no wrapping; it is only sanitised and shortened."""
+    from services.awaiting_reply import candidates
+
+    rows: list[Row] = []
+    for c in candidates(now, limit=LIMITS["awaiting"]):
+        who = _who_label(c["label"]) or "contato sem nome"
+        age = f"há {c['days']} d"
+        quote = plain_external(c["excerpt"], 60)
+        text = f"{plain_external(who, 40)} · {age} · “{quote}”"
+        user = f"{_bold(plain_external(who, 40))} · {age} · “{_esc(quote)}”"
+        ref = {
+            "kind": "awaiting", "id": c["jid"], "out_at": c["out_at"].isoformat(),
+            "rm_title": plain_external(f"Cobrar {plain_external(who, 30)}: {quote}", _RM_TITLE_MAX),
+        }
+        rows.append(Row(text, ref, user))
+    return rows
+
+
 def _collect_names(now: datetime) -> list[tuple[str, dict]]:
     from services.contact_names import prompt_rows
 
@@ -461,9 +482,11 @@ def _truncate(text: str) -> str:
 # Rótulos do texto do usuário. ``_NOUNS``: (singular, plural, pedido que lista tudo) — o
 # pedido é uma frase que o agente já entende (tools de listar), não um comando novo.
 _PLAIN_TITLES = {"calendar": "Agenda", "tasks": "Tarefas", "email": "E-mail",
-                 "whatsapp": "WhatsApp", "names": "Conversas sem nome"}
+                 "whatsapp": "WhatsApp", "awaiting": "Esperando resposta deles",
+                 "names": "Conversas sem nome"}
 _USER_TITLES = {"calendar": "📅 Agenda", "tasks": "✅ Tarefas", "email": "✉️ E-mail",
-                "whatsapp": "💬 WhatsApp", "names": "🏷 Conversas sem nome"}
+                "whatsapp": "💬 WhatsApp", "awaiting": "⏳ Esperando resposta deles",
+                "names": "🏷 Conversas sem nome"}
 _GROUP_TITLES = {GROUP_DEBTS: "💬 Esperando sua resposta", GROUP_PROMISES: "🤝 Suas promessas",
                  GROUP_COMMITMENTS: "📌 Combinados"}
 _NOUNS = {
@@ -471,6 +494,7 @@ _NOUNS = {
     "tasks": ("tarefa", "tarefas", "minhas tarefas"),
     "email": ("e-mail", "e-mails", "resumo dos e-mails"),
     "whatsapp": ("pendência do WhatsApp", "pendências do WhatsApp", "pendências do WhatsApp"),
+    "awaiting": ("conversa sem resposta", "conversas sem resposta", "quem não me respondeu"),
     "names": ("conversa sem nome", "conversas sem nome", "conversas sem nome"),
     GROUP_DEBTS: ("conversa", "conversas", "quem está esperando minha resposta"),
     GROUP_PROMISES: ("promessa", "promessas", "minhas promessas"),
@@ -553,6 +577,8 @@ def _footer(items: list[BriefItem], kind: str = "morning") -> str:
         parts += [f"confirma {first['commitment']}", f"dispensa {first['commitment']}"]
     if "reply_debt" in first:
         parts.append(f"respondido {first['reply_debt']}")
+    if "awaiting" in first:
+        parts.append(f"ignora {first['awaiting']}")
     if "name_prompt" in first:
         parts += [f"nomeia {first['name_prompt']} Nome", f"ignora {first['name_prompt']}"]
     remind = remindable_titles(items, kind)
@@ -714,8 +740,12 @@ def assemble_briefing(kind: str = "morning", now: datetime | None = None) -> Bri
         ("email", _collect_email),
         ("whatsapp", lambda: _collect_whatsapp(now.date())),
     ]
-    if kind == "morning" and now.weekday() == 0:  # weekly "Conversas sem nome" (SCN-NAME-05)
-        sources.append(("names", lambda: _collect_names(now)))
+    if kind == "morning" and now.weekday() == 0:  # weekly sections: only on Monday morning
+        from services.awaiting_reply import enabled as awaiting_enabled
+
+        if awaiting_enabled():  # "Esperando resposta deles" (evi-awaiting-their-reply)
+            sources.append(("awaiting", lambda: _collect_awaiting(now)))
+        sources.append(("names", lambda: _collect_names(now)))  # SCN-NAME-05
     with ThreadPoolExecutor(max_workers=len(sources)) as pool:
         futures = [pool.submit(_run_source, key, fn) for key, fn in sources]
         raw_sections = [f.result() for f in futures]
@@ -807,7 +837,7 @@ def resolve_briefing_items(
     refs: dict | None = None if payload is None else (payload.get("refs") or {})
     if refs is None:
         return [], [NO_BRIEFING_TODAY] if nums else []
-    label = {"commitment": "um compromisso", "reply_debt": "uma conversa esperando resposta", "name_prompt": "uma conversa sem nome"}.get(kind, f"do tipo {kind}")
+    label = {"commitment": "um compromisso", "reply_debt": "uma conversa esperando resposta", "name_prompt": "uma conversa sem nome", "awaiting": "uma conversa sem resposta deles"}.get(kind, f"do tipo {kind}")
     ids: list = []
     errors: list[str] = []
     for n in nums:
@@ -818,7 +848,7 @@ def resolve_briefing_items(
             errors.append(f"item {n} não existe no briefing{span}")
             continue
         ref_kind, _, ref_id = str(ref).partition(":")
-        if kind in ("reply_debt", "name_prompt"):
+        if kind in ("reply_debt", "name_prompt", "awaiting"):
             if ref_kind != kind or not ref_id:
                 errors.append(f"item {n} do briefing não é {label}")
             elif ref_id not in ids:
@@ -834,7 +864,7 @@ def resolve_briefing_items(
 
 # --- botões inline (evi-briefing-buttons) -----------------------------------------
 
-BUTTON_KINDS = ("reply_debt", "commitment", "name_prompt")
+BUTTON_KINDS = ("reply_debt", "commitment", "name_prompt", "awaiting")
 MAX_BUTTON_ROWS = 10
 KIND_CODES = {"morning": "m", "evening": "e"}
 CODE_KINDS = {v: k for k, v in KIND_CODES.items()}
@@ -874,11 +904,14 @@ def actionable_from_refs(refs: dict) -> dict[int, str]:
 
 
 def remindable_titles(items: list[BriefItem], kind: str) -> dict[int, str]:
-    """Evening preview only: item number -> title for the items due tomorrow (the ones that
-    offer "🔔 lembrar amanhã 9h"). Titles are plain text, at most ``_RM_TITLE_MAX`` chars."""
-    if kind != "evening":
-        return {}
-    out = {it.n: str(it.ref["rm_title"]) for it in items if it.ref.get("rm_title")}
+    """Item number -> title for the items that offer "🔔 lembrar amanhã 9h": the evening
+    preview's items due tomorrow and, on the morning briefing, the "awaiting" items.
+    Titles are plain text, at most ``_RM_TITLE_MAX`` chars."""
+    out = {
+        it.n: str(it.ref["rm_title"])
+        for it in items
+        if it.ref.get("rm_title") and (kind == "evening" or it.ref.get("kind") == "awaiting")
+    }
     return dict(sorted(out.items())[:MAX_BUTTON_ROWS])
 
 
@@ -896,7 +929,9 @@ def build_keyboard(
         item_kind = actionable.get(n)
         row: list[dict] = []
         if item_kind and n not in handled:
-            if item_kind == "name_prompt":
+            if item_kind == "awaiting":
+                row.append({"text": f"{n} ✖", "callback_data": callback_data(day, kind, n, "no")})
+            elif item_kind == "name_prompt":
                 row.append({"text": f"{n} ✖ ignorar", "callback_data": callback_data(day, kind, n, "no")})
             else:
                 row.append({"text": f"{n} ✅", "callback_data": callback_data(day, kind, n, "ok")})
@@ -988,6 +1023,9 @@ def deliver_briefing(kind: str = "morning", force: bool = False, now: datetime |
                 "day": day.isoformat(),
                 # compacto ("n": "kind:id"): format_tool_snapshots corta em 1200 chars
                 "refs": {str(it.n): f"{it.ref.get('kind')}:{it.ref.get('id')}" for it in brief.items},
+                # item -> out_at of the message the "awaiting" item is about ("ignorar" dismisses that one)
+                **({"aw": {str(it.n): it.ref["out_at"] for it in brief.items if it.ref.get("out_at")}}
+                   if any(it.ref.get("out_at") for it in brief.items) else {}),
                 "message_id": getattr(result, "message_id", None),
                 # item -> title (delimited: the snapshot is shown to the model) for "🔔 / lembra N"
                 **({"rm": {str(n): wrap_external(t, "briefing", _RM_TITLE_MAX) for n, t in remind.items()}}

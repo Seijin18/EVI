@@ -1,13 +1,13 @@
 ## 1. Detecção
 
-- [ ] 1.1 `awaiting_reply.candidates(now)`: estado + última mensagem `[eu]` da timeline + heurística de pedido; tabela `awaiting_dismissed`
+- [x] 1.1 `awaiting_reply.candidates(now)`: estado + última mensagem `[eu]` da timeline + heurística de pedido; tabela `awaiting_dismissed`
   - SCN-AWAIT-01, SCN-AWAIT-02
   - Files: `agent/services/awaiting_reply.py`, `agent/db.py`, `tests/unit/test_awaiting_reply.py`, `tests/unit/test_db.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_awaiting_reply.py tests/unit/test_db.py -q`
 
 ## 2. Briefing e ações
 
-- [ ] 2.1 Seção semanal "Esperando resposta deles" no briefing de segunda (até 3, ref `awaiting:<jid>`, botões ✖/🔔); ações por toque e por texto ("ignora N", "lembra N"); flag `EVI_AWAITING_ENABLED`
+- [x] 2.1 Seção semanal "Esperando resposta deles" no briefing de segunda (até 3, ref `awaiting:<jid>`, botões ✖/🔔); ações por toque e por texto ("ignora N", "lembra N"); flag `EVI_AWAITING_ENABLED`
   - SCN-AWAIT-03, SCN-AWAIT-04
   - Files: `agent/services/briefing.py`, `agent/services/telegram_handler.py`, `tests/unit/test_briefing.py`, `tests/unit/test_telegram_handler.py`, `.env.example`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_telegram_handler.py -q` e `./scripts/evi-test briefing`

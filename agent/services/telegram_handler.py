@@ -197,7 +197,9 @@ _CB_REMINDED = "🔔 Vou te lembrar amanhã às 9h."
 _CB_REMINDED_ALREADY = "Já estava agendado."
 _BUTTON_LOCK = threading.Lock()
 _REMIND_REPLY = re.compile(r"^\s*lembra\s+(\d{1,3})\s*[.!]?\s*$", re.IGNORECASE)
-_CB_KINDS = {"reply_debt": ("ok", "no"), "commitment": ("ok", "no"), "name_prompt": ("no",)}
+_CB_KINDS = {"reply_debt": ("ok", "no"), "commitment": ("ok", "no"), "name_prompt": ("no",), "awaiting": ("no",)}
+_IGNORE_AWAITING = re.compile(r"^\s*ignora\s+(\d{1,3})\s*[.!]?\s*$", re.IGNORECASE)
+_CB_AWAITING_IGNORED = "Ok, não pergunto mais sobre essa mensagem."
 
 
 def handle_briefing_callback(cq: Dict[str, Any]) -> Dict[str, Any]:
@@ -307,6 +309,10 @@ def _run_briefing_action(payload: Dict[str, Any], session_id: str, n: int, actio
 
         ignore_name_prompt(ref_id)
         text = "Ok, não pergunto mais sobre essa conversa."
+    elif kind == "awaiting":
+        if not _dismiss_awaiting(payload, ref_id, n):
+            return reply(_CB_ERROR, "invalid")
+        text = _CB_AWAITING_IGNORED
     elif kind == "commitment":
         text = _commitment_action(db, int(ref_id), action)
         if text is None:
@@ -333,7 +339,9 @@ def _tomorrow_reminder(payload: Dict[str, Any], session_id: str, n: int) -> tupl
     from tools.reminder_tools import create_reminder_now
 
     wrapped = (payload.get("rm") or {}).get(str(n))
-    if payload.get("kind") != "evening" or not wrapped:
+    # evening preview items, or the Monday briefing's "awaiting" items ("cobrar <pessoa>")
+    awaiting = str((payload.get("refs") or {}).get(str(n)) or "").startswith("awaiting:")
+    if not (payload.get("kind") == "evening" or awaiting) or not wrapped:
         return "invalid", _CB_ERROR
     title = " ".join(strip_markers(str(wrapped)).split())
     if not title:
@@ -372,13 +380,66 @@ def try_reminder_reply(text: str, session_id: str) -> str | None:
 
     n = int(m.group(1))
     with _BUTTON_LOCK:  # read → create → store `rm_done` is one unit, like the buttons
-        payload = briefing.today_snapshot(session_id, "evening")
-        if not payload or str(n) not in (payload.get("rm") or {}):
+        payload = None
+        for bkind in ("evening", "morning"):  # morning: only the "awaiting" items carry `rm`
+            cand = briefing.today_snapshot(session_id, bkind)
+            if cand and str(n) in (cand.get("rm") or {}):
+                payload = cand
+                break
+        if not payload:
             return None
         outcome, answer = _tomorrow_reminder(payload, session_id, n)
         if outcome == "done":
             _store_reminded(payload, session_id, n)
         return answer if outcome in ("done", "already", "error") else None
+
+
+def _dismiss_awaiting(payload: Dict[str, Any], jid: str, n: int) -> bool:
+    """Dismisses the "awaiting" item ``n`` (that exact outbound message). False = unknown out_at."""
+    from datetime import datetime as _dt, timezone
+
+    from services import awaiting_reply
+
+    raw = (payload.get("aw") or {}).get(str(n))
+    try:
+        out_at = _dt.fromisoformat(str(raw))
+    except ValueError:
+        return False
+    if out_at.tzinfo is None:
+        out_at = out_at.replace(tzinfo=timezone.utc)
+    awaiting_reply.dismiss(jid, out_at)
+    return True
+
+
+def try_awaiting_ignore_reply(text: str, session_id: str) -> str | None:
+    """Deterministic "ignora N" on an "awaiting" item of today's morning briefing (no LLM).
+    Claims the message only when item N is one; never contacts the person."""
+    m = _IGNORE_AWAITING.match(text or "")
+    if not m:
+        return None
+    import db
+    from datetime import date as _date
+
+    from services import briefing
+
+    n = int(m.group(1))
+    with _BUTTON_LOCK:
+        payload = briefing.today_snapshot(session_id, "morning")
+        if not payload:
+            return None
+        kind, _, jid = str((payload.get("refs") or {}).get(str(n)) or "").partition(":")
+        if kind != "awaiting" or not jid:
+            return None
+        done = {int(x) for x in payload.get("done") or []}
+        if n in done:
+            return _CB_DONE
+        if not _dismiss_awaiting(payload, jid, n):
+            return None
+        new_payload = dict(payload)
+        new_payload["done"] = sorted(done | {n})
+        db.save_tool_snapshot(session_id, "morning_briefing", new_payload)
+        db.mark_briefing_replied(_date.fromisoformat(str(payload["day"])), "morning")
+        return _CB_AWAITING_IGNORED
 
 
 def _commitment_action(db, cid: int, action: str) -> str | None:
@@ -489,6 +550,24 @@ def process_telegram_update(
                 ai_content=named,
                 tools=[{"type": "direct", "tool": "contact_name_reply"}],
                 extra={"name_reply": True},
+            )
+
+    if not forwarded:
+        # "ignora N" on the Monday briefing's "waiting for their reply" items.
+        try:
+            ignored = try_awaiting_ignore_reply(text, session_id)
+        except Exception as exc:
+            from services.soft_fail import soft_fail
+            soft_fail("telegram_handler.awaiting_reply", exc)
+            ignored = None
+        if ignored:
+            return _reply_direct(
+                session_id=session_id,
+                chat_id=chat_id,
+                text=text,
+                ai_content=ignored,
+                tools=[{"type": "direct", "tool": "awaiting_ignore"}],
+                extra={"awaiting_ignore": True},
             )
 
     if not forwarded:

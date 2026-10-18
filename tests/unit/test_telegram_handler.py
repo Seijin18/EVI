@@ -735,3 +735,108 @@ def test_text_reply_not_claimed_without_matching_item(evening, monkeypatch):
     evening.snaps.insert(0, _snap("morning", 99, {"1": "task:t1"}))  # latest *evening* still decides
     assert try_reminder_reply("lembra 1", f"telegram-{OWNER}") == "🔔 Vou te lembrar amanhã às 9h."
     assert len(evening.created) == 1
+
+
+# --- Monday "⏳ Esperando resposta deles" (evi-awaiting-their-reply, SCN-AWAIT-03/04) ------------
+
+BRUNO = "5511900000001@s.whatsapp.net"
+OUT_AT = "2026-10-08T14:30:00.123456+00:00"
+
+
+@pytest.fixture
+def awaiting(buttons, monkeypatch):
+    import db
+    import tools.reminder_tools as rt
+
+    buttons.created, buttons.dismissed, buttons.sent_to_contact = [], [], []
+    buttons.snaps.insert(0, {"tool_name": "morning_briefing", "created_at": "2026-10-12T10:00:00+00:00", "payload": {
+        "kind": "morning", "day": "2026-10-12", "message_id": 66,
+        "refs": {"1": f"awaiting:{BRUNO}", "2": "reply_debt:5511@s.whatsapp.net"},
+        "aw": {"1": OUT_AT},
+        "rm": {"1": "«externo:briefing» Cobrar Bruno: consegue me mandar o contrato? «/externo»"},
+    }})
+    monkeypatch.setattr(db, "dismiss_awaiting", lambda jid, out_at: buttons.dismissed.append((jid, out_at)))
+    monkeypatch.setenv("EVI_REMINDERS_ENABLED", "true")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", str(OWNER))
+    monkeypatch.setattr(rt, "now_local", lambda: TODAY.replace(hour=8))
+    monkeypatch.setattr(db, "create_reminder",
+                        lambda text, due, rep, chat, src, anchor_day=None: buttons.created.append((text, due, rep, chat, src)) or 1)
+
+    def _never(*a, **k):
+        buttons.sent_to_contact.append((a, k))
+        raise AssertionError("the EVI never writes to the contact")
+
+    from services import evolution_client
+
+    monkeypatch.setattr(evolution_client, "send_whatsapp_text", _never)
+    monkeypatch.setattr(evolution_client._client, "send_text", _never)
+    return buttons
+
+
+def test_scn_await_03_tap_no_dismisses_that_exact_message_and_hides_the_button(awaiting):
+    out = _go(_tap("b1:20261012:m:1:no", message_id=66))
+    assert out["callback"] == "done" and awaiting.answers == ["Ok, não pergunto mais sobre essa mensagem."]
+    [(jid, out_at)] = awaiting.dismissed
+    assert jid == BRUNO and out_at.isoformat() == OUT_AT  # the exact outbound message
+    assert awaiting.snaps[0]["payload"]["done"] == [1]
+    assert ["1 🔔"] in _rows(awaiting.edits[-1]) and ["1 ✖", "1 🔔"] not in _rows(awaiting.edits[-1])
+    assert not awaiting.sent_to_contact and not awaiting.acked  # not a "respondido"
+
+
+def test_awaiting_no_is_idempotent(awaiting):
+    _go(_tap("b1:20261012:m:1:no", message_id=66))
+    out = _go(_tap("b1:20261012:m:1:no", message_id=66))
+    assert out["callback"] == "already" and len(awaiting.dismissed) == 1
+
+
+def test_awaiting_ok_button_is_invalid(awaiting):
+    assert _go(_tap("b1:20261012:m:1:ok", message_id=66))["callback"] == "invalid"
+    assert not awaiting.dismissed
+
+
+def test_scn_await_04_tap_bell_creates_reminder_tomorrow_9h_and_sends_nothing(awaiting):
+    out = _go(_tap("b1:20261012:m:1:rm", message_id=66))
+    assert out["callback"] == "done" and awaiting.answers == ["🔔 Vou te lembrar amanhã às 9h."]
+    [(text, due, rep, chat, src)] = awaiting.created
+    assert text == "Cobrar Bruno: consegue me mandar o contrato?" and rep is None and src == "telegram"
+    assert due == datetime(2026, 10, 13, 9, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))
+    assert awaiting.snaps[0]["payload"]["rm_done"] == [1] and not awaiting.sent_to_contact
+    assert not awaiting.dismissed  # a reminder does not dismiss
+    out = _go(_tap("b1:20261012:m:1:rm", message_id=66))
+    assert out["callback"] == "already" and len(awaiting.created) == 1
+
+
+def test_bell_on_a_morning_item_that_is_not_awaiting_stays_invalid(awaiting):
+    awaiting.snaps[0]["payload"]["rm"]["2"] = "«externo:briefing» x «/externo»"
+    assert _go(_tap("b1:20261012:m:2:rm", message_id=66))["callback"] == "invalid"
+    assert not awaiting.created
+
+
+def test_text_reply_ignora_n_dismisses_and_is_idempotent(awaiting, monkeypatch):
+    out, sent = _say("ignora 1", monkeypatch)
+    assert out.get("awaiting_ignore") is True and sent == ["Ok, não pergunto mais sobre essa mensagem."]
+    [(jid, out_at)] = awaiting.dismissed
+    assert jid == BRUNO and out_at.isoformat() == OUT_AT
+    _, sent = _say("Ignora 1", monkeypatch)
+    assert len(awaiting.dismissed) == 1 and sent == ["Já estava feito."]
+    assert not awaiting.sent_to_contact
+
+
+def test_text_reply_ignora_is_not_claimed_for_other_items(awaiting):
+    from services.telegram_handler import try_awaiting_ignore_reply
+
+    session = f"telegram-{OWNER}"
+    assert try_awaiting_ignore_reply("ignora 2", session) is None  # a reply debt
+    assert try_awaiting_ignore_reply("ignora 9", session) is None
+    assert try_awaiting_ignore_reply("ignora 1 por favor", session) is None
+    assert not awaiting.dismissed
+
+
+def test_text_reply_lembra_n_creates_the_awaiting_reminder(awaiting, monkeypatch):
+    out, sent = _say("lembra 1", monkeypatch)
+    assert out.get("briefing_reminder") is True and sent == ["🔔 Vou te lembrar amanhã às 9h."]
+    [(text, due, *_)] = awaiting.created
+    assert text.startswith("Cobrar Bruno: ") and due.day == 13 and due.hour == 9
+    _, sent = _say("lembra 1", monkeypatch)
+    assert len(awaiting.created) == 1 and sent == ["Já estava agendado."]
+    assert not awaiting.sent_to_contact

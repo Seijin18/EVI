@@ -215,6 +215,12 @@ def _run_migrations() -> None:
                     acknowledged_at TIMESTAMPTZ,
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
                 );
+                CREATE TABLE IF NOT EXISTS awaiting_dismissed (
+                    jid TEXT NOT NULL,
+                    out_at TIMESTAMPTZ NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    PRIMARY KEY (jid, out_at)
+                );
                 CREATE TABLE IF NOT EXISTS wa_jid_alias (
                     lid TEXT PRIMARY KEY,
                     phone_jid TEXT NOT NULL,
@@ -1749,6 +1755,44 @@ def merge_conversation_state(src_jid: str, dst_jid: str) -> bool:
             cur.execute("DELETE FROM wa_conversation_state WHERE jid = %s", (src_jid,))
         conn.commit()
     return True
+
+
+def list_awaiting_candidates(now, min_age, max_age, limit: int = 200) -> List[Dict[str, Any]]:
+    """Conversations where the user spoke last (``last_out_at`` newer than ``last_in_at``),
+    aged between ``min_age`` and ``max_age`` (timedeltas) relative to ``now``, oldest first.
+    The request/closing filter and dismissals are applied by the caller."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT jid, last_in_at, last_out_at FROM wa_conversation_state "
+                "WHERE last_out_at IS NOT NULL "
+                "AND last_out_at > COALESCE(last_in_at, '-infinity') "
+                "AND last_out_at <= %s AND last_out_at >= %s "
+                "ORDER BY last_out_at ASC LIMIT %s",
+                (now - min_age, now - max_age, limit),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+def dismiss_awaiting(jid: str, out_at) -> None:
+    """"Ignore" for one outbound message: a newer one (different ``out_at``) reopens it."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO awaiting_dismissed (jid, out_at) VALUES (%s, %s) "
+                "ON CONFLICT DO NOTHING",
+                (jid, out_at),
+            )
+        conn.commit()
+
+
+def is_awaiting_dismissed(jid: str, out_at) -> bool:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM awaiting_dismissed WHERE jid = %s AND out_at = %s", (jid, out_at)
+            )
+            return cur.fetchone() is not None
 
 
 def list_debt_candidates(now, min_age, max_age, limit: int = 200) -> List[Dict[str, Any]]:

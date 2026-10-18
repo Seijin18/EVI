@@ -1051,3 +1051,43 @@ def test_list_debt_candidates_window_and_state_rules():
     db.record_inbound(jids["acked"], h(5), "de novo", "m2")
     rows = db.list_debt_candidates(now, dt.timedelta(hours=4), dt.timedelta(days=7))
     assert jids["acked"] in [r["jid"] for r in rows]
+
+
+# --- awaiting_reply (evi-awaiting-their-reply) --------------------------------
+
+
+@pytest.mark.ephemeral_db
+def test_list_awaiting_candidates_window_and_state_rules():
+    import db
+
+    now = dt.datetime(2026, 6, 10, 12, 0, tzinfo=dt.timezone.utc)
+    d = lambda n: now - dt.timedelta(days=n)  # noqa: E731
+    u = _uid()
+    jids = {k: f"{k}{u}@s.whatsapp.net" for k in ("old", "mid", "fresh", "ancient", "replied", "inonly")}
+    db.record_outbound(jids["old"], d(20))
+    db.record_outbound(jids["mid"], d(4))
+    db.record_outbound(jids["fresh"], d(1))
+    db.record_outbound(jids["ancient"], d(40))
+    db.record_outbound(jids["replied"], d(5))
+    db.record_inbound(jids["replied"], d(2), "oi", "m1")  # they answered after
+    db.record_inbound(jids["inonly"], d(5), "oi", "m2")  # user never spoke
+    rows = db.list_awaiting_candidates(now, dt.timedelta(days=3), dt.timedelta(days=30))
+    got = [r["jid"] for r in rows if r["jid"].endswith(f"{u}@s.whatsapp.net")]
+    assert got == [jids["old"], jids["mid"]]  # oldest first
+    # their older inbound does not hide it
+    db.record_inbound(jids["mid"], d(6), "antes", "m3")
+    rows = db.list_awaiting_candidates(now, dt.timedelta(days=3), dt.timedelta(days=30))
+    assert jids["mid"] in [r["jid"] for r in rows]
+
+
+@pytest.mark.ephemeral_db
+def test_awaiting_dismissal_is_per_outbound_message_and_idempotent():
+    import db
+
+    jid = f"{_uid()}@s.whatsapp.net"
+    t1 = dt.datetime(2026, 6, 3, 10, 0, 0, 123456, tzinfo=dt.timezone.utc)
+    assert not db.is_awaiting_dismissed(jid, t1)
+    db.dismiss_awaiting(jid, t1)
+    db.dismiss_awaiting(jid, t1)  # second tap: no error, still one row
+    assert db.is_awaiting_dismissed(jid, t1)
+    assert not db.is_awaiting_dismissed(jid, t1 + dt.timedelta(hours=1))  # newer message reopens

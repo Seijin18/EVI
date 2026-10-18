@@ -122,6 +122,12 @@ def _fold(text: str) -> str:
     )
 
 
+def looks_like_request(text: str | None) -> bool:
+    """Question or request wording ("?" or a request word); shared with awaiting_reply."""
+    f = _fold((text or "").strip())
+    return "?" in f or bool(_REQUEST_RE.search(f))
+
+
 def is_closing_message(text: str | None) -> bool:
     t = (text or "").strip()
     if not t:
@@ -129,7 +135,7 @@ def is_closing_message(text: str | None) -> bool:
     if _NO_WORDS_RE.fullmatch(t):
         return True
     f = _fold(t)
-    if "?" in f or _REQUEST_RE.search(f):
+    if looks_like_request(f):
         return False
     if CLOSING_RE.fullmatch(f):
         return True
@@ -147,6 +153,21 @@ def _min_hours() -> float:
         return 4.0
 
 
+def fold_alias_states() -> None:
+    """State keyed by an @lid before its alias was known folds into the phone row,
+    so predicates see both sides' timestamps. Soft-fails."""
+    try:
+        import db
+        from services.contact_identity import canonical_jid
+
+        for st in db.list_states():
+            lid = st["jid"]
+            if lid.endswith("@lid") and canonical_jid(lid) != lid:
+                db.merge_conversation_state(lid, canonical_jid(lid))
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("reply_debts.fold_aliases", exc)
+
+
 def list_debts(
     now: datetime | None = None,
     min_hours: float | None = None,
@@ -162,17 +183,7 @@ def list_debts(
         now = now.replace(tzinfo=timezone.utc)
     hours = _min_hours() if min_hours is None else min_hours
     db.init_db()
-    # State keyed by an @lid before its alias was known folds into the phone row,
-    # so the debt predicate sees both sides' timestamps.
-    try:
-        from services.contact_identity import canonical_jid
-
-        for st in db.list_states():
-            lid = st["jid"]
-            if lid.endswith("@lid") and canonical_jid(lid) != lid:
-                db.merge_conversation_state(lid, canonical_jid(lid))
-    except Exception as exc:  # noqa: BLE001
-        soft_fail("reply_debts.fold_aliases", exc)
+    fold_alias_states()
     rows = db.list_debt_candidates(now, timedelta(hours=hours), timedelta(days=max_days))
     # Rows keyed by an @lid that predates the migration collapse onto the phone jid.
     from services.contact_identity import canonical_jid

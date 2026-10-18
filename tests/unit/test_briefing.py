@@ -86,6 +86,14 @@ def _no_tip_by_default(monkeypatch):
     monkeypatch.setenv("EVI_BRIEFING_TIPS", "false")
 
 
+@pytest.fixture(autouse=True)
+def _no_awaiting_by_default(monkeypatch):
+    # the Monday "waiting for their reply" section reads the DB; its tests opt in explicitly
+    from services import awaiting_reply
+
+    monkeypatch.setattr(awaiting_reply, "candidates", lambda now=None, limit=3: [])
+
+
 @pytest.fixture
 def setup(monkeypatch):
     def _setup(responses=None, commitments=None):
@@ -1168,3 +1176,108 @@ def test_deliver_evening_sends_bell_buttons_and_stores_wrapped_titles(setup, del
     payload = delivery.db.snaps[-1][2]
     assert list(payload["rm"]) == ["1"] and "Pagar boleto" in payload["rm"]["1"]
     assert payload["rm"]["1"].startswith("«externo:")  # shown to the model: delimited
+
+
+# --- "Esperando resposta deles" (evi-awaiting-their-reply, SCN-AWAIT-01/02) -----------------
+
+BRUNO = "5511900000001@s.whatsapp.net"
+OUT_AT = datetime(2026, 10, 8, 14, 30, tzinfo=ZoneInfo("UTC"))
+
+
+def _awaiting(monkeypatch, n=1, label="Bruno"):
+    from services import awaiting_reply
+
+    cands = [{"jid": f"5511900000{i:03d}@s.whatsapp.net", "label": f"{label}{i or ''}", "out_at": OUT_AT,
+              "days": 4 + i, "excerpt": "consegue me mandar o <contrato>?"} for i in range(n)]
+    monkeypatch.setattr(awaiting_reply, "candidates", lambda now=None, limit=3: cands[:limit])
+    return cands
+
+
+def test_scn_await_01_monday_lists_awaiting_after_debts_and_before_names(setup, monkeypatch):
+    setup(commitments=[])
+    _awaiting(monkeypatch, 2)
+    _unnamed(monkeypatch, [("5511900000009@s.whatsapp.net", "oi")])
+    b = briefing.assemble_briefing(now=MONDAY)
+    assert [s.key for s in b.sections] == ["calendar", "tasks", "email", "whatsapp", "awaiting", "names"]
+    sec = b.sections[4]
+    assert [i.n for i in sec.items] == [6, 7] and b.sections[5].items[0].n == 8  # numbering continues
+    ref = sec.items[0].ref
+    assert ref["kind"] == "awaiting" and ref["id"] == "5511900000000@s.whatsapp.net"
+    assert ref["out_at"] == OUT_AT.isoformat() and ref["rm_title"].startswith("Cobrar Bruno: ")
+    plain = _assert_valid_html(b.text_user)
+    assert "⏳ Esperando resposta deles" in plain
+    assert "6. Bruno · há 4 d · “consegue me mandar o <contrato>?”" in plain
+    assert "<b>Bruno</b> · há 4 d" in b.text_user and "&lt;contrato&gt;" in b.text_user
+    assert "lembra 6" in b.text_user and "ignora 6" in b.text_user
+
+
+def test_awaiting_only_on_monday_morning(setup, monkeypatch):
+    setup()
+    _awaiting(monkeypatch)
+    assert "awaiting" not in [s.key for s in briefing.assemble_briefing(now=TUESDAY).sections]
+    assert "awaiting" not in [s.key for s in briefing.assemble_briefing("evening", now=MONDAY).sections]
+    assert "awaiting" in [s.key for s in briefing.assemble_briefing(now=MONDAY).sections]
+
+
+def test_awaiting_flag_off_removes_the_section(setup, monkeypatch):
+    setup()
+    _awaiting(monkeypatch)
+    monkeypatch.setenv("EVI_AWAITING_ENABLED", "false")
+    assert "awaiting" not in [s.key for s in briefing.assemble_briefing(now=MONDAY).sections]
+
+
+def test_awaiting_failure_is_isolated(setup, monkeypatch):
+    setup(commitments=[])
+    from services import awaiting_reply
+
+    monkeypatch.setattr(awaiting_reply, "candidates",
+                        lambda now=None, limit=3: (_ for _ in ()).throw(RuntimeError("boom")))
+    b = briefing.assemble_briefing(now=MONDAY)
+    sec = next(s for s in b.sections if s.key == "awaiting")
+    assert sec.error and not sec.items and len(b.items) == 5  # the other sources are untouched
+
+
+def test_awaiting_cap_is_three(setup, monkeypatch):
+    setup()
+    _awaiting(monkeypatch, 5)
+    sec = next(s for s in briefing.assemble_briefing(now=MONDAY).sections if s.key == "awaiting")
+    assert len(sec.items) == 3
+
+
+def test_awaiting_collapses_after_email_and_before_the_rest():
+    order = briefing.COLLAPSE_ORDER
+    assert order.index("email") < order.index("awaiting") < order.index("whatsapp")
+    secs = [_sec("tasks", 5), _sec("email", 3, more=6), _sec("whatsapp", 5, more=3), _sec("awaiting", 3)]
+    full = briefing.volume_lines(secs)
+    out = briefing.fit_volume(secs, budget=full - 1)
+    assert [s.collapsed for s in out] == [False, True, False, False]  # e-mail goes first
+    out = briefing.fit_volume(secs, budget=full - 6)
+    assert [s.collapsed for s in out] == [False, True, False, True]  # then awaiting, still before the rest
+    out = briefing.fit_volume(secs, budget=1)
+    assert all(s.collapsed for s in out)
+    summary = briefing._summary_text(out[3])
+    assert summary.startswith("3 conversas sem resposta")
+
+
+def test_awaiting_keyboard_has_ignore_and_bell_on_one_row():
+    kb = briefing.build_keyboard("2026-10-12", "morning", {1: "awaiting"}, remind={1: "Cobrar Bruno: x"})
+    assert [[b["text"] for b in r] for r in kb["inline_keyboard"]][0] == ["1 ✖", "1 🔔"]
+    datas = [b["callback_data"] for b in kb["inline_keyboard"][0]]
+    assert datas == ["b1:20261012:m:1:no", "b1:20261012:m:1:rm"]
+    kb = briefing.build_keyboard("2026-10-12", "morning", {1: "awaiting"}, done=[1], remind={1: "t"})
+    assert [[b["text"] for b in r] for r in kb["inline_keyboard"]][0] == ["1 🔔"]
+
+
+def test_deliver_stores_out_at_and_wrapped_reminder_title_for_awaiting_items(delivery, monkeypatch):
+    item = briefing.BriefItem(
+        1, "t", {"kind": "awaiting", "id": BRUNO, "out_at": OUT_AT.isoformat(), "rm_title": "Cobrar Bruno: x"},
+        "", "<b>Bruno</b>")
+    sec = [briefing.Section("awaiting", "Esperando resposta deles", items=[item])]
+    monkeypatch.setattr(briefing, "assemble_briefing",
+                        lambda kind="morning", now=None: briefing.Briefing("TEXTO", sec, [item], "<b>a</b>"))
+    briefing.deliver_briefing("morning", now=NOW)
+    rows = [[b["text"] for b in r] for r in delivery.markups[0]["inline_keyboard"]]
+    assert rows[0] == ["1 ✖", "1 🔔"]
+    payload = delivery.db.snaps[-1][2]
+    assert payload["refs"] == {"1": f"awaiting:{BRUNO}"} and payload["aw"] == {"1": OUT_AT.isoformat()}
+    assert payload["rm"]["1"].startswith("«externo:") and "Cobrar Bruno: x" in payload["rm"]["1"]
