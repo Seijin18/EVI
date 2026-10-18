@@ -16,6 +16,9 @@ Routing:
     GET  /_sim/telegram/sent      captured sendMessage calls
     POST /_sim/telegram/voice     {"audio_b64", "duration_s"?, "file_size"?, "chat_id"?} -> {"update_id"}
                                   (registers the audio for getFile/download + queues a voice update)
+    POST /_sim/telegram/callback  {"message_id", "data", "chat_id"?, "from_id"?} -> {"update_id"} (a button tap)
+    GET  /_sim/telegram/answers   captured answerCallbackQuery calls
+    GET  /_sim/telegram/edits     captured editMessageReplyMarkup calls
     POST /_sim/telegram/faults    {"sendMessage": "transient", "count": N}
     GET  /_sim/evolution/sent     captured sendText calls (with recipient)
     POST /_sim/evolution/media    {"id", "audio_b64", "mimetype"?} registers media for getBase64FromMediaMessage
@@ -115,6 +118,19 @@ def build_app(
         uid = t.enqueue(text, data.get("chat_id"))
         return JSONResponse({"ok": True, "update_id": uid})
 
+    async def telegram_callback(req: Request):
+        data = await _json_body(req)
+        if not data.get("data") or data.get("message_id") in (None, ""):
+            return JSONResponse({"error": "message_id and data required"}, status_code=400)
+        uid = t.enqueue_callback(data.get("chat_id"), data.get("from_id"), int(data["message_id"]), str(data["data"]))
+        return JSONResponse({"ok": True, "update_id": uid})
+
+    async def telegram_answers(_req: Request):
+        return JSONResponse(t.answers)
+
+    async def telegram_edits(_req: Request):
+        return JSONResponse(t.edits)
+
     async def telegram_voice(req: Request):
         data = await _json_body(req)
         try:
@@ -198,6 +214,9 @@ def build_app(
             Route("/_sim/evolution/message", evolution_message, methods=["POST"]),
             Route("/_sim/evolution/sent", evolution_sent, methods=["GET"]),
             Route("/_sim/telegram/updates", telegram_updates, methods=["POST"]),
+            Route("/_sim/telegram/callback", telegram_callback, methods=["POST"]),
+            Route("/_sim/telegram/answers", telegram_answers, methods=["GET"]),
+            Route("/_sim/telegram/edits", telegram_edits, methods=["GET"]),
             Route("/_sim/telegram/voice", telegram_voice, methods=["POST"]),
             Route("/_sim/evolution/media", evolution_media, methods=["POST"]),
             Route("/_sim/telegram/sent", telegram_sent, methods=["GET"]),

@@ -19,7 +19,7 @@
 
 ## 3. Simulação e fechamento
 
-- [ ] 3.1 Fake do Telegram com `callback_query`, `answerCallbackQuery`, `editMessageReplyMarkup` e `reply_markup` registrado; cenário `SIM-UX-04` (toque ✅ numa dívida → reconhecida; 👍 gravado; botão de ontem recusado); cassetes; `docs/testing.md`
+- [x] 3.1 Fake do Telegram com `callback_query`, `answerCallbackQuery`, `editMessageReplyMarkup` e `reply_markup` registrado; cenário `SIM-UX-04` (toque ✅ numa dívida → reconhecida; 👍 gravado; botão de ontem recusado); cassetes; `docs/testing.md`
   - SCN-UX-06, SCN-UX-07, SCN-UX-08
   - Files: `agent/testing/sim/fake_telegram.py`, `agent/testing/sim/runner.py`, `tests/sim/scenarios/briefing/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --id SIM-UX-04 --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`

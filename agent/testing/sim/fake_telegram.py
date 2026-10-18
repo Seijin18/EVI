@@ -12,6 +12,11 @@ Only the token ``sim-token`` is accepted (401 otherwise, like Telegram).
                   ``"rate_limit"``) - what ``services.send_result.post_with_retry``
                   treats as transient (5xx / transport; a 4xx is NOT retried,
                   so 429 is only for exercising the no-retry path).
+* ``sendMessage`` also records the parsed ``reply_markup`` (inline keyboard) and returns it;
+* ``answerCallbackQuery`` -> ``answers``; ``editMessageReplyMarkup`` -> ``edits`` and updates the
+                  stored ``reply_markup`` of that sent message (``enqueue_callback`` queues a
+                  ``callback_query`` update, like a tap on an inline button);
+* ``getUpdates`` honours ``allowed_updates`` (a ``callback_query`` is only returned when asked for);
 * ``getFile``     file_path for a file registered by the runner (``register_file``);
 * ``GET /file/bot<token>/<path>`` serves the registered bytes (``file_bytes``);
 * any other method -> 500 naming it (fail loudly).
@@ -20,6 +25,7 @@ Only the token ``sim-token`` is accepted (401 otherwise, like Telegram).
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from typing import Any
@@ -27,6 +33,16 @@ from typing import Any
 SIM_TOKEN = "sim-token"
 BOT_ID = 8000000001
 FAULTS = ("transient", "rate_limit")
+
+
+def _parse_json(value: Any) -> Any:
+    """Bot API params may arrive as a JSON string (form) or already parsed (JSON body)."""
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except ValueError:
+            return None
+    return value
 
 
 def _ok(result: Any) -> dict:
@@ -52,6 +68,9 @@ class FakeTelegram:
         self._updates: list[dict] = []
         self._message_seq = 0
         self.sent: list[dict] = []
+        self.answers: list[dict] = []  # answerCallbackQuery calls
+        self.edits: list[dict] = []  # editMessageReplyMarkup calls
+        self._callback_seq = 0
         self._files: dict[str, dict] = {}  # file_id -> {"path", "data", "mime"}
         self._file_seq = 0
         self._faults: dict[str, dict] = {}
@@ -75,6 +94,44 @@ class FakeTelegram:
                     "chat": {"id": cid, "first_name": from_name, "type": "private"},
                     "date": int(time.time()),
                     "text": text,
+                },
+            }
+        )
+        return self._update_seq
+
+    def enqueue_callback(
+        self,
+        chat_id: str | int | None,
+        from_id: str | int | None,
+        message_id: int,
+        data: str,
+        *,
+        from_name: str = "Sim User",
+    ) -> int:
+        """Queue a ``callback_query`` update (a tap on an inline button of ``message_id``)."""
+        cid = int(chat_id if chat_id is not None else self.default_chat_id)
+        fid = int(from_id if from_id is not None else cid)
+        self._update_seq += 1
+        self._callback_seq += 1
+        sent = next((m for m in self.sent if m["message_id"] == int(message_id) and m["chat_id"] == cid), None)
+        message: dict = {
+            "message_id": int(message_id),
+            "from": {"id": BOT_ID, "is_bot": True, "first_name": "EVI Sim", "username": "evi_sim_bot"},
+            "chat": {"id": cid, "first_name": from_name, "type": "private"},
+            "date": int(time.time()),
+            "text": (sent or {}).get("text", ""),
+        }
+        if sent and sent.get("reply_markup"):
+            message["reply_markup"] = sent["reply_markup"]
+        self._updates.append(
+            {
+                "update_id": self._update_seq,
+                "callback_query": {
+                    "id": f"SIMCQ{self._callback_seq}",
+                    "from": {"id": fid, "is_bot": False, "first_name": from_name, "language_code": "pt-br"},
+                    "message": message,
+                    "chat_instance": f"sim-{cid}",
+                    "data": data,
                 },
             }
         )
@@ -129,6 +186,8 @@ class FakeTelegram:
         return {
             "pending_updates": list(self._updates),
             "sent": list(self.sent),
+            "answers": list(self.answers),
+            "edits": list(self.edits),
             "files": sorted(self._files),
             "faults": dict(self._faults),
         }
@@ -144,10 +203,12 @@ class FakeTelegram:
     def check_token(self, token: str) -> bool:
         return token == self.token
 
-    def get_updates(self, offset: int | None) -> list[dict]:
+    def get_updates(self, offset: int | None, allowed: list[str] | None = None) -> list[dict]:
         if offset is not None and offset > 0:
             self._updates = [u for u in self._updates if u["update_id"] >= offset]
-        return list(self._updates)
+        if allowed is None:
+            return list(self._updates)
+        return [u for u in self._updates if any(k in allowed for k in u if k != "update_id")]
 
     async def call(self, method: str, params: dict) -> tuple[int, dict]:
         if method == "getMe":
@@ -162,6 +223,11 @@ class FakeTelegram:
             return self._send_message(params)
         if method == "getFile":
             return self._get_file(params)
+        if method == "answerCallbackQuery":
+            self.answers.append(dict(params))
+            return 200, _ok(True)
+        if method == "editMessageReplyMarkup":
+            return self._edit_reply_markup(params)
         return 500, {
             "ok": False,
             "error_code": 500,
@@ -177,9 +243,12 @@ class FakeTelegram:
             wait = float(params.get("timeout") or 0)
         except (TypeError, ValueError):
             wait = 0.0
+        allowed = _parse_json(params.get("allowed_updates"))
+        if not isinstance(allowed, list):
+            allowed = None
         deadline = time.monotonic() + max(0.0, wait)
         while True:
-            out = self.get_updates(offset)
+            out = self.get_updates(offset, allowed)
             if out or time.monotonic() >= deadline:
                 return out
             await asyncio.sleep(0.05)
@@ -226,5 +295,22 @@ class FakeTelegram:
             "date": int(time.time()),
             "text": text,
         }
-        self.sent.append({**msg, "chat_id": cid, "params": dict(params)})
+        markup = _parse_json(params.get("reply_markup"))
+        if isinstance(markup, dict):
+            msg["reply_markup"] = markup
+        self.sent.append({**msg, "chat_id": cid, "params": dict(params), "reply_markup": markup if isinstance(markup, dict) else None})
         return 200, _ok(msg)
+
+    def _edit_reply_markup(self, params: dict) -> tuple[int, dict]:
+        try:
+            cid, mid = int(params.get("chat_id")), int(params.get("message_id"))
+        except (TypeError, ValueError):
+            return 400, {"ok": False, "error_code": 400, "description": "Bad Request: chat_id and message_id are required"}
+        target = next((m for m in self.sent if m["message_id"] == mid and m["chat_id"] == cid), None)
+        if target is None:
+            return 400, {"ok": False, "error_code": 400, "description": "Bad Request: message to edit not found"}
+        markup = _parse_json(params.get("reply_markup"))
+        rows = markup.get("inline_keyboard") if isinstance(markup, dict) else None
+        self.edits.append({"chat_id": cid, "message_id": mid, "reply_markup": markup})
+        target["reply_markup"] = markup if rows else None  # an empty keyboard removes it
+        return 200, _ok({k: v for k, v in target.items() if k not in ("params", "chat_id")})

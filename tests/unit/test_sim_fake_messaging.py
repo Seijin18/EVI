@@ -373,3 +373,82 @@ def test_evolution_connection_state_default_seed_and_change(evo):
     evo.post("/_sim/evolution/state", json={"state": "open"})
     assert evo.get("/instance/connectionState/sim", headers=EVO).json()["instance"]["state"] == "open"
     assert evo.get("/instance/connectionState/sim", headers={"apikey": "bad"}).status_code == 401
+
+
+# --- inline keyboards / callback queries (evi-briefing-buttons 3.1) -----------------
+KB = {"inline_keyboard": [[{"text": "1 ✅", "callback_data": "b1:20261018:m:1:ok"}], [{"text": "👍", "callback_data": "b1:20261018:m:0:up"}]]}
+
+
+def _send_kb(client, markup=KB, chat_id=900000001):
+    r = client.post(f"{TOK}/sendMessage", json={"chat_id": chat_id, "text": "briefing", "reply_markup": markup})
+    return r.json()["result"]
+
+
+def test_send_message_records_reply_markup_and_returns_message_id(client):
+    res = _send_kb(client)
+    assert isinstance(res["message_id"], int) and res["reply_markup"] == KB
+    sent = client.get("/_sim/telegram/sent").json()
+    assert sent[0]["message_id"] == res["message_id"] and sent[0]["reply_markup"] == KB
+
+
+def test_reply_markup_sent_as_json_string_is_parsed(client):
+    import json
+
+    client.get(f"{TOK}/sendMessage", params={"chat_id": "1", "text": "x", "reply_markup": json.dumps(KB)})
+    assert client.get("/_sim/telegram/sent").json()[0]["reply_markup"] == KB
+
+
+def test_answer_callback_query_recorded(client):
+    r = client.post(f"{TOK}/answerCallbackQuery", json={"callback_query_id": "SIMCQ1", "text": "Ok"})
+    assert r.json() == {"ok": True, "result": True}
+    assert client.get("/_sim/telegram/answers").json() == [{"callback_query_id": "SIMCQ1", "text": "Ok"}]
+
+
+def test_edit_reply_markup_updates_stored_markup(client):
+    mid = _send_kb(client)["message_id"]
+    new = {"inline_keyboard": [KB["inline_keyboard"][1]]}
+    r = client.post(f"{TOK}/editMessageReplyMarkup", json={"chat_id": 900000001, "message_id": mid, "reply_markup": new})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert client.get("/_sim/telegram/sent").json()[0]["reply_markup"] == new
+    assert client.get("/_sim/telegram/edits").json() == [{"chat_id": 900000001, "message_id": mid, "reply_markup": new}]
+    # an empty keyboard removes it; an unknown message is a 400
+    client.post(f"{TOK}/editMessageReplyMarkup", json={"chat_id": 900000001, "message_id": mid, "reply_markup": {"inline_keyboard": []}})
+    assert client.get("/_sim/telegram/sent").json()[0]["reply_markup"] is None
+    assert client.post(f"{TOK}/editMessageReplyMarkup", json={"chat_id": 900000001, "message_id": 999, "reply_markup": new}).status_code == 400
+
+
+def test_enqueue_callback_builds_callback_query_update(client):
+    mid = _send_kb(client)["message_id"]
+    uid = client.post("/_sim/telegram/callback", json={"message_id": mid, "data": "b1:20261018:m:1:ok"}).json()["update_id"]
+    (u,) = client.get(f"{TOK}/getUpdates?offset=0&timeout=0").json()["result"]
+    cq = u["callback_query"]
+    assert u["update_id"] == uid and "message" not in u
+    assert cq["data"] == "b1:20261018:m:1:ok" and cq["id"]
+    assert cq["from"]["id"] == 900000001 and cq["message"]["chat"]["id"] == 900000001
+    assert cq["message"]["message_id"] == mid and cq["message"]["reply_markup"] == KB
+    assert client.post("/_sim/telegram/callback", json={"data": "x"}).status_code == 400
+
+
+def test_enqueue_callback_foreign_chat_and_sender(client):
+    mid = _send_kb(client)["message_id"]
+    client.post("/_sim/telegram/callback", json={"message_id": mid, "data": "d", "chat_id": 42, "from_id": 43})
+    cq = client.get(f"{TOK}/getUpdates?offset=0&timeout=0").json()["result"][0]["callback_query"]
+    assert cq["message"]["chat"]["id"] == 42 and cq["from"]["id"] == 43
+
+
+def test_get_updates_honours_allowed_updates(client):
+    import json
+
+    mid = _send_kb(client)["message_id"]
+    client.post("/_sim/telegram/updates", json={"text": "oi"})
+    client.post("/_sim/telegram/callback", json={"message_id": mid, "data": "d"})
+
+    def kinds(allowed):
+        q = f"&allowed_updates={json.dumps(allowed)}" if allowed is not None else ""
+        res = client.get(f"{TOK}/getUpdates?offset=0&timeout=0{q}").json()["result"]
+        return sorted(k for u in res for k in u if k != "update_id")
+
+    assert kinds(None) == ["callback_query", "message"]
+    assert kinds(["message"]) == ["message"]
+    assert kinds(["message", "callback_query"]) == ["callback_query", "message"]
+    assert kinds(["callback_query"]) == ["callback_query"]

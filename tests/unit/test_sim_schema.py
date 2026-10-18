@@ -316,3 +316,49 @@ def test_eval_telegram_message():
     assert any("max_lines" in f for f in ev([msg("<b>Ana</b>\na\nb\nc")]))
     assert any("matches" in f for f in ev([msg("Bia")]))
     assert any("no message" in f for f in ev([msg("Ana", cid=2)]))
+
+
+def test_telegram_tap_step_validation():
+    s = parse_scenario(_scn(steps=[
+        {"telegram_tap": {"item": 1, "action": "ok"}, "expect": {"reply_matches": "respondido", "telegram_keyboard": {"not_contains": "1 ✅"}}},
+        {"telegram_tap": {"action": "up", "briefing": "first"}},
+        {"telegram_tap": {"item": 1, "action": "ok", "from_chat": 4242}, "expect": {"no_reply": True}},
+    ]))
+    assert [st.type for st in s.steps] == ["telegram_tap"] * 3
+    for bad in (
+        {"action": "ok"},  # item missing
+        {"item": 1, "action": "zz"},
+        {"item": 1, "action": "ok", "extra": 1},
+        {"action": "up", "briefing": "middle"},
+    ):
+        with pytest.raises(ScenarioError):
+            parse_scenario(_scn(steps=[{"telegram_tap": bad}]))
+    with pytest.raises(ScenarioError):
+        parse_scenario(_scn(steps=[{"telegram_tap": {"action": "up"}, "expect": {"telegram_keyboard": {}}}]))
+
+
+def test_briefing_log_in_postgres_allowlist():
+    s = parse_scenario(_scn(steps=[{"telegram_tap": {"action": "up"}, "expect": {"postgres": [
+        {"table": "briefing_log", "where": {"feedback": "up"}, "count": 1},
+    ]}}]))
+    assert s.steps[0].expect["postgres"][0]["table"] == "briefing_log"
+
+
+def test_eval_telegram_message_keyboard_and_callback_data():
+    kb = {"inline_keyboard": [[{"text": "1 ✅", "callback_data": "b1:20261018:m:1:ok"}], [{"text": "👍", "callback_data": "b1:20261018:m:0:up"}]]}
+    sent = [{"chat_id": 5, "text": "b", "params": {}, "reply_markup": kb}]
+    exp = {"has_keyboard": True, "callback_data_matches": r"b1:\d{8}:[me]:\d{1,3}:(ok|no|up|dn)", "callback_data_max_bytes": 64}
+    assert schema.eval_expect({"telegram_message": exp}, {"telegram_step_sent": sent, "chat_id": 5}) == []
+    bad = [{"chat_id": 5, "text": "b", "params": {}, "reply_markup": {"inline_keyboard": [[{"text": "x", "callback_data": "5511999990001@s.whatsapp.net"}]]}}]
+    fails = schema.eval_expect({"telegram_message": exp}, {"telegram_step_sent": bad, "chat_id": 5})
+    assert any("callback_data_matches" in f for f in fails)
+    assert any("has_keyboard" in f for f in schema.eval_expect({"telegram_message": {"has_keyboard": True}}, {"telegram_step_sent": [{"chat_id": 5, "text": "b"}], "chat_id": 5}))
+    with pytest.raises(ScenarioError):
+        parse_scenario(_scn(steps=[{"job": "briefing", "expect": {"telegram_message": {"callback_data_matches": "("}}}]))
+
+
+def test_eval_telegram_keyboard():
+    exp = {"telegram_keyboard": {"contains": "👍", "not_contains": "1 ✅"}}
+    assert schema.eval_expect(exp, {"telegram_keyboard": "👍 ✓ | 👎"}) == []
+    assert any("not_contains" in f for f in schema.eval_expect(exp, {"telegram_keyboard": "1 ✅ | 1 ✖\n👍"}))
+    assert any("no tapped" in f for f in schema.eval_expect(exp, {}))

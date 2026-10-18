@@ -306,6 +306,34 @@ def _telegram_user_sent(ctx: Ctx) -> list[dict]:
     return [m for m in sent if str(m.get("chat_id")) == str(ctx.chat_id)]
 
 
+def _tap_button(ctx: Ctx, tap: dict) -> tuple[dict | None, str | None]:
+    """The briefing message to tap and the matching button's own ``callback_data``.
+
+    The data is looked up in the recorded ``reply_markup`` by label (never built here), so
+    the scenario exercises exactly what the agent put on the keyboard."""
+    mine = [m for m in _telegram_user_sent(ctx) if any(b.get("callback_data") for row in (m.get("reply_markup") or {}).get("inline_keyboard", []) for b in row)]
+    if not mine:
+        return None, None
+    msg = mine[0] if tap.get("briefing") == "first" else mine[-1]
+    action, item = tap["action"], tap.get("item")
+    want = {"ok": f"{item} ✅", "no": f"{item} ✖", "up": "👍", "dn": "👎"}[action]
+    for row in msg["reply_markup"]["inline_keyboard"]:
+        for b in row:
+            label = str(b.get("text", ""))
+            if label == want or (action in ("up", "dn") and label.startswith(want)) or (action == "no" and label.startswith(want + " ")):
+                return msg, b.get("callback_data")
+    return msg, None
+
+
+def _keyboard_labels(ctx: Ctx, message_id: int) -> str:
+    """Current button labels (one row per line) of a sent message, after any edit."""
+    for m in _telegram_user_sent(ctx):
+        if m.get("message_id") == message_id:
+            rows = (m.get("reply_markup") or {}).get("inline_keyboard") or []
+            return "\n".join(" | ".join(str(b.get("text", "")) for b in row) for row in rows)
+    return ""
+
+
 def _control_replies(ctx: Ctx) -> list[str]:
     sent = ctx.fakes("GET", "/_sim/evolution/sent") or []
     return [m.get("text", "") for m in sent if m.get("jid") in ctx.control_jids]
@@ -374,6 +402,28 @@ def run_step(ctx: Ctx, scn: Scenario, idx: int, step: Step) -> StepResult:
         body = {"audio_b64": _audio_b64(step.value["file"]), "duration_s": int(step.value.get("duration_s") or DEFAULT_VOICE_SECONDS)}
         ctx.fakes("POST", "/_sim/telegram/voice", body)
         sr.reply, sr.latency_s = _wait_reply(ctx, lambda: _telegram_replies(ctx), base, timeout)
+    elif step.type == "telegram_tap":
+        msg, data = _tap_button(ctx, step.value)
+        if msg is None or data is None:
+            what = "no briefing message with a keyboard was sent" if msg is None else f"no {step.value['action']!r} button for item {step.value.get('item')} on it"
+            sr.failures.append(f"telegram_tap: {what}")
+            return sr
+        base = len(ctx.fakes("GET", "/_sim/telegram/answers") or [])
+        chat = step.value.get("from_chat", ctx.chat_id)
+        ctx.fakes("POST", "/_sim/telegram/callback", {"message_id": msg["message_id"], "data": data, "chat_id": chat, "from_id": chat})
+        t_end = time.monotonic() + timeout
+        answers: list[dict] = []
+        while time.monotonic() < t_end:
+            answers = (ctx.fakes("GET", "/_sim/telegram/answers") or [])[base:]
+            if answers:
+                time.sleep(SETTLE_S)  # the keyboard edit follows the answer
+                answers = (ctx.fakes("GET", "/_sim/telegram/answers") or [])[base:]
+                break
+            time.sleep(0.5)
+        if answers:
+            sr.reply, sr.latency_s = "\n".join(str(a.get("text", "")) for a in answers), time.monotonic() - t0
+        if "telegram_keyboard" in exp:
+            step_obs["telegram_keyboard"] = _keyboard_labels(ctx, msg["message_id"])
     elif step.type in ("whatsapp_control_voice", "whatsapp_contact_voice"):
         base = len(_control_replies(ctx))
         if step.type == "whatsapp_control_voice":

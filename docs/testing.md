@@ -62,6 +62,14 @@ marcadores `«externo`, em ≤ 25 linhas, com seções longas colapsadas em linh
 `valid_html` (só `<b>/<i>/<code>`, balanceado, `<`/`&` escapados), `not_matches`, `max_lines`
 (linhas não vazias; vale para cada mensagem) e `matches` (ao menos uma). "respondido N" sobre o
 briefing novo é coberto pelo SIM-UX-03 (cassete gravado com `--llm record`).
+Botões do briefing (SIM-UX-04, 0 chamadas de LLM): o Telegram falso registra o `reply_markup` de cada
+`sendMessage` (devolve `message_id`), aceita `answerCallbackQuery` e `editMessageReplyMarkup` (atualiza o
+teclado guardado), respeita `allowed_updates` e enfileira `callback_query` (`POST /_sim/telegram/callback`).
+O passo `telegram_tap: {item: N, action: ok|no|up|dn, from_chat?: id, briefing?: last|first}` acha o
+briefing mais recente (ou o primeiro) e usa o `callback_data` do botão gravado, procurado pelo rótulo
+(nunca montado pelo runner); `reply` é o texto do `answerCallbackQuery`. Expectativas novas:
+`telegram_keyboard: {contains, not_contains}` (rótulos do teclado após as edições),
+`telegram_message: {has_keyboard, callback_data_matches, callback_data_max_bytes}`; `postgres` aceita `briefing_log`.
 Reply debts: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (sim.env liga
 `EVI_REPLY_DEBTS_ENABLED`; `postgres` aceita `wa_conversation_state`; `reply_not_matches` exige que
 o texto enviado ao Telegram NÃO case com a regex).

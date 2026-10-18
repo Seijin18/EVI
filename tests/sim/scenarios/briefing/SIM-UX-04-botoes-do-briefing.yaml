@@ -1,0 +1,57 @@
+id: SIM-UX-04
+title: Briefing com botões - toque ✅ reconhece a dívida, 👍 grava feedback, botão de ontem e chat estranho não mudam nada (SCN-UX-06, SCN-UX-07, SCN-UX-08)
+tags: [briefing, critical, reply-debts]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "consegue me mandar o orçamento?", jid: "5511955550204@s.whatsapp.net", push_name: "Davi Exemplo"}
+  - clock: D0 16:30
+  - job: briefing
+    expect:
+      reply_within_s: 60
+      reply_matches: "(?s)esperando sua resposta.*1\\. .*Davi"
+      telegram_message:
+        parse_mode: HTML
+        valid_html: true
+        has_keyboard: true
+        # day + briefing kind + item number + action only: no JID, id or text in the button, well under Telegram's 64 bytes
+        callback_data_matches: "b1:\\d{8}:[me]:\\d{1,3}:(ok|no|up|dn)"
+        callback_data_max_bytes: 64
+      postgres:
+        - {table: wa_conversation_state, where: {acknowledged_at: null}, count: 1}
+  # a tap from a chat that is not on the allowlist is ignored: no answer, nothing changes
+  - telegram_tap: {item: 1, action: ok, from_chat: 777000111}
+    expect:
+      no_reply: true
+      no_reply_window_s: 6
+      telegram_keyboard: {contains: "1 ✅"}
+      postgres:
+        - {table: wa_conversation_state, where: {acknowledged_at: null}, count: 1}
+        - {table: briefing_log, where: {replied_at: null}, count: 1}
+  # ✅ on the reply debt: acknowledged without the LLM, row removed from the keyboard, briefing counted as replied
+  - telegram_tap: {item: 1, action: ok}
+    expect:
+      reply_within_s: 30
+      reply_matches: "respondido"
+      tools_not_called: [dismiss_reply_debt]
+      telegram_keyboard: {contains: "👍", not_contains: "1 ✅"}
+      postgres:
+        - {table: wa_conversation_state, where: {acknowledged_at: null}, count: 0}
+        - {table: briefing_log, where: {replied_at: null}, count: 0}
+      outbound_to_third_parties: 0
+  - telegram_tap: {action: up}
+    expect:
+      reply_within_s: 30
+      telegram_keyboard: {contains: "👍 ✓"}
+      postgres:
+        - {table: briefing_log, where: {feedback: up}, count: 1}
+  # next day: a button of yesterday's briefing is refused and nothing changes
+  - clock: D1 09:00
+  - job: briefing
+  - telegram_tap: {action: dn, briefing: first}
+    expect:
+      reply_within_s: 30
+      reply_matches: "antigo"
+      postgres:
+        - {table: briefing_log, where: {feedback: down}, count: 0}
+        - {table: briefing_log, where: {feedback: up}, count: 1}

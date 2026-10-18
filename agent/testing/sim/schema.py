@@ -23,6 +23,7 @@ STEP_TYPES = (
     "whatsapp_control",
     "whatsapp_contact",
     "telegram_voice",
+    "telegram_tap",
     "whatsapp_control_voice",
     "whatsapp_contact_voice",
     "clock",
@@ -33,7 +34,7 @@ VOICE_STEPS = ("telegram_voice", "whatsapp_control_voice", "whatsapp_contact_voi
 AUDIO_FIXTURE_RE = re.compile(r"^[A-Za-z0-9_.-]+$")  # name inside tests/fixtures/audio/
 JOBS = ("heartbeat", "daily-summary", "briefing", "contact-learn", "contact-names-sync", "probe")
 # agent tables a scenario may inspect via expect.postgres (never free-form SQL)
-PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log", "reminders", "reminder_fires", "wa_conversation_state")
+PG_TABLES = ("pending_commitments", "whatsapp_contacts", "messages", "session_tool_snapshots", "turn_log", "probe_log", "reminders", "reminder_fires", "wa_conversation_state", "briefing_log")
 
 TOP_KEYS = {"id", "title", "tags", "source", "clock", "seed", "steps", "judge", "description"}
 STEP_KEYS = set(STEP_TYPES) | {"expect", "judge"}
@@ -55,12 +56,15 @@ EXPECT_KEYS = {
     "messages_min",
     "telegram_sent_count_matching",
     "telegram_message",
+    "telegram_keyboard",
     "contact_profile",
     "job_response_matches",
     "judge",
 }
 DEFAULT_NO_REPLY_WINDOW_S = 15
-TELEGRAM_MESSAGE_KEYS = {"parse_mode", "valid_html", "matches", "not_matches", "max_lines"}
+TELEGRAM_MESSAGE_KEYS = {"parse_mode", "valid_html", "matches", "not_matches", "max_lines", "has_keyboard", "callback_data_matches", "callback_data_max_bytes"}
+TAP_KEYS = {"item", "action", "from_chat", "briefing"}
+TAP_ACTIONS = ("ok", "no", "up", "dn")
 HTML_TAGS = ("b", "i", "code")  # the only tags a valid_html message may use
 CALENDAR_KEYS = {"created", "count"}
 TASKS_KEYS = {"created", "count"}
@@ -184,8 +188,8 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
     if "no_reply_window_s" in exp and not exp.get("no_reply"):
         raise _err(path, f"{where}.no_reply_window_s", "only valid together with no_reply: true")
     if exp.get("no_reply"):
-        if step_type not in ("telegram", "whatsapp_control", "telegram_voice", "whatsapp_control_voice", "clock"):
-            raise _err(path, f"{where}.no_reply", "only valid on telegram/whatsapp_control(_voice)/clock steps")
+        if step_type not in ("telegram", "whatsapp_control", "telegram_voice", "telegram_tap", "whatsapp_control_voice", "clock"):
+            raise _err(path, f"{where}.no_reply", "only valid on telegram(_voice|_tap)/whatsapp_control(_voice)/clock steps")
         if "reply_within_s" in exp or "reply_matches" in exp or "reply_not_matches" in exp:
             raise _err(path, where, "no_reply cannot be combined with reply_within_s/reply_matches")
     for key, allowed in (("calendar", CALENDAR_KEYS), ("tasks", TASKS_KEYS), ("gmail", GMAIL_KEYS)):
@@ -215,6 +219,23 @@ def _validate_expect(exp: Any, path: str, where: str, step_type: str = "") -> di
                     re.compile(tg[rk])
                 except (re.error, TypeError) as exc:
                     raise _err(path, f"{where}.telegram_message.{rk}", f"invalid regex: {exc}") from exc
+    if "telegram_message" in exp:
+        tg = exp["telegram_message"]
+        if "callback_data_matches" in tg:
+            try:
+                re.compile(tg["callback_data_matches"])
+            except (re.error, TypeError) as exc:
+                raise _err(path, f"{where}.telegram_message.callback_data_matches", f"invalid regex: {exc}") from exc
+    if "telegram_keyboard" in exp:
+        tk = exp["telegram_keyboard"]
+        _check_keys(tk, {"contains", "not_contains"}, path, f"{where}.telegram_keyboard")
+        if not tk:
+            raise _err(path, f"{where}.telegram_keyboard", "needs 'contains' and/or 'not_contains'")
+        for k in tk:
+            try:
+                re.compile(tk[k])
+            except (re.error, TypeError) as exc:
+                raise _err(path, f"{where}.telegram_keyboard.{k}", f"invalid regex: {exc}") from exc
     if "contact_profile" in exp:
         cp = exp["contact_profile"]
         _check_keys(cp, {"jid", "section", "matches", "not_matches"}, path, f"{where}.contact_profile")
@@ -304,6 +325,17 @@ def parse_scenario(data: Any, path: str = "<memory>") -> Scenario:
             raise _err(path, f"{where}.job", f"must be one of {JOBS}")
         elif kind in ("telegram", "whatsapp_control") and not isinstance(value, str):
             raise _err(path, f"{where}.{kind}", "must be a string")
+        elif kind == "telegram_tap":
+            _check_keys(value, TAP_KEYS, path, f"{where}.{kind}")
+            if value.get("action") not in TAP_ACTIONS:
+                raise _err(path, f"{where}.{kind}.action", f"must be one of {TAP_ACTIONS}")
+            item = value.get("item")
+            if value["action"] in ("ok", "no") and (not isinstance(item, int) or isinstance(item, bool) or item < 1):
+                raise _err(path, f"{where}.{kind}.item", "must be a positive integer for ok/no")
+            if "from_chat" in value and (isinstance(value["from_chat"], bool) or not isinstance(value["from_chat"], (int, str))):
+                raise _err(path, f"{where}.{kind}.from_chat", "must be a chat id")
+            if value.get("briefing", "last") not in ("last", "first"):
+                raise _err(path, f"{where}.{kind}.briefing", "must be 'last' or 'first'")
         elif kind == "whatsapp_contact":
             if isinstance(value, dict):
                 _check_keys(value, {"text", "jid", "from_me", "group", "push_name"}, path, f"{where}.{kind}")
@@ -531,7 +563,21 @@ def eval_telegram_message(exp: dict, sent: list[dict], chat_id: str | int) -> li
                 fails.append(f"telegram_message.max_lines: {n} non-blank lines > {exp['max_lines']} ({head!r})")
     if "matches" in exp and not any(re.search(exp["matches"], str(m.get("text", "")), re.S | re.I) for m in mine):
         fails.append(f"telegram_message.matches: /{exp['matches']}/ matched no message")
+    if "has_keyboard" in exp and any(bool(_markup_data(m)) != bool(exp["has_keyboard"]) for m in mine):
+        fails.append(f"telegram_message.has_keyboard: expected {exp['has_keyboard']} on every message")
+    for m in mine:
+        for d in _markup_data(m):
+            if "callback_data_matches" in exp and not re.fullmatch(exp["callback_data_matches"], d):
+                fails.append(f"telegram_message.callback_data_matches: /{exp['callback_data_matches']}/ did not match {d!r}")
+            if "callback_data_max_bytes" in exp and len(d.encode("utf-8")) > exp["callback_data_max_bytes"]:
+                fails.append(f"telegram_message.callback_data_max_bytes: {d!r} is {len(d.encode('utf-8'))} bytes > {exp['callback_data_max_bytes']}")
     return fails
+
+
+def _markup_data(m: dict) -> list[str]:
+    """``callback_data`` of every button of a recorded message's inline keyboard."""
+    rows = ((m.get("reply_markup") or {}).get("inline_keyboard")) or []
+    return [str(b.get("callback_data")) for row in rows for b in row if b.get("callback_data") is not None]
 
 
 def eval_expect(exp: dict, obs: dict) -> list[str]:
@@ -601,6 +647,16 @@ def eval_expect(exp: dict, obs: dict) -> list[str]:
             fails.append(f"telegram_sent_count_matching: /{tm['regex']}/ expected {tm['count']} user-bound messages got {n}")
     if "telegram_message" in exp:
         fails += eval_telegram_message(exp["telegram_message"], obs.get("telegram_step_sent") or [], obs.get("chat_id", ""))
+    if "telegram_keyboard" in exp:
+        labels = obs.get("telegram_keyboard")
+        tk = exp["telegram_keyboard"]
+        if labels is None:
+            fails.append("telegram_keyboard: no tapped briefing message to inspect")
+        else:
+            if "contains" in tk and not re.search(tk["contains"], labels, re.S):
+                fails.append(f"telegram_keyboard.contains: /{tk['contains']}/ not in keyboard {labels!r}")
+            if "not_contains" in tk and re.search(tk["not_contains"], labels, re.S):
+                fails.append(f"telegram_keyboard.not_contains: /{tk['not_contains']}/ found in keyboard {labels!r}")
     if "contact_profile" in exp:
         fails += eval_contact_profile(exp["contact_profile"], obs.get("contact_profile"))
     if "job_response_matches" in exp:
