@@ -162,6 +162,13 @@ def _run_migrations() -> None:
                     check_name VARCHAR(64) NOT NULL,
                     PRIMARY KEY (day, check_name)
                 );
+                CREATE TABLE IF NOT EXISTS source_status (
+                    source TEXT PRIMARY KEY,
+                    ok BOOLEAN NOT NULL,
+                    reason TEXT,
+                    down_since TIMESTAMPTZ,
+                    checked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                );
                 CREATE TABLE IF NOT EXISTS briefing_log (
                     id SERIAL PRIMARY KEY,
                     day DATE NOT NULL,
@@ -1144,6 +1151,43 @@ def mark_probe_notified(day, check_name: str) -> None:
                 (day, check_name),
             )
         conn.commit()
+
+
+def record_source(source: str, ok: bool, reason: str | None = None, now=None) -> None:
+    """Upsert the current state of a source. down_since is set on the first failure
+    (or an ok -> fail transition), kept while it stays down, cleared on ok."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO source_status (source, ok, reason, down_since, checked_at)
+                VALUES (%(s)s, %(ok)s, %(r)s,
+                        CASE WHEN %(ok)s THEN NULL ELSE COALESCE(%(now)s, now()) END,
+                        COALESCE(%(now)s, now()))
+                ON CONFLICT (source) DO UPDATE SET
+                    ok = EXCLUDED.ok,
+                    reason = EXCLUDED.reason,
+                    down_since = CASE
+                        WHEN EXCLUDED.ok THEN NULL
+                        WHEN source_status.ok OR source_status.down_since IS NULL
+                            THEN EXCLUDED.down_since
+                        ELSE source_status.down_since END,
+                    checked_at = EXCLUDED.checked_at
+                """,
+                {"s": source, "ok": ok, "r": reason, "now": now},
+            )
+        conn.commit()
+
+
+def list_sources_down() -> List[Dict[str, Any]]:
+    """Sources whose last check failed, oldest outage first."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT source, ok, reason, down_since, checked_at FROM source_status "
+                "WHERE NOT ok ORDER BY down_since, source"
+            )
+            return [dict(r) for r in cur.fetchall()]
 
 
 def list_probes(since, until) -> List[Dict[str, Any]]:

@@ -43,6 +43,10 @@ class FakeDB:
         self.rows = []
         self.notified = set()
         self.claimed = set()
+        self.sources = []
+
+    def record_source(self, source, ok, reason=None, now=None):
+        self.sources.append((source, ok, reason))
 
     def insert_probe(self, day, check, ok, reason=None, ms=None):
         self.rows.append((day, check, ok, reason, ms))
@@ -69,7 +73,7 @@ def env(monkeypatch):
     fake_db = FakeDB()
     for name in (
         "insert_probe", "probe_already_notified", "mark_probe_notified",
-        "claim_probe_notification", "release_probe_notification",
+        "claim_probe_notification", "release_probe_notification", "record_source",
     ):
         monkeypatch.setattr(db, name, getattr(fake_db, name))
     sent = []
@@ -79,6 +83,8 @@ def env(monkeypatch):
     )
     monkeypatch.setattr("services.telegram_poller._api_get", lambda token, method, params=None: {"ok": True})
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "t")
+    monkeypatch.delenv("EVOLUTION_API_KEY", raising=False)
+    monkeypatch.delenv("EVI_SOURCE_ALERTS_ENABLED", raising=False)
     failures = []
     monkeypatch.setattr(probe.metrics, "record_probe_failure", failures.append)
 
@@ -90,7 +96,7 @@ def env(monkeypatch):
     return MagicMock(db=fake_db, sent=sent, failures=failures, install=install)
 
 
-def test_all_ok_records_four_checks_read_only(env):
+def test_all_ok_records_four_checks_read_only_without_evolution(env):
     integ = env.install({})
     out = probe.run_probe()
     assert out["ok"] is True
@@ -103,6 +109,59 @@ def test_all_ok_records_four_checks_read_only(env):
     assert integ.calls[0][1]["on_date"] == out["day"]
     assert integ.calls[1][1]["max_results"] == 1
     assert integ.calls[2][1]["max_messages"] == 1
+
+
+def _whatsapp(monkeypatch, state):
+    monkeypatch.setenv("EVOLUTION_API_KEY", "k")
+    monkeypatch.setattr("messaging.evolution.EvolutionClient.connection_state", lambda self, **kw: state)
+
+
+def test_whatsapp_open_adds_a_fifth_check(env, monkeypatch):
+    _whatsapp(monkeypatch, "open")
+    env.install({})
+    out = probe.run_probe()
+    assert out["ok"] is True
+    assert [r[1] for r in env.db.rows] == ["calendar", "tasks", "gmail", "telegram", "whatsapp"]
+    assert ("whatsapp", True, None) in env.db.sources
+    assert {s[0] for s in env.db.sources} == {"calendar", "tasks", "gmail", "telegram", "whatsapp"}
+
+
+def test_scn_use_09_whatsapp_close_twice_one_warning(env, monkeypatch):
+    _whatsapp(monkeypatch, "close")
+    env.install({})
+    first = probe.run_probe()
+    second = probe.run_probe()
+    assert first["checks"]["whatsapp"]["reason"] == "disconnected"
+    assert first["checks"]["whatsapp"]["notified"] is True
+    assert second["checks"]["whatsapp"]["notified"] is False
+    assert len(env.sent) == 1
+    assert "WhatsApp está desconectado (estado: close)" in env.sent[0]
+    assert "localhost:8082/manager" in env.sent[0]
+    assert ("whatsapp", False, "disconnected") in env.db.sources
+    assert any(r[1] == "whatsapp" and not r[2] and r[3] == "disconnected" for r in env.db.rows)
+
+
+def test_whatsapp_unreachable_is_upstream_error(env, monkeypatch):
+    _whatsapp(monkeypatch, None)
+    env.install({})
+    out = probe.run_probe()
+    assert out["checks"]["whatsapp"]["reason"] == "upstream_error"
+
+
+def test_whatsapp_flag_off_skips_the_check(env, monkeypatch):
+    _whatsapp(monkeypatch, "close")
+    monkeypatch.setenv("EVI_SOURCE_ALERTS_ENABLED", "false")
+    env.install({})
+    out = probe.run_probe()
+    assert "whatsapp" not in out["checks"]
+    assert env.sent == []
+
+
+def test_oauth_warning_explains_the_7_day_cycle(env):
+    env.install({"summarize_inbox": OAUTH_ERR})
+    probe.run_probe()
+    assert "7 dias" in env.sent[0] and "Produção" in env.sent[0]
+    assert ("gmail", False, "oauth") in env.db.sources
 
 
 def test_scn_use_06_oauth_twice_one_warning(env):

@@ -536,6 +536,38 @@ def test_probe_log_notified_flag():
     assert rows and rows[0]["ok"] is False and rows[0]["reason"] == "timeout"
 
 
+def test_record_source_keeps_first_down_since_and_ok_clears():
+    import db
+
+    src = f"src-{_uid()}"
+    t1 = dt.datetime(2030, 1, 1, 10, 0, tzinfo=dt.timezone.utc)
+    t2 = dt.datetime(2030, 1, 2, 10, 0, tzinfo=dt.timezone.utc)
+    t3 = dt.datetime(2030, 1, 3, 10, 0, tzinfo=dt.timezone.utc)
+
+    def row():
+        return next((r for r in db.list_sources_down() if r["source"] == src), None)
+
+    db.record_source(src, True, now=t1)
+    assert row() is None
+    db.record_source(src, False, "disconnected", now=t2)
+    assert row()["down_since"] == t2 and row()["reason"] == "disconnected"
+    db.record_source(src, False, "upstream_error", now=t3)
+    assert row()["down_since"] == t2 and row()["reason"] == "upstream_error"
+    db.record_source(src, True, now=t3)
+    assert row() is None
+    db.record_source(src, False, "disconnected", now=t3)
+    assert row()["down_since"] == t3  # new outage restarts the clock
+
+
+def test_record_source_first_fail_sets_down_since():
+    import db
+
+    src = f"src-{_uid()}"
+    db.record_source(src, False, "oauth")
+    r = next(r for r in db.list_sources_down() if r["source"] == src)
+    assert r["down_since"] is not None and r["ok"] is False
+
+
 # --- briefing_log (evi-morning-briefing) ---------------------------------------
 
 

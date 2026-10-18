@@ -97,6 +97,40 @@ def _check_gemini() -> dict[str, Any]:
     return {"ok": True, "detail": "api key configured"}
 
 
+def source_alerts_enabled() -> bool:
+    return os.getenv("EVI_SOURCE_ALERTS_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off")
+
+
+def whatsapp_connection_state() -> str | None:
+    """Read-only Evolution state; lives here so the read-only probe imports no messaging module."""
+    from messaging.evolution import EvolutionClient
+
+    return EvolutionClient().connection_state()
+
+
+def _check_whatsapp() -> dict[str, Any]:
+    """Evolution connection state. `close` means the phone was unlinked: no inbound."""
+
+    if not source_alerts_enabled():
+        return {"ok": True, "detail": "skipped (EVI_SOURCE_ALERTS_ENABLED off)"}
+    if not os.getenv("EVOLUTION_API_KEY", "").strip():
+        return {"ok": True, "detail": "skipped (Evolution not configured)"}
+    state = whatsapp_connection_state()
+    out = {"ok": state == "open", "detail": state or "unreachable"}
+    try:
+        if not os.getenv("DATABASE_URL", "").strip():
+            return out
+        import db
+
+        db.record_source("whatsapp", out["ok"], None if out["ok"] else (
+            "disconnected" if state else "upstream_error"))
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+
+        soft_fail("health.record_source", exc)
+    return out
+
+
 def _check_graph(graph_ready: bool) -> dict[str, Any]:
     if graph_ready:
         return {"ok": True, "detail": "initialized"}
@@ -117,7 +151,11 @@ def run_health_checks(*, graph_ready: bool = True) -> dict[str, Any]:
     }
     if llm == "gemini" or embed == "google":
         checks["gemini"] = _check_gemini()
+    # Non-fatal: a disconnected WhatsApp degrades the status but never marks it down.
+    whatsapp = _check_whatsapp()
+    checks["whatsapp"] = whatsapp
     evaluated = [c for c in checks.values() if not str(c.get("detail", "")).startswith("skipped")]
+    evaluated = [c for c in evaluated if c is not whatsapp]
     if not evaluated:
         status = "ok"
     elif all(c["ok"] for c in evaluated):
@@ -126,4 +164,6 @@ def run_health_checks(*, graph_ready: bool = True) -> dict[str, Any]:
         status = "degraded"
     else:
         status = "down"
+    if status == "ok" and not whatsapp["ok"]:
+        status = "degraded"
     return {"status": status, "checks": checks}

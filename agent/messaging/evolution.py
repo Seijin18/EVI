@@ -60,6 +60,28 @@ class EvolutionClient:
         except (urllib.error.URLError, urllib.error.HTTPError, OSError, json.JSONDecodeError):
             return None
 
+    def connection_state(self, *, timeout: int = 5) -> str | None:
+        """Instance connection state ('open', 'close', 'connecting'…), lower-case.
+
+        None on any failure (Evolution down, timeout, bad payload). Never raises.
+        """
+        base, instance, api_key = self._config()
+        if not base or not instance:
+            return None
+        req = urllib.request.Request(
+            f"{base}/instance/connectionState/{instance}",
+            headers={"apikey": api_key} if api_key else {},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+        except (OSError, ValueError):  # URLError/HTTPError/timeout are OSError
+            return None
+        inst = body.get("instance") if isinstance(body, dict) else None
+        state = inst.get("state") if isinstance(inst, dict) else None
+        return state.strip().lower() if isinstance(state, str) and state.strip() else None
+
     def find_messages(self, jid: str, *, limit: int | None = None) -> Any:
         """Fetch cached chat messages from Evolution DB (findMessages)."""
         _, instance, _ = self._config()

@@ -104,7 +104,7 @@ BRIEFING_REPLIED_TOTAL = (
 
 _TURN_CHANNELS = frozenset({"telegram", "whatsapp_control", "api", "job"})
 _TURN_OUTCOMES = frozenset({"ok", "error", "tool_failed"})
-_PROBE_CHECKS = frozenset({"calendar", "tasks", "gmail", "telegram"})
+_PROBE_CHECKS = frozenset({"calendar", "tasks", "gmail", "telegram", "whatsapp"})
 _BRIEFING_KINDS = frozenset({"morning", "evening"})
 
 

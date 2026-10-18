@@ -1,11 +1,11 @@
 ## 1. Estado das fontes
 
-- [ ] 1.1 `EvolutionClient.connection_state()`; check `whatsapp` no `/health` (não fatal); tabela `source_status` + helpers (`record_source`, `list_sources_down`)
+- [x] 1.1 `EvolutionClient.connection_state()`; check `whatsapp` no `/health` (não fatal); tabela `source_status` + helpers (`record_source`, `list_sources_down`)
   - SCN-REL-04
   - Files: `agent/messaging/evolution.py`, `agent/services/health.py`, `agent/db.py`, `tests/unit/test_health.py`, `tests/unit/test_db.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_health.py tests/unit/test_db.py -q`
 
-- [ ] 1.2 Sonda: check `whatsapp` (`disconnected`/`upstream_error`), grava `source_status`; texto do OAuth com o ciclo de 7 dias e a saída definitiva; flag `EVI_SOURCE_ALERTS_ENABLED`
+- [x] 1.2 Sonda: check `whatsapp` (`disconnected`/`upstream_error`), grava `source_status`; texto do OAuth com o ciclo de 7 dias e a saída definitiva; flag `EVI_SOURCE_ALERTS_ENABLED`
   - SCN-USE-06, SCN-USE-09
   - Files: `agent/services/probe.py`, `tests/unit/test_probe.py`, `.env.example`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_probe.py -q`

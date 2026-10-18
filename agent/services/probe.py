@@ -33,6 +33,7 @@ _LABELS = {
     "tasks": "Google Tasks",
     "gmail": "Gmail",
     "telegram": "Telegram",
+    "whatsapp": "WhatsApp",
 }
 _RESOURCE_DEFAULTS = {
     "calendar": ("WINDMILL_GCAL_RESOURCE", "gcal"),
@@ -115,6 +116,17 @@ def _check_telegram(day: date) -> ToolResult:
     return ToolResult.success("ok")
 
 
+def _check_whatsapp(day: date) -> ToolResult:
+    from services.health import whatsapp_connection_state
+
+    state = whatsapp_connection_state()
+    if state is None:
+        return ToolResult.failure("Evolution não respondeu", reason="upstream_error")
+    if state != "open":
+        return ToolResult.failure("WhatsApp desconectado", reason="disconnected", detail=state)
+    return ToolResult.success("ok")
+
+
 _CHECKS: list[tuple[str, Callable[[date], ToolResult]]] = [
     ("calendar", _check_calendar),
     ("tasks", _check_tasks),
@@ -123,13 +135,32 @@ _CHECKS: list[tuple[str, Callable[[date], ToolResult]]] = [
 ]
 
 
+def _checks() -> list[tuple[str, Callable[[date], ToolResult]]]:
+    """The always-on checks plus WhatsApp, when source alerts are on and Evolution is set up."""
+    from services.health import source_alerts_enabled
+
+    checks = list(_CHECKS)
+    if source_alerts_enabled() and os.getenv("EVOLUTION_API_KEY", "").strip():
+        checks.append(("whatsapp", _check_whatsapp))
+    return checks
+
+
 def _warning_text(check: str, reason: str, detail: str) -> str:
     label = _LABELS[check]
+    if check == "whatsapp":
+        return (
+            f"📵 O WhatsApp está desconectado (estado: {detail or 'indisponível'}) — "
+            "o EVI não está lendo suas conversas. Gere o QR no manager da Evolution "
+            "(http://localhost:8082/manager) e escaneie no celular."
+        )
     if reason == OAUTH:
         name = _resource_name(check)
         return (
             f"⚠️ O acesso ao {label} expirou. "
-            f"Reconecte em Windmill → Resources → {name} (reconectar OAuth)."
+            f"Reconecte em Windmill → Resources → {name} (reconectar OAuth). "
+            "O app OAuth está em modo Teste: o Google expira o acesso a cada 7 dias. "
+            "Para não acontecer mais, publique o app em Produção "
+            "(Google Cloud → OAuth consent screen)."
         )
     if reason == "not_configured":
         return f"⚠️ {label} não está configurado. Configure a integração no .env e no Windmill."
@@ -183,10 +214,10 @@ def _run_check(fn, day: date) -> ToolResult:
 
 
 def run_probe() -> dict:
-    """Run the four read-only checks. Each is timed and soft-failed independently."""
+    """Run the read-only checks (calendar, tasks, gmail, telegram, whatsapp). Each is timed and soft-failed independently."""
     day = _today()
     results: dict[str, dict[str, Any]] = {}
-    for check, fn in _CHECKS:
+    for check, fn in _checks():
         started = time.perf_counter()
         out = _run_check(fn, day)
         if not out.ok and check != "telegram":
@@ -201,6 +232,10 @@ def run_probe() -> dict:
             db.insert_probe(day, check, bool(out.ok), reason, ms)
         except Exception as exc:
             soft_fail("probe.insert", exc)
+        try:
+            db.record_source(check, bool(out.ok), reason)
+        except Exception as exc:
+            soft_fail("probe.record_source", exc)
         if not out.ok:
             logger.warning("probe %s failed: %s %s", check, reason, out.detail[:200])
             try:
