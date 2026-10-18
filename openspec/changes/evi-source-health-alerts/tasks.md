@@ -31,7 +31,7 @@
   - Files: `agent/testing/sim/fake_evolution.py`, `tests/sim/scenarios/reliability/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag reliability --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`
 
-- [ ] 4.2 Deploy (rebuild do agent-api; watchdog atualizado é o mesmo arquivo do timer), gates, BACKLOG + Progress
+- [x] 4.2 Deploy (rebuild do agent-api; watchdog atualizado é o mesmo arquivo do timer), gates, BACKLOG + Progress
   - SCN-REL-03
   - Files: `openspec/BACKLOG.md`, `Progress.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`, `./scripts/evi-test smoke`, `openspec validate --specs`, `ruff check agent/ --select E,W,F --ignore E501`

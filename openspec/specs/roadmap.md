@@ -239,7 +239,10 @@ Origem: [`docs/product-review-2026-10-18.md`](../../docs/product-review-2026-10-
 semana de uso real comparada às referências (Google CC, Pulse, Poke, Superhuman, Zapia,
 Perplexity, OpenClaw). Em ordem; cada etapa é um change.
 
-### Etapa 30 — Alertas de indisponibilidade das fontes — `evi-source-health-alerts`
+### Etapa 30 — Alertas de indisponibilidade das fontes — `evi-source-health-alerts` — **Done** (2026-10-18)
+
+Change: [`evi-source-health-alerts`](../changes/archive/2026-10-18-evi-source-health-alerts/proposal.md).
+As-built: `connectionState` da Evolution no watchdog (aviso após 2 min, um por queda + reconexão), no `/health` (degraded) e na sonda (`disconnected`); tabela `source_status`; selo de fontes fora no topo do briefing (Google agrupado); aviso de OAuth explica o modo Teste de 7 dias; `EVI_SOURCE_ALERTS_ENABLED` (padrão ligado).
 
 O WhatsApp ficou desconectado 14–18/10 e o OAuth do Google expirou em 18/10 sem o usuário
 saber pelo EVI (Poke: confiança = precisão + pontualidade).
