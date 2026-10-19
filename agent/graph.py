@@ -58,28 +58,38 @@ def _calendar_block() -> str:
     return calendar_text
 
 
-def agent_node(state: AgentState) -> dict:
-    if state["iterations"] > 10:
-        return {
-            "final_answer": "Max iterations reached.",
-            "messages": [],
-            "iterations": state["iterations"] + 1,
-        }
+def _make_agent_node(tool_list):
+    """agent_node bound to an explicit tool list (a closure, never the module global),
+    so a read-only graph and the full chat graph can coexist in one process."""
 
-    llm_with_tools = llm.bind_tools(tools)
-    project_context = (state.get("extra_context") or "").strip()
-    if project_context:
-        project_context = project_context + "\n"
+    def node(state: AgentState) -> dict:
+        if state["iterations"] > 10:
+            return {
+                "final_answer": "Max iterations reached.",
+                "messages": [],
+                "iterations": state["iterations"] + 1,
+            }
 
-    system_message = SystemMessage(
-        content=SYSTEM_PROMPT.format(
-            project_context=project_context,
-            calendar_context=_calendar_block(),
-            tool_names=[t.name for t in tools],
+        llm_with_tools = llm.bind_tools(tool_list)
+        project_context = (state.get("extra_context") or "").strip()
+        if project_context:
+            project_context = project_context + "\n"
+
+        system_message = SystemMessage(
+            content=SYSTEM_PROMPT.format(
+                project_context=project_context,
+                calendar_context=_calendar_block(),
+                tool_names=[t.name for t in tool_list],
+            )
         )
-    )
-    response = llm_with_tools.invoke([system_message] + state["messages"])
-    return {"messages": [response], "iterations": state["iterations"] + 1}
+        response = llm_with_tools.invoke([system_message] + state["messages"])
+        return {"messages": [response], "iterations": state["iterations"] + 1}
+
+    return node
+
+
+def agent_node(state: AgentState) -> dict:
+    return _make_agent_node(tools)(state)
 
 
 def should_continue(state: AgentState) -> str:
@@ -89,12 +99,15 @@ def should_continue(state: AgentState) -> str:
     return END
 
 
-def build_agent_graph(tool_list: list):
-    global tools
-    tools = tool_list
-    tool_node = ToolNode(tools)
+def build_agent_graph(tool_list: list | None = None):
+    """Compile the ReAct graph over ``tool_list`` (default: every registered tool).
+
+    Only these tools are bound to the model AND executable by the ToolNode; a scheduled
+    turn passes ``read_only_tools()`` so a write tool is simply not there to call."""
+    tool_list = get_all_tools() if tool_list is None else list(tool_list)
+    tool_node = ToolNode(tool_list)
     graph = StateGraph(AgentState)
-    graph.add_node("agent", agent_node)
+    graph.add_node("agent", _make_agent_node(tool_list))
     graph.add_node("tools", tool_node)
     graph.set_entry_point("agent")
     graph.add_conditional_edges("agent", should_continue, {"tools": "tools", END: END})

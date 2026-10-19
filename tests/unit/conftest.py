@@ -36,6 +36,7 @@ _SERIAL_TABLES = (
     "briefing_log",
     "reminders",
     "reminder_fires",
+    "scheduled_tasks",
 )
 _KEYED_TABLES = (  # (table, key columns)
     ("whatsapp_contacts", ("jid",)),

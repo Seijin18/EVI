@@ -37,6 +37,10 @@ WRITE_TOOLS = frozenset(
         "cancel_reminder",
         "snooze_reminder",
         "complete_reminder",
+        "create_scheduled_task",
+        "cancel_scheduled_task",
+        "pause_scheduled_task",
+        "resume_scheduled_task",
         "dismiss_reply_debt",
         "organize_inbox",
         "save_note_manual",
@@ -45,6 +49,9 @@ WRITE_TOOLS = frozenset(
     }
 )
 USER_CHANNELS = frozenset({"telegram", "whatsapp_control", "api"})
+# Turns run by the scheduler (evi-scheduled-tasks): read-only, refused here even if a
+# write tool were ever bound to that graph (defense in depth, independent of USER_CHANNELS).
+SCHEDULED_CHANNEL = "scheduled"
 BLOCKED_MESSAGE = "ação bloqueada: turno não iniciado pelo usuário"
 
 PENDING_TOOL = "pending_delete"
@@ -220,6 +227,8 @@ def check_write(tool_name: str) -> str | None:
     from services.turn_log import current_channel
 
     channel = current_channel()
+    if channel == SCHEDULED_CHANNEL:
+        return f"{BLOCKED_MESSAGE} (canal: {channel}; ferramenta: {tool_name})"
     if channel is None or channel in USER_CHANNELS:
         return None
     return f"{BLOCKED_MESSAGE} (canal: {channel}; ferramenta: {tool_name})"

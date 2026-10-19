@@ -1,23 +1,23 @@
 ## 1. Base
 
-- [ ] 1.1 Tabela `scheduled_tasks` + serviço (`create/list/cancel/pause`, próxima ocorrência pelos presets dos lembretes, tetos 10 ativas / 6 execuções por dia)
+- [x] 1.1 Tabela `scheduled_tasks` + serviço (`create/list/cancel/pause`, próxima ocorrência pelos presets dos lembretes, tetos 10 ativas / 6 execuções por dia)
   - SCN-SCHED-01, SCN-SCHED-04
   - Files: `agent/services/scheduled_tasks.py`, `agent/db.py`, `tests/unit/test_scheduled_tasks.py`, `tests/unit/test_db.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_scheduled_tasks.py tests/unit/test_db.py -q`
 
-- [ ] 1.2 Tools de agendamento (`@guarded_write`, só por pedido explícito) registradas no `registry`
+- [x] 1.2 Tools de agendamento (`@guarded_write`, só por pedido explícito) registradas no `registry`
   - SCN-SCHED-01
   - Files: `agent/tools/scheduled_task_tools.py`, `agent/tools/registry.py`, `tests/unit/test_scheduled_task_tools.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_scheduled_task_tools.py tests/unit/test_write_guard.py -q`
 
 ## 2. Execução
 
-- [ ] 2.1 Grafo com lista de tools filtrada (`read_only_tools()`), turno `channel='scheduled'` com sessão própria; guarda por origem recusa escrita nesse canal
+- [x] 2.1 Grafo com lista de tools filtrada (`read_only_tools()`), turno `channel='scheduled'` com sessão própria; guarda por origem recusa escrita nesse canal
   - SCN-SCHED-02, SCN-SCHED-03
   - Files: `agent/graph.py`, `agent/main.py`, `agent/services/scheduled_tasks.py`, `tests/unit/test_scheduled_tasks.py`, `tests/unit/test_write_guard.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_scheduled_tasks.py tests/unit/test_write_guard.py -q`
 
-- [ ] 2.2 Loop dispara tarefas vencidas em executor próprio (timeout 90 s), entrega no Telegram, trata falha/teto, flag `EVI_SCHEDULED_TASKS_ENABLED`
+- [x] 2.2 Loop dispara tarefas vencidas em executor próprio (timeout 90 s), entrega no Telegram, trata falha/teto, flag `EVI_SCHEDULED_TASKS_ENABLED`
   - SCN-SCHED-02, SCN-SCHED-04
   - Files: `agent/services/reminder_loop.py`, `agent/services/scheduled_tasks.py`, `tests/unit/test_reminder_loop.py`, `.env.example`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reminder_loop.py tests/unit/test_scheduled_tasks.py -q`

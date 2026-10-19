@@ -1091,3 +1091,86 @@ def test_awaiting_dismissal_is_per_outbound_message_and_idempotent():
     db.dismiss_awaiting(jid, t1)  # second tap: no error, still one row
     assert db.is_awaiting_dismissed(jid, t1)
     assert not db.is_awaiting_dismissed(jid, t1 + dt.timedelta(hours=1))  # newer message reopens
+
+
+# --- scheduled tasks (evi-scheduled-tasks) ---------------------------------------
+
+
+@pytest.fixture
+def sched_ids():
+    import db
+
+    db.reset_db_init_for_tests()
+    db.init_db()
+    ids: list = []
+    yield ids
+    with db._conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM scheduled_tasks WHERE id = ANY(%s)", (ids,))
+        conn.commit()
+
+
+@pytest.mark.ephemeral_db
+def test_scheduled_tasks_crud_due_and_caps(sched_ids):
+    import db
+
+    db.reset_db_init_for_tests()
+    db.init_db()  # migration twice is harmless
+    before = db.count_active_scheduled_tasks()
+    a = db.create_scheduled_task("a", "pergunta a", _t(-5), "weekly")
+    b = db.create_scheduled_task("b", "pergunta b", _t(600), None)
+    sched_ids.extend([a, b])
+    row = db.get_scheduled_task(a)
+    assert row["active"] and row["repeat"] == "weekly" and row["runs_today"] == 0
+    assert row["next_at"].tzinfo is not None and db.get_scheduled_task(-1) is None
+    assert db.count_active_scheduled_tasks() == before + 2
+    due = [r["id"] for r in db.due_scheduled_tasks(_t(0))]
+    assert a in due and b not in due
+    assert db.set_scheduled_task_active(b, False) and not db.get_scheduled_task(b)["active"]
+    assert db.count_active_scheduled_tasks() == before + 1
+    assert b not in [r["id"] for r in db.list_scheduled_tasks(active_only=True)]
+    assert db.set_scheduled_task_active(b, True, _t(900))
+    assert db.delete_scheduled_task(b) and db.get_scheduled_task(b) is None
+
+
+@pytest.mark.ephemeral_db
+def test_claim_scheduled_task_is_compare_and_swap(sched_ids):
+    import datetime as _dt
+
+    import db
+
+    day = _dt.date(2031, 5, 5)
+    t = _t(-1)
+    tid = db.create_scheduled_task("c", "p", t, "daily")
+    sched_ids.append(tid)
+    base = db.scheduled_runs_on(day)
+    nxt = _t(60 * 24)
+    got = db.claim_scheduled_task(tid, t, nxt, True, day)
+    assert got and got["next_at"] == nxt and got["runs_today"] == 1 and got["runs_day"] == day
+    # a second tick with the stale next_at loses the race
+    assert db.claim_scheduled_task(tid, t, nxt, True, day) is None
+    assert db.scheduled_runs_on(day) == base + 1
+    got = db.claim_scheduled_task(tid, nxt, _t(60 * 48), True, day)
+    assert got["runs_today"] == 2
+    # a capped (uncounted) claim advances without bumping the counter
+    got = db.claim_scheduled_task(tid, got["next_at"], _t(60 * 72), True, day, count_run=False)
+    assert got["runs_today"] == 2
+    # a one-shot claim deactivates the row; new day resets the counter
+    one = db.create_scheduled_task("d", "p", _t(-1), None)
+    sched_ids.append(one)
+    r = db.get_scheduled_task(one)
+    got = db.claim_scheduled_task(one, r["next_at"], r["next_at"], False, day)
+    assert got["active"] is False
+    assert db.due_scheduled_tasks(_t(0)) == [x for x in db.due_scheduled_tasks(_t(0)) if x["id"] != one]
+    db.finish_scheduled_task(one, "ok", _t(0))
+    r = db.get_scheduled_task(one)
+    assert r["last_status"] == "ok" and r["last_run_at"] is not None
+    nxt_day = _dt.date(2031, 5, 6)
+    got = db.claim_scheduled_task(tid, got_next(tid), _t(60 * 96), True, nxt_day)
+    assert got["runs_today"] == 1 and got["runs_day"] == nxt_day
+
+
+def got_next(tid):
+    import db
+
+    return db.get_scheduled_task(tid)["next_at"]

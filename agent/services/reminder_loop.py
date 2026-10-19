@@ -1,7 +1,9 @@
 """In-process reminder loop: daemon thread ticking `reminders.fire_due`.
 
-Started in the FastAPI lifespan when EVI_REMINDERS_ENABLED is truthy or promise
-context evaluation is on (it also drains the `needs_eval` promise queue, ≤1/min). The first
+Started in the FastAPI lifespan when EVI_REMINDERS_ENABLED is truthy, promise context
+evaluation is on, or EVI_SCHEDULED_TASKS_ENABLED is not false (it also drains the
+`needs_eval` promise queue, ≤1/min, and hands due scheduled tasks to their own
+executor every 30 s). The first
 tick runs immediately so reminders that fell due while the process was down are
 delivered right away. Pacing uses Event.wait (monotonic, unaffected by libfaketime);
 "now" is read inside fire_due via now_local().
@@ -22,6 +24,7 @@ DEFAULT_TICK_SEC = 30.0
 MIN_TICK_SEC = 5.0
 PROMISE_EVAL_EVERY_SEC = 60.0
 PROMISE_EVAL_BATCH = 3
+SCHEDULED_EVERY_SEC = 30.0  # due scheduled tasks are claimed at most this often
 SWEEP_HOUR, SWEEP_MINUTE = 6, 45  # daily fulfilment sweep, before the 07:00 briefing
 
 _last_sweep_date: str | None = None
@@ -64,6 +67,16 @@ def _reminders_on() -> bool:
     return _reminders_enabled()
 
 
+def _scheduled_on() -> bool:
+    try:
+        from services.scheduled_tasks import enabled
+
+        return enabled()
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("reminder_loop.scheduled_flag", exc)
+        return False
+
+
 def release_stranded_promises() -> int:
     """Promise context off: needs_eval rows would never be evaluated; make them pending."""
     if _promise_context_enabled() or not os.getenv("DATABASE_URL"):
@@ -104,12 +117,22 @@ def _run(stop: threading.Event, interval: float) -> None:
     from services import reminders
 
     last_eval = float("-inf")
+    last_sched = float("-inf")
     while not stop.is_set():
         if _reminders_on():
             try:
                 reminders.fire_due()
             except Exception as exc:
                 soft_fail("reminder_loop.tick", exc)
+        if time.monotonic() - last_sched >= SCHEDULED_EVERY_SEC and _scheduled_on():
+            last_sched = time.monotonic()
+            try:
+                from services import scheduled_tasks
+
+                # claims due rows and hands them to its own executor: never blocks the tick
+                scheduled_tasks.run_due()
+            except Exception as exc:
+                soft_fail("reminder_loop.scheduled", exc)
         if time.monotonic() - last_eval >= _promise_eval_interval():
             last_eval = time.monotonic()
             if not _promise_context_enabled():
@@ -132,7 +155,7 @@ def start_loop() -> bool:
     """Start the daemon thread if enabled and DB configured. Idempotent."""
     global _thread, _stop
     release_stranded_promises()
-    if not (_reminders_on() or _promise_context_enabled()):
+    if not (_reminders_on() or _promise_context_enabled() or _scheduled_on()):
         return False
     if not os.getenv("DATABASE_URL"):
         logger.warning("DATABASE_URL unset; reminder loop not started")

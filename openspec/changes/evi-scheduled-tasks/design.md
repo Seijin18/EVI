@@ -45,6 +45,12 @@ consegue apagar nada.
 ### 6. Flag
 `EVI_SCHEDULED_TASKS_ENABLED` (padrão `true`).
 
+### 7. As-built
+`build_agent_graph(tool_list)` (não `build_graph`); `read_only_tools()` em `services/scheduled_tasks.py`;
+claim atômico por compare-and-swap em `next_at` (avança a ocorrência e conta a execução num UPDATE);
+teto do dia: recorrente vai para a próxima ocorrência, avulsa para o dia seguinte, avisando uma vez;
+`cancel` apaga a linha; `resume` não recupera ocorrências passadas.
+
 ## Riscos
 
 - Custo: ≤ 6 chamadas de chat/dia.

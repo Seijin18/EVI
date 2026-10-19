@@ -27,6 +27,7 @@ READ_ONLY_TOOLS = {
     "list_reminders",
     "list_reply_debts",
     "query_university_notes",
+    "list_scheduled_tasks",
 }
 
 # Minimal valid arguments per write tool.
@@ -43,6 +44,10 @@ ARGS = {
     "cancel_reminder": {"reminder_id": 1},
     "snooze_reminder": {"reminder_id": 1, "until": "2030-01-01T10:00:00"},
     "complete_reminder": {"reminder_id": 1},
+    "create_scheduled_task": {"prompt": "x", "due_at": "2030-01-01T10:00:00"},
+    "cancel_scheduled_task": {"id_or_title": "1"},
+    "pause_scheduled_task": {"id_or_title": "1"},
+    "resume_scheduled_task": {"id_or_title": "1"},
     "dismiss_reply_debt": {"jid_or_name": "x"},
     "organize_inbox": {"confirm": True},
     "save_note_manual": {"title": "x", "content": "y"},
@@ -77,11 +82,12 @@ def _forbid_writes(monkeypatch):
     monkeypatch.setattr(db, "_conn", boom)
 
 
+@pytest.mark.parametrize("channel", ["job", "scheduled"])
 @pytest.mark.parametrize("name", sorted(write_guard.WRITE_TOOLS))
-def test_write_tool_blocked_in_job_turn(name, monkeypatch):
+def test_write_tool_blocked_in_job_turn(name, channel, monkeypatch):
     tool = _tools()[name]
     _forbid_writes(monkeypatch)
-    _, token = turn_log.start_turn(channel="job", session_id="s-inj03")
+    _, token = turn_log.start_turn(channel=channel, session_id="s-inj03")
     try:
         out = tool.invoke(ARGS[name])
     finally:
@@ -129,3 +135,23 @@ def test_decorator_keeps_schema_and_description():
     assert set(t.args) == {"title", "due_date", "notes"}
     assert t.description
     assert t.name == "create_task"
+
+
+def test_scheduled_channel_refused_even_if_listed_as_user_channel(monkeypatch):
+    """SCN-SCHED-03 defense in depth: the 'scheduled' refusal does not depend on USER_CHANNELS."""
+    monkeypatch.setattr(write_guard, "USER_CHANNELS", write_guard.USER_CHANNELS | {"scheduled"})
+    _, token = turn_log.start_turn(channel="scheduled", session_id="scheduled:1")
+    try:
+        assert write_guard.check_write("create_task").startswith(write_guard.BLOCKED_MESSAGE)
+    finally:
+        turn_log.end_turn(token)
+
+
+def test_scheduled_tools_are_write_tools_except_listing():
+    names = {t.name for t in get_all_tools()}
+    sched = {n for n in names if n.endswith("_scheduled_task") or n.endswith("_scheduled_tasks")}
+    assert sched == {
+        "create_scheduled_task", "list_scheduled_tasks", "cancel_scheduled_task",
+        "pause_scheduled_task", "resume_scheduled_task",
+    }
+    assert sched - {"list_scheduled_tasks"} <= write_guard.WRITE_TOOLS

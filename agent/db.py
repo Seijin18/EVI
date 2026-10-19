@@ -206,6 +206,21 @@ def _run_migrations() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS reminder_fires_fired_at
                     ON reminder_fires (fired_at);
+                CREATE TABLE IF NOT EXISTS scheduled_tasks (
+                    id SERIAL PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    next_at TIMESTAMPTZ NOT NULL,
+                    repeat VARCHAR(16),
+                    active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    last_run_at TIMESTAMPTZ,
+                    last_status TEXT,
+                    runs_day DATE,
+                    runs_today INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE INDEX IF NOT EXISTS scheduled_tasks_due
+                    ON scheduled_tasks (active, next_at);
                 CREATE TABLE IF NOT EXISTS wa_conversation_state (
                     jid VARCHAR(128) PRIMARY KEY,
                     last_in_at TIMESTAMPTZ,
@@ -1544,6 +1559,130 @@ def requeue_stuck(older_than_minutes: int = 5) -> int:
             n = cur.rowcount
         conn.commit()
     return n
+
+
+# --- scheduled tasks (evi-scheduled-tasks) -------------------------------------
+# A task runs when active AND next_at <= now. claim_scheduled_task() is a
+# compare-and-swap on next_at (advance it + bump the per-day counter in ONE
+# statement), so two ticks can never run the same occurrence.
+
+
+def create_scheduled_task(title: str, prompt: str, next_at, repeat: str | None) -> int:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO scheduled_tasks (title, prompt, next_at, repeat) "
+                "VALUES (%s, %s, %s, %s) RETURNING id",
+                (title, prompt, next_at, repeat),
+            )
+            tid = cur.fetchone()[0]
+        conn.commit()
+    return tid
+
+
+def get_scheduled_task(task_id: int) -> Dict[str, Any] | None:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM scheduled_tasks WHERE id = %s", (task_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def list_scheduled_tasks(active_only: bool = False) -> List[Dict[str, Any]]:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM scheduled_tasks WHERE (NOT %s OR active) ORDER BY next_at, id",
+                (active_only,),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def count_active_scheduled_tasks() -> int:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM scheduled_tasks WHERE active")
+            return int(cur.fetchone()[0])
+
+
+def delete_scheduled_task(task_id: int) -> bool:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM scheduled_tasks WHERE id = %s", (task_id,))
+            ok = cur.rowcount > 0
+        conn.commit()
+    return ok
+
+
+def set_scheduled_task_active(task_id: int, active: bool, next_at=None) -> bool:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE scheduled_tasks SET active = %s, next_at = COALESCE(%s, next_at) "
+                "WHERE id = %s",
+                (active, next_at, task_id),
+            )
+            ok = cur.rowcount > 0
+        conn.commit()
+    return ok
+
+
+def due_scheduled_tasks(now, limit: int = 20) -> List[Dict[str, Any]]:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM scheduled_tasks WHERE active AND next_at <= %s "
+                "ORDER BY next_at, id LIMIT %s",
+                (now, limit),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def scheduled_runs_on(day) -> int:
+    """Runs claimed on the local ``day`` across all tasks (the daily cap counter)."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COALESCE(SUM(runs_today), 0) FROM scheduled_tasks WHERE runs_day = %s",
+                (day,),
+            )
+            return int(cur.fetchone()[0])
+
+
+def claim_scheduled_task(task_id: int, expected_next_at, new_next_at, active: bool,
+                         day, count_run: bool = True) -> Dict[str, Any] | None:
+    """CAS: move next_at forward (and deactivate a one-shot) only if it still equals
+    ``expected_next_at``. Returns the row as it was claimed, or None when another
+    tick got there first. ``count_run`` bumps the local-day run counter."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "UPDATE scheduled_tasks SET next_at = %s, active = %s, "
+                "runs_today = CASE WHEN NOT %s THEN runs_today "
+                "                  WHEN runs_day = %s THEN runs_today + 1 ELSE 1 END, "
+                "runs_day = CASE WHEN %s THEN %s ELSE runs_day END "
+                "WHERE id = %s AND active AND next_at = %s "
+                "RETURNING *",
+                (new_next_at, active, count_run, day, count_run, day, task_id,
+                 expected_next_at),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return dict(row) if row else None
+
+
+def finish_scheduled_task(task_id: int, status: str, ran_at=None) -> None:
+    """Record the outcome; ``ran_at`` set means the task actually ran (last_run_at)."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE scheduled_tasks SET last_status = %s, "
+                "last_run_at = COALESCE(%s, last_run_at) WHERE id = %s",
+                (status, ran_at, task_id),
+            )
+        conn.commit()
 
 
 def _transition(reminder_id: int, new_status: str, from_statuses, chat_id=None) -> bool:

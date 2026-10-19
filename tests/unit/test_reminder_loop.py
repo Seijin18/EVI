@@ -18,6 +18,7 @@ from services import reminder_loop  # noqa: E402
 def _clean(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://x")
     monkeypatch.setenv("EVI_REMINDERS_ENABLED", "true")
+    monkeypatch.setenv("EVI_SCHEDULED_TASKS_ENABLED", "false")
     monkeypatch.delenv("EVI_REMINDERS_TICK_SEC", raising=False)
     monkeypatch.delenv("EVI_PROMISE_CONTEXT_ENABLED", raising=False)
     monkeypatch.delenv("EVI_REPLY_DEBTS_ENABLED", raising=False)
@@ -164,6 +165,7 @@ def test_promise_context_alone_starts_loop_without_firing_reminders(monkeypatch)
 def test_start_loop_releases_stranded_promises_when_context_disabled(monkeypatch):
     monkeypatch.undo()
     monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    monkeypatch.setenv("EVI_SCHEDULED_TASKS_ENABLED", "false")
     monkeypatch.setenv("EVI_REMINDERS_ENABLED", "false")
     monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "false")
     with patch("db.release_needs_eval", return_value=2) as rel:
@@ -209,3 +211,41 @@ def test_promise_eval_interval_env_override(monkeypatch):
     assert reminder_loop._promise_eval_interval() == reminder_loop.MIN_TICK_SEC
     monkeypatch.setenv("EVI_PROMISE_EVAL_TICK_SEC", "abc")
     assert reminder_loop._promise_eval_interval() == reminder_loop.PROMISE_EVAL_EVERY_SEC
+
+
+# --- scheduled tasks hook (evi-scheduled-tasks, SCN-SCHED-02/04) -----------------
+
+
+def test_scheduled_flag_alone_starts_loop_and_ticks_run_due(monkeypatch):
+    monkeypatch.setenv("EVI_REMINDERS_ENABLED", "false")
+    monkeypatch.setenv("EVI_SCHEDULED_TASKS_ENABLED", "true")
+    called = threading.Event()
+    with patch("services.scheduled_tasks.run_due", side_effect=lambda: called.set()) as rd:
+        assert reminder_loop.start_loop() is True
+        assert called.wait(2)  # first tick immediate
+        assert rd.call_count == 1
+
+
+def test_scheduled_flag_off_never_calls_run_due(monkeypatch):
+    monkeypatch.setenv("EVI_SCHEDULED_TASKS_ENABLED", "false")
+    fired = threading.Event()
+    with patch("services.reminders.fire_due", side_effect=lambda: fired.set()), patch(
+        "services.scheduled_tasks.run_due"
+    ) as rd:
+        reminder_loop.start_loop()
+        assert fired.wait(2)
+        assert rd.call_count == 0
+
+
+def test_scheduled_check_is_rate_limited_and_isolated_from_reminders(monkeypatch):
+    monkeypatch.setenv("EVI_SCHEDULED_TASKS_ENABLED", "true")
+    monkeypatch.setattr(reminder_loop, "MIN_TICK_SEC", 0.01)
+    monkeypatch.setenv("EVI_REMINDERS_TICK_SEC", "0.01")
+    monkeypatch.setattr(reminder_loop, "SCHEDULED_EVERY_SEC", 3600.0)
+    fd = MagicMock()
+    with patch("services.reminders.fire_due", fd), patch(
+        "services.scheduled_tasks.run_due", side_effect=RuntimeError("boom")
+    ) as rd, patch.object(reminder_loop, "soft_fail"):
+        reminder_loop.start_loop()
+        assert _wait(lambda: fd.call_count >= 5)  # reminders keep ticking despite the failure
+        assert rd.call_count == 1  # many ticks, one scheduled check (rate limit)

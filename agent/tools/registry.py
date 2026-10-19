@@ -23,6 +23,13 @@ from tools.reminder_tools import (
     list_reminders,
     snooze_reminder,
 )
+from tools.scheduled_task_tools import (
+    cancel_scheduled_task,
+    create_scheduled_task,
+    list_scheduled_tasks,
+    pause_scheduled_task,
+    resume_scheduled_task,
+)
 from tools.task_tool import create_task, list_tasks
 from tools.graph_tool import query_conversation_graph
 from tools.contact_tool import (
@@ -68,4 +75,9 @@ def get_all_tools():
         complete_reminder,
         list_reply_debts,
         dismiss_reply_debt,
+        create_scheduled_task,
+        list_scheduled_tasks,
+        cancel_scheduled_task,
+        pause_scheduled_task,
+        resume_scheduled_task,
     ]
