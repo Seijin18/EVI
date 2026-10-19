@@ -17,7 +17,8 @@
 - [x] WhatsApp reconectado (QR no manager da Evolution); watchdog/sonda voltam a `ok`
 - [x] App OAuth publicado em **Produção** (branding preenchido com páginas no GitHub Pages, branch `gh-pages`; a `main` NÃO foi enviada — repositório público)
 - [x] Google reconectado: recursos recriados (`calendar`, `gtasks`, `gmail`), `.env` atualizado, escopos `gmail.readonly`+`gmail.modify` configurados na instância do Windmill; sonda 5/5 ok. Detalhes e runbook: `docs/google-oauth.md`
-- [ ] `gcloud` no Windmill (recriado, sem uso): apagar e remover `WINDMILL_GCLOUD_RESOURCE` do `.env`
+- [x] `WINDMILL_GCLOUD_RESOURCE` removido do `.env` (nada no código o usa; cópia em `data/backups/env-pre-gcloud-removal-*`)
+- [ ] Apagar o recurso `gcloud` no Windmill (sem uso, escopo `cloud-platform`) — só no navegador
 - [ ] Ainda com o usuário (sudo/outras contas): Ollama (`./scripts/evi-host-hardening ollama`), patch do WhatBot, plano do Gemini
 ## Pendências do usuário (não bloqueantes)
 - [ ] WhatsApp desconectado desde 14/10 — gerar o QR e escanear (a geração foi bloqueada pelo classificador de permissões)
