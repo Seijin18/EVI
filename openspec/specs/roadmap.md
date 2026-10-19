@@ -304,7 +304,10 @@ Superhuman Auto Reminders: lembrar de cobrar quem não respondeu **você**.
 | Detecção | Conversa direta em que o usuário foi o último a falar há > N dias e a mensagem dele tem pergunta/pedido (determinístico, sem LLM) |
 | Entrega | Seção semanal do briefing de segunda, até 3 itens, com "cobrar"/"ignorar" |
 
-### Etapa 35 — Tarefas agendadas — `evi-scheduled-tasks`
+### Etapa 35 — Tarefas agendadas — `evi-scheduled-tasks` — **Done** (2026-10-18)
+
+Change: [`evi-scheduled-tasks`](../changes/archive/2026-10-18-evi-scheduled-tasks/proposal.md).
+As-built: tarefas agendadas por conversa (presets dos lembretes; ≤ 10 ativas, ≤ 6 execuções/dia); execução em turno `scheduled` só com tools de leitura sem efeito colateral, guarda recusa escrita nesse canal; criação só por pedido do próprio usuário (encaminhada não cria); resposta no Telegram com o título.
 
 Perplexity: "toda sexta 18h, resuma meus e-mails da semana".
 

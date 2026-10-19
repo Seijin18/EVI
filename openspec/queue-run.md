@@ -1,14 +1,15 @@
 # Execução da fila — iniciada 2026-10-18 (3ª rodada)
 ## Estado
-- Change atual: evi-scheduled-tasks (fase: implementar) — task 1.1
+- Change atual: — (fila concluída em 2026-10-18)
 - Ordem: evi-source-health-alerts → evi-briefing-buttons → evi-whatsapp-summary-cache → evi-discovery-tips → evi-awaiting-their-reply → evi-scheduled-tasks
-- Concluídos: evi-source-health-alerts (arquivado 2026-10-18, commits 891b894..5f83f9b + archive), evi-briefing-buttons (arquivado 2026-10-18, commits 6b878d7..7609d13 + archive), evi-whatsapp-summary-cache (arquivado 2026-10-18, commits 87c39be..a8d943c + archive), evi-discovery-tips (arquivado 2026-10-18, commits 37ae95d..cc09b3a + archive), evi-awaiting-their-reply (arquivado 2026-10-18, commits b889352..96c0509 + archive)
+- Concluídos: evi-source-health-alerts (arquivado 2026-10-18, commits 891b894..5f83f9b + archive), evi-briefing-buttons (arquivado 2026-10-18, commits 6b878d7..7609d13 + archive), evi-whatsapp-summary-cache (arquivado 2026-10-18, commits 87c39be..a8d943c + archive), evi-discovery-tips (arquivado 2026-10-18, commits 37ae95d..cc09b3a + archive), evi-awaiting-their-reply (arquivado 2026-10-18, commits b889352..96c0509 + archive), evi-scheduled-tasks (arquivado 2026-10-18, commits 19e7e8a..2305bee + archive)
 - Pulados: —
 ## Decisões do usuário no preflight (2026-10-18)
 - Mudanças novas no Telegram entram **ligadas por padrão**, cada uma com flag no `.env` para desligar.
 - Prévia da noite: schedule às 21h **ligado**.
 - Tarefas agendadas: **só leitura** (nunca apaga, cria ou envia), com teto de execuções/dia.
 ## Decisões tomadas sem o usuário
+- 2026-10-18 scheduled-tasks: criar lembrete/tarefa exige turno do próprio usuário com texto (mensagem encaminhada não cria); `get_whatsapp_contact_info` e `list_whatsapp_contacts` fora do turno agendado (têm efeito colateral local); turnos agendados não contam como uso nas métricas.
 - 2026-10-18 briefing-buttons: ✅ numa promessa marca como feita (a tool de confirmar não aceita promessa); 👍/👎 fica no teclado com ✓; `callback_data` ganhou o tipo do briefing e a guarda de `message_id` falha fechada (revisão).
 - 2026-10-18 whatsapp-summary-cache: em vez de pré-computar no lote noturno, ler a timeline local (já tem os dois lados desde 13/10) e ir à Evolution só para grupos/lacunas, em paralelo.
 - 2026-10-18 source-health-alerts: WhatsApp entra na sonda só quando `EVOLUTION_API_KEY` está definido; a sonda não pode importar `messaging` (teste de somente-leitura), então lê o estado via `services.health`. Sonda + watchdog podem avisar a mesma queda (até 2 mensagens).
@@ -16,6 +17,7 @@
 - [ ] WhatsApp desconectado desde 14/10 — gerar o QR e escanear (a geração foi bloqueada pelo classificador de permissões)
 - [ ] Google OAuth expirou em 18/10 (modo "Teste", 7 dias) — reconectar `gcal`/`gtasks`/`gmail` no Windmill e, de vez, publicar o app OAuth em Produção no Google Cloud
 - [ ] Teste dependente de ordem (pré-existente): `tests/unit/test_reply_debts.py::test_scn_ux_01_missing_item_error_states_the_valid_range` falha rodando sozinho, passa na suíte completa
+- [ ] Avaliar em 2026-10-25 a revisão de 18/10 (`docs/product-review-2026-10-18.md` §5): alerta de WhatsApp ≤ 10 min, selo no briefing quando fonte cai, respostas ao briefing ≥ 50 % (botões), dívidas ≥ 30 %, p95 < 15 s, ≥ 3 lembretes e ≥ 1 voz, ≥ 1 tarefa agendada
 ## Bloqueios
 
 ---

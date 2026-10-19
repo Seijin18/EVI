@@ -34,7 +34,7 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 54 | `evi-whatsapp-summary-cache` | 32 | **Done** (2026-10-18) | Resumo de WhatsApp do cache (p95 < 5 s) |
 | 55 | `evi-discovery-tips` | 33 | **Done** (2026-10-18) | Dica rotativa no briefing; prévia da noite às 21h |
 | 56 | `evi-awaiting-their-reply` | 34 | **Done** (2026-10-18) | Quem não respondeu você (follow-up) no briefing de segunda |
-| 57 | `evi-scheduled-tasks` | 35 | Ativo | Tarefas agendadas em linguagem natural, só leitura |
+| 57 | `evi-scheduled-tasks` | 35 | **Done** (2026-10-18) | Tarefas agendadas em linguagem natural, só leitura |
 
 ## Itens da revisão de segurança (2026-10-13)
 
