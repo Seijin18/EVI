@@ -24,7 +24,7 @@ Status: `aberto` · `corrigido (<task/data>)` · `em correção (<task>)` · `BA
 | Severidade | Qtde | Abertos |
 |---|---|---|
 | crítico | 1 | — (F1 corrigido) |
-| alto | 3 | F5, F6 — ação do usuário (F2 corrigido) |
+| alto | 3 | F6 provisório — ação do usuário (F2 e F5 corrigidos) |
 | médio | 9 | ver tabela |
 | baixo | 9 | F13, F18, F20, F22 (BACKLOG) |
 | info | 6 | ver tabela |
@@ -37,7 +37,7 @@ Status: `aberto` · `corrigido (<task/data>)` · `em correção (<task>)` · `BA
 | F2 | Windmill em `0.0.0.0:8001` (tokens OAuth Google) | alto | corrigido (3.1, 2026-10-13) | compose `127.0.0.1:8001:8000`; LAN/tailnet → recusada | Acesso remoto em `docs/remote-access.md`; credenciais: F12 |
 | F3 | Segredos padrão; Qdrant sem chave | médio | corrigido (3.2, rotação aplicada 2026-10-13) | scan `secrets.env` FAIL (`EVOLUTION_API_KEY`, `POSTGRES_PASSWORD`, `WINDMILL_DB_PASSWORD`); fallbacks no compose; tudo em loopback/rede Docker | `scripts/evi-rotate-secrets` |
 | F4 | Imagens sem versão fixa | médio | corrigido (3.2/4.2: qdrant v1.18.0, windmill por digest; redis/neo4j/postgres por tag major) | `qdrant:latest`, `windmill:main`; flutuantes: `redis:7-alpine`, `neo4j:5-community`, `postgres:15-alpine`. trivy (HIGH/CRITICAL): evolution C11/H253, windmill C33/H1121, neo4j C6/H548, postgres C1/H35, qdrant C7/H127, redis H4 — SO base, nada exposto fora do host | Fixar por tag/digest; SCN-SEC-06 aceita digest |
-| F5 | Ollama em `*:11434` sem auth, LAN + tailnet | alto | aberto — ação do usuário | `OLLAMA_HOST=0.0.0.0` (override.conf do systemd); `/api/tags` responde da LAN e da tailnet; ufw desligado; API permite pull/delete e uso de GPU; EVI usa Ollama em tarefas de fundo | Bind em `172.17.0.1` (host-gateway dos containers EVI e WhatBot); sudo |
+| F5 | Ollama em `*:11434` sem auth, LAN + tailnet | alto | corrigido (2026-10-19, `./scripts/evi-host-hardening ollama`: escuta só em `172.17.0.1`; LAN/tailnet/loopback recusam, container responde 200) | `OLLAMA_HOST=0.0.0.0` (override.conf do systemd); `/api/tags` responde da LAN e da tailnet; ufw desligado; API permite pull/delete e uso de GPU; EVI usa Ollama em tarefas de fundo | Bind em `172.17.0.1` (host-gateway dos containers EVI e WhatBot); sudo |
 | F6 | Chat principal + embeddings via Gemini, plano da chave não verificado | alto (provisório) | aberto — ação do usuário | `EVI_LLM_PROVIDER=gemini`, `EVI_EMBED_PROVIDER=google`; prompts com e-mail/WhatsApp de terceiros; tier gratuito pode treinar com os dados; a decisão de 2026-10-12 só aprovou nuvem via OpenRouter ZDR | Usuário verifica o plano; pago → aceito; gratuito → faturamento ou trocar provedor |
 | F7 | Chat de controle do WhatsApp é um grupo; qualquer participante comanda o agente | médio | corrigido (3.3: só `from_me` no grupo de controle) | `EVI_WHATSAPP_CONTROL_JIDS`: 1 JID `@g.us`; `evolution_parser.py` `sender = remoteJid`; canal `whatsapp_control` ∈ `USER_CHANNELS`; grupo hoje com 1 participante | 3.3: exigir `from_me=True` (ou participante = dono) + teste |
 | F8 | `EVI_REQUIRE_API_KEY` default `false`; `verify_api_key` é no-op sem chave | médio | corrigido (4.1) | compose `EVI_REQUIRE_API_KEY` default false; `agent/auth.py` | 4.1: default true + recusa de subir sem chave |
@@ -115,4 +115,5 @@ desenho — o JID de controle é confiável), e texto encaminhado dentro de uma 
   errado do corpo (`{...}` em vez de `{"value": {...}}`), a configuração foi zerada por ~1 min e
   restaurada da cópia (`data/backups/windmill-oauths-pre-gmail-scopes-*`, 0600). Procedimento correto
   em `docs/google-oauth.md`.
-- **Abertos (sem mudança):** F5 (Ollama na rede, sudo), F6 (plano do Gemini), F9, F10, F12, F26.
+- **F5 corrigido** no mesmo dia (o drop-in precisa se chamar `zz-evi-bind.conf`: o systemd lê em ordem alfabética e o `override.conf` com `0.0.0.0` vencia a primeira versão). No host, o CLI do Ollama passa a precisar de `export OLLAMA_HOST=172.17.0.1:11434`.
+- **Abertos:** F6 (plano do Gemini: projetos Capy/EvolvingVirtualInteligence/WhatBot têm faturamento; o erro de teto de gasto de 13/10 só existe em projeto pago — falta confirmar qual projeto é dono da chave), F9, F10 (patch do WhatBot), F12, F26.
