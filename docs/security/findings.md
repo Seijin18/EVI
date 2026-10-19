@@ -100,3 +100,19 @@ F6 (alto provisório, plano do Gemini), F9, F10, F11, F12, F26. Revisão de cód
 Notas das revisões: um contato 1:1 que seja o JID de controle ainda comanda o agente (por
 desenho — o JID de controle é confiável), e texto encaminhado dentro de uma mensagem `from_me`
 é tratado como comando.
+
+## Atualização de 2026-10-19
+
+- **F11 (parcial):** o app OAuth foi publicado em **Produção** (fim da expiração de 7 dias; ver
+  [`docs/google-oauth.md`](../google-oauth.md)). Os recursos Google foram recriados
+  (`calendar`, `gtasks`, `gmail`); `gmail.modify` segue necessário e inclui, tecnicamente, a permissão
+  de enviar — **risco aceito** (o EVI não tem ferramenta de envio). Reapareceu um recurso `gcloud`
+  (`cloud-platform`) sem uso: apagar no Windmill e remover `WINDMILL_GCLOUD_RESOURCE` do `.env`.
+- **Exposição pública:** o repositório `Seijin18/EVI` é público; só a branch `gh-pages` (página inicial e
+  política de privacidade) foi publicada. **Não** dar `push` da `main` sem revisar: ela contém este
+  registro, o modelo de ameaças e as revisões de uso.
+- **Incidente operacional:** ao gravar as configurações OAuth da instância do Windmill com o formato
+  errado do corpo (`{...}` em vez de `{"value": {...}}`), a configuração foi zerada por ~1 min e
+  restaurada da cópia (`data/backups/windmill-oauths-pre-gmail-scopes-*`, 0600). Procedimento correto
+  em `docs/google-oauth.md`.
+- **Abertos (sem mudança):** F5 (Ollama na rede, sudo), F6 (plano do Gemini), F9, F10, F12, F26.

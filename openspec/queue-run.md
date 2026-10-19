@@ -13,6 +13,12 @@
 - 2026-10-18 briefing-buttons: ✅ numa promessa marca como feita (a tool de confirmar não aceita promessa); 👍/👎 fica no teclado com ✓; `callback_data` ganhou o tipo do briefing e a guarda de `message_id` falha fechada (revisão).
 - 2026-10-18 whatsapp-summary-cache: em vez de pré-computar no lote noturno, ler a timeline local (já tem os dois lados desde 13/10) e ir à Evolution só para grupos/lacunas, em paralelo.
 - 2026-10-18 source-health-alerts: WhatsApp entra na sonda só quando `EVOLUTION_API_KEY` está definido; a sonda não pode importar `messaging` (teste de somente-leitura), então lê o estado via `services.health`. Sonda + watchdog podem avisar a mesma queda (até 2 mensagens).
+## Pendências executadas em 2026-10-19 (com o usuário)
+- [x] WhatsApp reconectado (QR no manager da Evolution); watchdog/sonda voltam a `ok`
+- [x] App OAuth publicado em **Produção** (branding preenchido com páginas no GitHub Pages, branch `gh-pages`; a `main` NÃO foi enviada — repositório público)
+- [x] Google reconectado: recursos recriados (`calendar`, `gtasks`, `gmail`), `.env` atualizado, escopos `gmail.readonly`+`gmail.modify` configurados na instância do Windmill; sonda 5/5 ok. Detalhes e runbook: `docs/google-oauth.md`
+- [ ] `gcloud` no Windmill (recriado, sem uso): apagar e remover `WINDMILL_GCLOUD_RESOURCE` do `.env`
+- [ ] Ainda com o usuário (sudo/outras contas): Ollama (`./scripts/evi-host-hardening ollama`), patch do WhatBot, plano do Gemini
 ## Pendências do usuário (não bloqueantes)
 - [ ] WhatsApp desconectado desde 14/10 — gerar o QR e escanear (a geração foi bloqueada pelo classificador de permissões)
 - [ ] Google OAuth expirou em 18/10 (modo "Teste", 7 dias) — reconectar `gcal`/`gtasks`/`gmail` no Windmill e, de vez, publicar o app OAuth em Produção no Google Cloud

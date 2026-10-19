@@ -108,7 +108,7 @@ EVI_TIMEZONE=America/Sao_Paulo
 
 Horários são **relógio local** (`09:00` = 9h em `EVI_TIMEZONE`), não UTC. Após mudar o script, rode `../scripts/wmill-sync.sh`.
 
-Resource OAuth atual após reconectar: confira com `wmill resource list`.
+Resource OAuth atual após reconectar: confira com `wmill resource list`. Estado atual (nomes `calendar`/`gtasks`/`gmail`, app em Produção, como reconectar e o aviso sobre o corpo do POST de configuração): [`docs/google-oauth.md`](../docs/google-oauth.md).
 
 **Token frio / 422 na primeira chamada:** Windmill pode renovar o OAuth do resource (`gcal`, `gtasks`, `gmail`) só após o primeiro acesso. O agent repete automaticamente uma vez (`EVI_WINDMILL_RETRY_ATTEMPTS=2`, pausa `EVI_WINDMILL_RETRY_DELAY_SEC=2`).
 
