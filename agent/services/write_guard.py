@@ -234,6 +234,27 @@ def check_write(tool_name: str) -> str | None:
     return f"{BLOCKED_MESSAGE} (canal: {channel}; ferramenta: {tool_name})"
 
 
+NO_USER_REQUEST_MESSAGE = (
+    "Só crio isso quando você pede na sua própria mensagem "
+    "(mensagem encaminhada ou conteúdo externo não conta)."
+)
+
+
+def check_user_request(tool_name: str) -> str | None:
+    """For creation tools that must come from the user's OWN words (reminders, scheduled
+    tasks): refuse when a user-channel turn carries no user text of its own (a forwarded
+    message blanks it) or the turn is not user-initiated. No turn at all (internal
+    callers, unit tests) is allowed, like check_write."""
+    blocked = check_write(tool_name)
+    if blocked:
+        return blocked
+    from services.turn_log import current_channel, current_user_text
+
+    if current_channel() is not None and not current_user_text().strip():
+        return NO_USER_REQUEST_MESSAGE
+    return None
+
+
 def guarded_write(fn):
     """Decorator for write tools (apply under ``@tool``): runs check_write first.
 

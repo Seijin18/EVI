@@ -219,6 +219,7 @@ def _run_migrations() -> None:
                     runs_day DATE,
                     runs_today INTEGER NOT NULL DEFAULT 0
                 );
+                ALTER TABLE scheduled_tasks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
                 CREATE INDEX IF NOT EXISTS scheduled_tasks_due
                     ON scheduled_tasks (active, next_at);
                 CREATE TABLE IF NOT EXISTS wa_conversation_state (
@@ -1005,7 +1006,7 @@ def insert_turn(
 
 
 def capabilities_used_since(since) -> set[str]:
-    """Markers of what the user's real (non-test) turns used since ``since``: the names of
+    """Markers of what the user's real (non-test, non-scheduled) turns used since ``since``: the names of
     the tools that ran (not failed) and ``input_kind:<kind>`` (voice, button, ...)."""
     with _conn() as conn:
         with conn.cursor() as cur:
@@ -1016,13 +1017,13 @@ def capabilities_used_since(since) -> set[str]:
                      jsonb_array_elements(
                          CASE WHEN jsonb_typeof(tools) = 'array' THEN tools ELSE '[]'::jsonb END
                      ) AS t
-                WHERE ts >= %s AND NOT is_test
+                WHERE ts >= %s AND NOT is_test AND channel <> 'scheduled'
                   AND jsonb_typeof(t) = 'object'
                   AND COALESCE(t->>'ok', 'true') <> 'false'
                 UNION
                 SELECT DISTINCT 'input_kind:' || input_kind
                 FROM turn_log
-                WHERE ts >= %s AND NOT is_test
+                WHERE ts >= %s AND NOT is_test AND channel <> 'scheduled'
                 """,
                 (since, since),
             )
@@ -1567,9 +1568,24 @@ def requeue_stuck(older_than_minutes: int = 5) -> int:
 # statement), so two ticks can never run the same occurrence.
 
 
-def create_scheduled_task(title: str, prompt: str, next_at, repeat: str | None) -> int:
+_SCHED_LOCK_KEY = 7_301_001  # pg_advisory_xact_lock: serializes the active-cap check + write
+
+
+def create_scheduled_task(title: str, prompt: str, next_at, repeat: str | None,
+                          max_active: int | None = None) -> int | None:
+    """Insert a task. With ``max_active`` the count + insert are one serialized
+    transaction (advisory lock), so concurrent creates cannot exceed the cap; returns
+    None when the cap is reached."""
     with _conn() as conn:
         with conn.cursor() as cur:
+            if max_active is not None:
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", (_SCHED_LOCK_KEY,))
+                cur.execute(
+                    "SELECT COUNT(*) FROM scheduled_tasks WHERE active AND deleted_at IS NULL"
+                )
+                if cur.fetchone()[0] >= max_active:
+                    conn.rollback()
+                    return None
             cur.execute(
                 "INSERT INTO scheduled_tasks (title, prompt, next_at, repeat) "
                 "VALUES (%s, %s, %s, %s) RETURNING id",
@@ -1583,7 +1599,9 @@ def create_scheduled_task(title: str, prompt: str, next_at, repeat: str | None) 
 def get_scheduled_task(task_id: int) -> Dict[str, Any] | None:
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM scheduled_tasks WHERE id = %s", (task_id,))
+            cur.execute(
+                "SELECT * FROM scheduled_tasks WHERE id = %s AND deleted_at IS NULL", (task_id,)
+            )
             row = cur.fetchone()
     return dict(row) if row else None
 
@@ -1592,7 +1610,8 @@ def list_scheduled_tasks(active_only: bool = False) -> List[Dict[str, Any]]:
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "SELECT * FROM scheduled_tasks WHERE (NOT %s OR active) ORDER BY next_at, id",
+                "SELECT * FROM scheduled_tasks WHERE deleted_at IS NULL AND (NOT %s OR active) "
+                "ORDER BY next_at, id",
                 (active_only,),
             )
             rows = cur.fetchall()
@@ -1602,25 +1621,44 @@ def list_scheduled_tasks(active_only: bool = False) -> List[Dict[str, Any]]:
 def count_active_scheduled_tasks() -> int:
     with _conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM scheduled_tasks WHERE active")
+            cur.execute("SELECT COUNT(*) FROM scheduled_tasks WHERE active AND deleted_at IS NULL")
             return int(cur.fetchone()[0])
 
 
 def delete_scheduled_task(task_id: int) -> bool:
+    """Soft delete: the row leaves lists and the active cap but keeps its run counter,
+    so cancel + recreate cannot reset today's 6-runs cap."""
     with _conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM scheduled_tasks WHERE id = %s", (task_id,))
+            cur.execute(
+                "UPDATE scheduled_tasks SET deleted_at = now(), active = FALSE "
+                "WHERE id = %s AND deleted_at IS NULL",
+                (task_id,),
+            )
             ok = cur.rowcount > 0
         conn.commit()
     return ok
 
 
-def set_scheduled_task_active(task_id: int, active: bool, next_at=None) -> bool:
+def set_scheduled_task_active(task_id: int, active: bool, next_at=None,
+                              max_active: int | None = None) -> bool:
+    """Pause/resume. Resuming with ``max_active`` is cap-checked atomically (False if
+    the cap is reached or the task is gone)."""
     with _conn() as conn:
         with conn.cursor() as cur:
+            if active and max_active is not None:
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", (_SCHED_LOCK_KEY,))
+                cur.execute(
+                    "SELECT COUNT(*) FROM scheduled_tasks "
+                    "WHERE active AND deleted_at IS NULL AND id <> %s",
+                    (task_id,),
+                )
+                if cur.fetchone()[0] >= max_active:
+                    conn.rollback()
+                    return False
             cur.execute(
                 "UPDATE scheduled_tasks SET active = %s, next_at = COALESCE(%s, next_at) "
-                "WHERE id = %s",
+                "WHERE id = %s AND deleted_at IS NULL",
                 (active, next_at, task_id),
             )
             ok = cur.rowcount > 0
@@ -1632,7 +1670,7 @@ def due_scheduled_tasks(now, limit: int = 20) -> List[Dict[str, Any]]:
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "SELECT * FROM scheduled_tasks WHERE active AND next_at <= %s "
+                "SELECT * FROM scheduled_tasks WHERE active AND deleted_at IS NULL AND next_at <= %s "
                 "ORDER BY next_at, id LIMIT %s",
                 (now, limit),
             )

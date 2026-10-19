@@ -59,7 +59,7 @@ def test_create_rejects_bad_input_and_cap(fake_db):
 
 
 def test_test_session_does_not_schedule(fake_db):
-    _, token = turn_log.start_turn(channel="api", session_id="test-abc", is_test=True)
+    _, token = turn_log.start_turn(channel="api", session_id="test-abc", is_test=True, user_text="agenda")
     try:
         out = tools.create_scheduled_task.invoke({"prompt": "x", "due_at": _due()})
     finally:
@@ -90,3 +90,32 @@ def test_listing_is_not_guarded(fake_db):
         assert tools.list_scheduled_tasks.invoke({}) == "Nenhuma tarefa agendada."
     finally:
         turn_log.end_turn(token)
+
+
+@pytest.mark.parametrize("which", ["scheduled", "reminder"])
+def test_forwarded_message_creates_nothing(fake_db, monkeypatch, which):
+    """A forwarded Telegram message blanks the turn's user text: no task/reminder."""
+    from tools import reminder_tools
+
+    created = []
+    monkeypatch.setenv("EVI_REMINDERS_ENABLED", "true")
+    monkeypatch.setattr(reminder_tools, "create_reminder_now", lambda *a, **k: created.append(1) or (True, "x"))
+    _, token = turn_log.start_turn(channel="telegram", session_id="s", user_text="")
+    try:
+        if which == "scheduled":
+            out = tools.create_scheduled_task.invoke({"prompt": "x", "due_at": _due()})
+        else:
+            out = reminder_tools.create_reminder.invoke({"text": "x", "due_at": _due()})
+    finally:
+        turn_log.end_turn(token)
+    assert out == write_guard.NO_USER_REQUEST_MESSAGE
+    assert not fake_db.rows and not created
+
+
+def test_own_message_still_creates(fake_db):
+    _, token = turn_log.start_turn(channel="telegram", session_id="s", user_text="agenda isso")
+    try:
+        out = tools.create_scheduled_task.invoke({"prompt": "x", "due_at": _due()})
+    finally:
+        turn_log.end_turn(token)
+    assert "Tarefa agendada" in out

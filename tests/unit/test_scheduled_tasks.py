@@ -92,7 +92,7 @@ def test_list_cancel_pause_resume(fake_db):
     assert ok and fake_db.rows[b["id"]]["active"]
     assert fake_db.rows[b["id"]]["next_at"] > NOW + timedelta(days=3)  # next occurrence, no backfill
     assert st.cancel("resumo semanal de e-mails")[0]
-    assert a["id"] not in fake_db.rows
+    assert fake_db.rows[a["id"]]["deleted_at"] and a["id"] not in [r["id"] for r in st.list_tasks()]
     assert st.cancel("nada disso")[0] is False
     assert st.cancel(999)[0] is False
 
@@ -356,3 +356,86 @@ def test_read_only_graph_is_cached(monkeypatch):
     monkeypatch.setattr(scheduled_tasks, "_graph_cache", None)
     assert scheduled_tasks._graph() is scheduled_tasks._graph()
     scheduled_tasks._graph_cache = None
+
+
+# --- review fixes -------------------------------------------------------------------
+
+
+def test_side_effect_read_tools_not_bound():
+    names = {t.name for t in st.read_only_tools()}
+    assert "get_whatsapp_contact_info" not in names
+    assert "get_whatsapp_contact_info" in st.SIDE_EFFECT_READ_TOOLS
+
+
+def test_cancel_recreate_does_not_reset_daily_cap(fake_db):
+    """Run, cancel, recreate: the earlier run still counts toward the 6/day cap."""
+    first, _ = _create(prompt="primeira", repeat="daily")
+    st.run_due(now=FRI, send=Sent(), runner=lambda t: "ok", wait=True)
+    assert st.cancel(first["id"])[0]
+    assert fake_db.scheduled_runs_on(FRI.date()) == 1  # soft delete keeps the count
+    for i in range(5):
+        _create(prompt=f"outra {i}", repeat="daily")
+    st.run_due(now=FRI + timedelta(minutes=1), send=Sent(), runner=lambda t: "ok", wait=True)
+    assert fake_db.scheduled_runs_on(FRI.date()) == 6
+    late, _ = _create(prompt="sétima", repeat="daily", due=FRI + timedelta(minutes=5))
+    sent = Sent()
+    c = st.run_due(now=FRI + timedelta(minutes=6), send=sent, runner=lambda t: "x", wait=True)
+    assert c["capped"] == 1 and c["started"] == 0
+
+
+def test_cancelled_task_frees_active_slot(fake_db):
+    for i in range(10):
+        _create(prompt=f"t{i}")
+    assert _create(prompt="x")[0] is None
+    st.cancel(1)
+    assert _create(prompt="x")[0] is not None
+
+
+def test_cap_notice_is_sent_from_the_executor_not_the_loop_thread(fake_db):
+    for i in range(7):
+        _create(prompt=f"t{i}", repeat="daily")
+    threads = []
+
+    def send(text, *a, **k):
+        threads.append(threading.current_thread().name)
+        return True
+
+    st.run_due(now=FRI, send=send, runner=lambda t: "ok", wait=True)
+    assert threads and all(n.startswith("sched-task") or n == "sched-task_0" or "sched-task" in n
+                           for n in threads)
+    assert threading.current_thread().name not in threads
+
+
+def test_abandoned_run_drops_result_and_turn_log(fake_db, monkeypatch):
+    """After a timeout the late return neither delivers nor writes a turn_log row."""
+    from services import scheduled_tasks, turn_log
+
+    gate = threading.Event()
+    finished = threading.Event()
+
+    class SlowGraph:
+        def invoke(self, state, config=None):
+            gate.wait(5)
+            from langchain_core.messages import AIMessage
+
+            return {"messages": [AIMessage(content="tarde")]}
+
+    rec = []
+    monkeypatch.setattr(scheduled_tasks, "_graph", lambda: SlowGraph())
+    monkeypatch.setattr(turn_log, "record_turn", lambda c, **kw: rec.append(kw))
+    real_run = st.run_turn
+
+    def runner(task):
+        try:
+            return real_run(task)
+        finally:
+            finished.set()
+
+    _create()
+    sent = Sent()
+    st.run_due(now=FRI, send=sent, runner=runner, wait=True, timeout=0.2)
+    gate.set()
+    assert finished.wait(5)
+    time.sleep(0.1)
+    assert rec == []  # abandoned: no turn_log row
+    assert len(sent.msgs) == 1 and sent.msgs[0].startswith("Não consegui rodar")

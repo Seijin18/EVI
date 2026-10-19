@@ -81,3 +81,14 @@ def test_capabilities_used_since_reads_tools_and_input_kind_of_real_turns():
     assert "get_whatsapp_contact_info" not in used  # the tool failed
     assert "input_kind:button" not in used and "list_reminders" not in used  # test turn
     assert db.capabilities_used_since(datetime.now(timezone.utc) + timedelta(days=1)) == set()
+
+
+@pytest.mark.ephemeral_db
+def test_capabilities_used_since_ignores_scheduled_turns():
+    db.reset_db_init_for_tests()
+    db.init_db()
+    sid = f"scheduled:{uuid.uuid4().hex[:6]}"
+    db.insert_turn(session_id=sid, channel="scheduled", user_text="resuma", input_kind="text",
+                   tools=[{"name": "summarize_inbox_zz", "ok": True, "ms": 1}])
+    used = db.capabilities_used_since(datetime.now(timezone.utc) - timedelta(days=1))
+    assert "summarize_inbox_zz" not in used

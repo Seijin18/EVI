@@ -31,6 +31,7 @@ from services.usage_signals import (
 logger = logging.getLogger(__name__)
 
 UNAVAILABLE = "indisponível"
+SCHEDULED_CHANNEL = "scheduled"  # scheduled-task turns: cost only, never user activity
 MAX_REVIEW = 5
 REVIEW_TEXT_CHARS = 80
 # Review priority: ruim > tool_failed > correction > rephrase (cant_do last).
@@ -119,8 +120,14 @@ def turn_flags(turn: Dict[str, Any]) -> List[str]:
 
 
 def compute_kpis(turns: List[Dict[str, Any]], weeks: float = 1.0) -> Dict[str, Any]:
-    """KPIs over non-test turns. Count KPIs are divided by `weeks` (baseline = 2)."""
-    real = [t for t in turns if not t.get("is_test")]
+    """KPIs over non-test turns. Count KPIs are divided by `weeks` (baseline = 2).
+
+    Scheduled-task turns (channel 'scheduled') are not user activity: they count only
+    toward tokens/cost, never toward turns, active days, channels or rates."""
+    all_real = [t for t in turns if not t.get("is_test")]
+    real = [t for t in all_real if t.get("channel") != SCHEDULED_CHANNEL]
+    sched_in = sum(int(t.get("tokens_in") or 0) for t in all_real if t.get("channel") == SCHEDULED_CHANNEL)
+    sched_out = sum(int(t.get("tokens_out") or 0) for t in all_real if t.get("channel") == SCHEDULED_CHANNEL)
     n = len(real)
     by_channel: Dict[str, float] = {}
     days = set()
@@ -154,6 +161,8 @@ def compute_kpis(turns: List[Dict[str, Any]], weeks: float = 1.0) -> Dict[str, A
             if isinstance(tool, dict) and tool.get("ok") is False:
                 key = f"{tool.get('name') or '?'} / {tool.get('reason') or 'sem reason'}"
                 failures[key] = failures.get(key, 0) + 1
+    tok_in += sched_in
+    tok_out += sched_out
     cost_usd, cost_brl = estimate_cost(tok_in, tok_out)
     return {
         "tokens": (tok_in + tok_out) / weeks,
@@ -448,7 +457,7 @@ def _first_real_turn_ts() -> datetime | None:
 
     with db._conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT MIN(ts) FROM turn_log WHERE NOT is_test")
+            cur.execute("SELECT MIN(ts) FROM turn_log WHERE NOT is_test AND channel <> 'scheduled'")
             row = cur.fetchone()
     return row[0] if row else None
 
@@ -500,7 +509,11 @@ def build_report(week_start: datetime, now: datetime | None = None) -> Dict[str,
 
     turns = _section("turns", lambda: db.list_turns(week_start, end))
     r["kpis"] = None if turns is None else compute_kpis(turns)
-    r["review"] = None if turns is None else review_candidates(turns)
+    r["review"] = (
+        None
+        if turns is None
+        else review_candidates([t for t in turns if t.get("channel") != SCHEDULED_CHANNEL])
+    )
 
     def _prev():
         return compute_kpis(db.list_turns(prev_start, week_start))

@@ -138,7 +138,11 @@ def run_usage_signals(since=None, until=None) -> Dict[str, Any]:
     until = until or now
     since = since or (until - timedelta(days=DEFAULT_WINDOW_DAYS))
     # Fetch a little past `until` so the last turns still see their next turn.
-    rows = db.list_turns(since, until + timedelta(seconds=NEXT_TURN_WINDOW_S))
+    rows = [
+        r
+        for r in db.list_turns(since, until + timedelta(seconds=NEXT_TURN_WINDOW_S))
+        if r.get("channel") != "scheduled"  # not user activity: no follow-up signals
+    ]
 
     next_by_id: Dict[int, Dict[str, Any] | None] = {}
     last_in_session: Dict[str, Dict[str, Any]] = {}

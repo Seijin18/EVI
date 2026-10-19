@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from langchain_core.tools import tool
 from services import scheduled_tasks
-from services.write_guard import guarded_write
+from services.write_guard import check_user_request, guarded_write
 
 from tools.calendar_time import now_local
 
@@ -27,6 +27,9 @@ def create_scheduled_task(prompt: str, due_at: str, repeat: str = "") -> str:
     """
     from services.turn_log import current_is_test
 
+    refused = check_user_request("create_scheduled_task")
+    if refused:
+        return refused
     if current_is_test():
         return "Tarefa de teste não agendada (sessão de teste)."
     return scheduled_tasks.create(prompt, due_at, repeat, now=now_local())[1]

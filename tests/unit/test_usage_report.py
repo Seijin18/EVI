@@ -409,3 +409,18 @@ def test_no_voice_turns_no_telegram_line():
         "commitments": None, "probes": None, "review": [],
     }
     assert "Voz:" not in ur.render_telegram(r)
+
+
+def test_scheduled_turns_are_cost_only_not_user_activity():
+    user = [mk(i, day=0, ch="telegram") for i in range(2)]
+    for t in user:
+        t["tokens_in"], t["tokens_out"] = 100, 10
+    sched = [mk(50 + i, day=3, ch="scheduled") for i in range(3)]
+    for t in sched:
+        t["tokens_in"], t["tokens_out"] = 1000, 100
+    base = ur.compute_kpis(user)
+    k = ur.compute_kpis(user + sched)
+    assert k["turns"] == 2 and k["active_days"] == 1 and k["by_channel"] == {"telegram": 2}
+    assert k["success_rate"] == base["success_rate"] and k["latency_p50"] == base["latency_p50"]
+    assert k["tokens"] == 2 * 110 + 3 * 1100 and k["cost_brl"] > base["cost_brl"]
+    assert ur.compute_kpis(sched)["turns"] == 0

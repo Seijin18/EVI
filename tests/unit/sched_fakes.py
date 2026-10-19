@@ -14,42 +14,55 @@ class FakeSchedDB:
         self._id = 0
         self._lock = threading.Lock()
 
-    def create_scheduled_task(self, title, prompt, next_at, repeat):
+    def _live(self):
+        return [r for r in self.rows.values() if not r.get("deleted_at")]
+
+    def create_scheduled_task(self, title, prompt, next_at, repeat, max_active=None):
         with self._lock:
+            if max_active is not None and self.count_active_scheduled_tasks() >= max_active:
+                return None
             self._id += 1
             self.rows[self._id] = {
                 "id": self._id, "title": title, "prompt": prompt, "next_at": next_at,
                 "repeat": repeat, "active": True,
                 "created_at": datetime.now(timezone.utc), "last_run_at": None,
                 "last_status": None, "runs_day": None, "runs_today": 0,
+                "deleted_at": None,
             }
             return self._id
 
     def get_scheduled_task(self, tid):
         r = self.rows.get(tid)
-        return dict(r) if r else None
+        return dict(r) if r and not r["deleted_at"] else None
 
     def list_scheduled_tasks(self, active_only=False):
-        rows = [dict(r) for r in self.rows.values() if r["active"] or not active_only]
+        rows = [dict(r) for r in self._live() if r["active"] or not active_only]
         return sorted(rows, key=lambda r: (r["next_at"], r["id"]))
 
     def count_active_scheduled_tasks(self):
-        return sum(1 for r in self.rows.values() if r["active"])
+        return sum(1 for r in self._live() if r["active"])
 
     def delete_scheduled_task(self, tid):
-        return self.rows.pop(tid, None) is not None
-
-    def set_scheduled_task_active(self, tid, active, next_at=None):
         r = self.rows.get(tid)
-        if not r:
+        if not r or r["deleted_at"]:
             return False
+        r["deleted_at"], r["active"] = datetime.now(timezone.utc), False
+        return True
+
+    def set_scheduled_task_active(self, tid, active, next_at=None, max_active=None):
+        r = self.rows.get(tid)
+        if not r or r["deleted_at"]:
+            return False
+        if active and max_active is not None:
+            if sum(1 for x in self._live() if x["active"] and x["id"] != tid) >= max_active:
+                return False
         r["active"] = active
         if next_at is not None:
             r["next_at"] = next_at
         return True
 
     def due_scheduled_tasks(self, now, limit=20):
-        rows = [dict(r) for r in self.rows.values() if r["active"] and r["next_at"] <= now]
+        rows = [dict(r) for r in self._live() if r["active"] and r["next_at"] <= now]
         return sorted(rows, key=lambda r: (r["next_at"], r["id"]))[:limit]
 
     def scheduled_runs_on(self, day):

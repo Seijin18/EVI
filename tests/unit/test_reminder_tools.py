@@ -58,7 +58,7 @@ def test_create_ok(fake):
 def test_create_uses_turn_channel(fake):
     from services import turn_log
 
-    _, token = turn_log.start_turn("whatsapp_control", "whatsapp-1")
+    _, token = turn_log.start_turn("whatsapp_control", "whatsapp-1", user_text="me lembra")
     try:
         rt.create_reminder.invoke({"text": "x", "due_at": "2026-10-10T18:00:00"})
     finally:
@@ -70,7 +70,7 @@ def test_test_turn_writes_nothing(fake):
     from services import turn_log
 
     for kw in ({"is_test": True}, {"session_id": "evi-test-1"}):
-        _, token = turn_log.start_turn("api", **kw)
+        _, token = turn_log.start_turn("api", user_text="me lembra", **kw)
         try:
             out = rt.create_reminder.invoke({"text": "x", "due_at": "2026-10-10T18:00:00"})
         finally:

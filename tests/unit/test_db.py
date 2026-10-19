@@ -1174,3 +1174,45 @@ def got_next(tid):
     import db
 
     return db.get_scheduled_task(tid)["next_at"]
+
+
+@pytest.mark.ephemeral_db
+def test_scheduled_create_cap_is_atomic_and_soft_delete_keeps_run_count(sched_ids):
+    import datetime as _dt
+    import threading
+
+    import db
+
+    base = db.count_active_scheduled_tasks()
+    cap = base + 1
+    out: list = []
+    ts = [
+        threading.Thread(
+            target=lambda: out.append(db.create_scheduled_task("t", "p", _t(60), None, max_active=cap))
+        )
+        for _ in range(6)
+    ]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join(10)
+    made = [i for i in out if i is not None]
+    sched_ids.extend(made)
+    assert len(made) == 1 and out.count(None) == 5  # only one slot, no race overshoot
+    assert db.count_active_scheduled_tasks() == cap
+    # soft delete: leaves lists and the active count, keeps today's run counter
+    day = _dt.date(2032, 1, 1)
+    row = db.get_scheduled_task(made[0])
+    db.claim_scheduled_task(made[0], row["next_at"], row["next_at"], True, day)
+    assert db.scheduled_runs_on(day) == 1
+    assert db.delete_scheduled_task(made[0]) and not db.delete_scheduled_task(made[0])
+    assert db.get_scheduled_task(made[0]) is None
+    assert made[0] not in [r["id"] for r in db.list_scheduled_tasks()]
+    assert db.count_active_scheduled_tasks() == base
+    assert db.scheduled_runs_on(day) == 1
+    # resume cap
+    a = db.create_scheduled_task("a", "p", _t(60), None)
+    sched_ids.append(a)
+    db.set_scheduled_task_active(a, False)
+    assert db.set_scheduled_task_active(a, True, max_active=db.count_active_scheduled_tasks()) is False
+    assert db.set_scheduled_task_active(a, True, max_active=db.count_active_scheduled_tasks() + 1) is True

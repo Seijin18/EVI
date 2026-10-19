@@ -49,6 +49,12 @@ _SCHEDULING_TOOLS = frozenset(
 )
 
 
+# Read tools that are NOT pure reads: get_whatsapp_contact_info can backfill the contact's
+# history, run LLM extraction, queue commitments and notify; list_whatsapp_contacts refreshes
+# the local registry from Evolution. Scheduled turns never get them.
+SIDE_EFFECT_READ_TOOLS = frozenset({"get_whatsapp_contact_info", "list_whatsapp_contacts"})
+
+
 def enabled() -> bool:
     """EVI_SCHEDULED_TASKS_ENABLED (default on), read at call time."""
     return os.getenv("EVI_SCHEDULED_TASKS_ENABLED", "true").strip().lower() not in _FALSE
@@ -112,13 +118,13 @@ def create(
         return None, f"Não criei a tarefa: {err}"
     try:
         _init()
-        if db.count_active_scheduled_tasks() >= MAX_ACTIVE:
+        title = (title or "").strip()[:TITLE_MAX] or derive_title(prompt)
+        tid = db.create_scheduled_task(title, prompt, due, rep, max_active=MAX_ACTIVE)
+        if tid is None:  # cap checked atomically with the insert
             return None, (
                 f"Já existem {MAX_ACTIVE} tarefas agendadas ativas (o máximo). "
                 "Cancele ou pause uma antes de criar outra."
             )
-        title = (title or "").strip()[:TITLE_MAX] or derive_title(prompt)
-        tid = db.create_scheduled_task(title, prompt, due, rep)
         row = db.get_scheduled_task(tid)
     except Exception as exc:  # noqa: BLE001
         return None, f"Não consegui salvar a tarefa: {exc}"
@@ -212,14 +218,13 @@ def resume(id_or_title, now: datetime | None = None) -> tuple[bool, str]:
             return False, err
         if row["active"]:
             return True, f"Tarefa #{row['id']} «{row['title']}» já está ativa."
-        if db.count_active_scheduled_tasks() >= MAX_ACTIVE:
-            return False, f"Já existem {MAX_ACTIVE} tarefas ativas; cancele ou pause outra antes."
         nxt = row["next_at"]
         if nxt <= now:
             if not row.get("repeat"):
                 return False, "Esse horário já passou; crie a tarefa de novo com um novo horário."
             nxt = next_occurrence(nxt, row["repeat"], now)
-        db.set_scheduled_task_active(row["id"], True, nxt)
+        if not db.set_scheduled_task_active(row["id"], True, nxt, max_active=MAX_ACTIVE):
+            return False, f"Já existem {MAX_ACTIVE} tarefas ativas; cancele ou pause outra antes."
     except Exception as exc:  # noqa: BLE001
         return False, f"Não consegui retomar a tarefa: {exc}"
     return True, f"Tarefa #{row['id']} «{row['title']}» retomada; próxima: {_fmt(nxt)}."
@@ -229,12 +234,15 @@ def resume(id_or_title, now: datetime | None = None) -> tuple[bool, str]:
 
 
 def read_only_tools() -> list:
-    """Every registered tool minus WRITE_TOOLS minus reminder/scheduling tools."""
+    """Every registered tool minus WRITE_TOOLS, reminder/scheduling tools and
+    SIDE_EFFECT_READ_TOOLS."""
     from services.write_guard import WRITE_TOOLS
     from tools.registry import get_all_tools
 
     return [
-        t for t in get_all_tools() if t.name not in WRITE_TOOLS and t.name not in _SCHEDULING_TOOLS
+        t for t in get_all_tools() if t.name not in WRITE_TOOLS
+        and t.name not in _SCHEDULING_TOOLS
+        and t.name not in SIDE_EFFECT_READ_TOOLS
     ]
 
 
@@ -257,7 +265,11 @@ def run_turn(task: dict) -> str:
     """Run one task's question as a fresh scheduled turn and return the answer text.
 
     channel ``scheduled`` (the write guard refuses any write in it), session
-    ``scheduled:<id>``, no chat history. Raises on failure; records a turn_log row."""
+    ``scheduled:<id>``, no chat history. Raises on failure; records a turn_log row.
+
+    ``task["cancel"]`` (a threading.Event set by the executor on timeout) marks an
+    abandoned run: the in-flight LLM/tool call cannot be interrupted, so when it finally
+    returns the result is dropped and no turn_log row is written."""
     from langchain_core.messages import HumanMessage
 
     from llm import extract_llm_text
@@ -295,16 +307,18 @@ def run_turn(task: dict) -> str:
         raise
     finally:
         end_turn(token)
-        record_turn(
-            collector,
-            session_id=session_id,
-            channel="scheduled",
-            user_text=prompt,
-            reply_text=reply,
-            latency_ms=int((time.monotonic() - started) * 1000),
-            error=error,
-            is_test=False,
-        )
+        cancel = task.get("cancel")
+        if not (cancel is not None and cancel.is_set()):
+            record_turn(
+                collector,
+                session_id=session_id,
+                channel="scheduled",
+                user_text=prompt,
+                reply_text=reply,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                error=error,
+                is_test=False,
+            )
 
 
 # --- loop hook ------------------------------------------------------------------
@@ -324,6 +338,7 @@ def _get_executor() -> ThreadPoolExecutor:
 
 
 def _call_with_timeout(fn: Callable[[dict], str], arg: dict, timeout: float) -> str:
+    """(``arg["cancel"]`` is set on timeout so the abandoned run drops its result.)"""
     """Run ``fn(arg)`` in a daemon thread; a run past ``timeout`` is abandoned (it can only
     read, and its delivery never happens) so one stuck LLM call cannot block the worker."""
     box: dict[str, Any] = {}
@@ -338,6 +353,9 @@ def _call_with_timeout(fn: Callable[[dict], str], arg: dict, timeout: float) -> 
     th.start()
     th.join(timeout)
     if th.is_alive():
+        cancel = arg.get("cancel")
+        if cancel is not None:
+            cancel.set()
         raise TimeoutError(f"scheduled run exceeded {timeout:g}s")
     if "err" in box:
         raise box["err"]
@@ -445,16 +463,20 @@ def run_due(
                 _inflight.discard(tid)
             counts["capped"] += 1
             _finish(tid, "capped", None)
-            _notify(
-                send,
-                f"Hoje já rodaram {MAX_RUNS_PER_DAY} tarefas agendadas (o limite diário); "
-                f"'{row['title']}' fica para {_fmt(nxt)}.",
-                "scheduled_tasks.notify_cap",
+            # via the executor: a Telegram send never blocks the loop thread
+            futures.append(
+                _get_executor().submit(
+                    _notify,
+                    send,
+                    f"Hoje já rodaram {MAX_RUNS_PER_DAY} tarefas agendadas (o limite diário); "
+                    f"'{row['title']}' fica para {_fmt(nxt)}.",
+                    "scheduled_tasks.notify_cap",
+                )
             )
             continue
         used += 1
         counts["started"] += 1
-        task = {**claimed, "next_at": due}
+        task = {**claimed, "next_at": due, "cancel": threading.Event()}
         futures.append(_get_executor().submit(_process, task, send, runner, timeout))
     if wait:
         for f in futures:
