@@ -20,7 +20,8 @@
 - [x] `WINDMILL_GCLOUD_RESOURCE` removido do `.env` (nada no código o usa; cópia em `data/backups/env-pre-gcloud-removal-*`)
 - [ ] Apagar o recurso `gcloud` no Windmill (sem uso, escopo `cloud-platform`) — só no navegador
 - [x] Ollama fora da rede (F5): `./scripts/evi-host-hardening ollama` aplicado; LAN/tailnet recusam, container alcança (host CLI: `export OLLAMA_HOST=172.17.0.1:11434`)
-- [ ] Ainda com o usuário: patch do WhatBot (`docs/security/whatbot-compose-loopback.patch`) e confirmar o projeto/plano da chave do Gemini
+- [x] WhatBot fechado (F10): patch aplicado e containers recriados com `--profile windmill --profile instagram`; portas recusam na LAN/tailnet
+- [ ] Ainda com o usuário: confirmar o projeto/plano da chave do Gemini (F6), SSH sem senha/ufw (F9), login do Windmill (F12), `tailscale serve` antigo (F26)
 ## Pendências do usuário (não bloqueantes)
 - [ ] WhatsApp desconectado desde 14/10 — gerar o QR e escanear (a geração foi bloqueada pelo classificador de permissões)
 - [ ] Google OAuth expirou em 18/10 (modo "Teste", 7 dias) — reconectar `gcal`/`gtasks`/`gmail` no Windmill e, de vez, publicar o app OAuth em Produção no Google Cloud
