@@ -18,14 +18,14 @@
 - [x] App OAuth publicado em **Produção** (branding preenchido com páginas no GitHub Pages, branch `gh-pages`; a `main` NÃO foi enviada — repositório público)
 - [x] Google reconectado: recursos recriados (`calendar`, `gtasks`, `gmail`), `.env` atualizado, escopos `gmail.readonly`+`gmail.modify` configurados na instância do Windmill; sonda 5/5 ok. Detalhes e runbook: `docs/google-oauth.md`
 - [x] `WINDMILL_GCLOUD_RESOURCE` removido do `.env` (nada no código o usa; cópia em `data/backups/env-pre-gcloud-removal-*`)
-- [ ] Apagar o recurso `gcloud` no Windmill (sem uso, escopo `cloud-platform`) — só no navegador
+- [x] Apagar o recurso `gcloud` no Windmill (sem uso, escopo `cloud-platform`) — só no navegador — apagado via API em 2026-10-19 (restam calendar, gmail, gtasks)
 - [x] Ollama fora da rede (F5): `./scripts/evi-host-hardening ollama` aplicado; LAN/tailnet recusam, container alcança (host CLI: `export OLLAMA_HOST=172.17.0.1:11434`)
 - [x] WhatBot fechado (F10): patch aplicado e containers recriados com `--profile windmill --profile instagram`; portas recusam na LAN/tailnet
-- [ ] Ainda com o usuário: confirmar o projeto/plano da chave do Gemini (F6), SSH sem senha/ufw (F9), login do Windmill (F12), `tailscale serve` antigo (F26)
+- [x] Ainda com o usuário: confirmar o projeto/plano da chave do Gemini (F6), SSH sem senha/ufw (F9), login do Windmill (F12), `tailscale serve` antigo (F26) — **feito 2026-10-19**: F6 (faturamento ativo), F12 (senha padrão recusada), F26 (`serve` removido); F9 aceito (sem SSH remoto)
 ## Pendências do usuário (não bloqueantes)
-- [ ] WhatsApp desconectado desde 14/10 — gerar o QR e escanear (a geração foi bloqueada pelo classificador de permissões)
-- [ ] Google OAuth expirou em 18/10 (modo "Teste", 7 dias) — reconectar `gcal`/`gtasks`/`gmail` no Windmill e, de vez, publicar o app OAuth em Produção no Google Cloud
-- [ ] Teste dependente de ordem (pré-existente): `tests/unit/test_reply_debts.py::test_scn_ux_01_missing_item_error_states_the_valid_range` falha rodando sozinho, passa na suíte completa
+- [x] WhatsApp desconectado desde 14/10 — gerar o QR e escanear (a geração foi bloqueada pelo classificador de permissões)
+- [x] Google OAuth expirou em 18/10 (modo "Teste", 7 dias) — reconectar `gcal`/`gtasks`/`gmail` no Windmill e, de vez, publicar o app OAuth em Produção no Google Cloud
+- [x] Teste dependente de ordem (pré-existente): `tests/unit/test_reply_debts.py::test_scn_ux_01_missing_item_error_states_the_valid_range` falha rodando sozinho, passa na suíte completa — passa isolado em 2026-10-19; não reproduz
 - [ ] Avaliar em 2026-10-25 a revisão de 18/10 (`docs/product-review-2026-10-18.md` §5): alerta de WhatsApp ≤ 10 min, selo no briefing quando fonte cai, respostas ao briefing ≥ 50 % (botões), dívidas ≥ 30 %, p95 < 15 s, ≥ 3 lembretes e ≥ 1 voz, ≥ 1 tarefa agendada
 ## Bloqueios
 
@@ -54,25 +54,25 @@
 - [x] `wmill sync push` restrito (`--includes` só dos 3 scripts novos + schedules novos): criados `list_contacts`, `contact_names_sync`, schedules `contact_learn_daily` (03:30, ativo) e `contact_names_sync_daily` (03:15, DESLIGADO até o OAuth); schedules existentes não foram tocados
 - [x] `contact-identity-migrate`: 56 aliases @lid↔telefone já registrados; 0 pastas @lid para mesclar (nada a fazer)
 - [x] Promessas: as 16 pendentes já estavam `dismissed` — `promise-reeval --apply` não tem mais o que aplicar
-- [ ] **WhatsApp desconectado** (`state: close`, sem eventos desde 14/10 11:21): precisa gerar o QR e escanear. A geração do QR foi bloqueada pelo classificador de permissões — executar manualmente (ver resposta)
-- [ ] `scripts/evi-host-hardening` (Ollama/SSH/ufw, precisa de sudo): rodar `./scripts/evi-host-hardening` (status) e depois `ollama`, `ssh` (só após instalar chave), `ufw`
-- [ ] WhatBot: aplicar `docs/security/whatbot-compose-loopback.patch` (editar o outro projeto foi bloqueado): `cd ~/Projects/WhatBot && git apply ~/Projects/EVI/docs/security/whatbot-compose-loopback.patch && docker compose up -d`
+- [x] **WhatsApp desconectado** (`state: close`, sem eventos desde 14/10 11:21): precisa gerar o QR e escanear. A geração do QR foi bloqueada pelo classificador de permissões — executar manualmente (ver resposta)
+- [x] `scripts/evi-host-hardening` (Ollama/SSH/ufw, precisa de sudo): rodar `./scripts/evi-host-hardening` (status) e depois `ollama`, `ssh` (só após instalar chave), `ufw`
+- [x] WhatBot: aplicar `docs/security/whatbot-compose-loopback.patch` (editar o outro projeto foi bloqueado): `cd ~/Projects/WhatBot && git apply ~/Projects/EVI/docs/security/whatbot-compose-loopback.patch && docker compose up -d`
 ## Pendências do usuário (não bloqueantes)
-- [ ] Revisar a reavaliação das promessas atuais e aplicar: abrir `data/eval/promise_reeval_dryrun.txt` (9 a descartar, 7 a atualizar) e, se estiver de acordo, `./scripts/evi-test promise-reeval --apply` — muda dados reais (não feito pela fila)
+- [x] Revisar a reavaliação das promessas atuais e aplicar: abrir `data/eval/promise_reeval_dryrun.txt` (9 a descartar, 7 a atualizar) e, se estiver de acordo, `./scripts/evi-test promise-reeval --apply` — muda dados reais (não feito pela fila) — aplicado (itens 47–50 e demais `dismissed`)
 - [ ] Avaliar em 2026-10-20 a validação das promessas com contexto: taxa de ação ≥ 30%, ≤ 1 promessa/dia sem objeto no briefing — relatório semanal (tipo `promise`)
 - [ ] Definir teto mensal de gasto na conta OpenRouter (a trava no código é US$ 0,10/dia) — openrouter.ai → Settings → Limits
-- [ ] **Segurança F5 (alto, sudo)**: Ollama responde na LAN/tailnet sem auth — comandos exatos em `docs/security/findings.md` § Ações do usuário (1) — `sudo systemctl edit ollama` → `OLLAMA_HOST=172.17.0.1:11434`
-- [ ] **Segurança F6 (alto provisório)**: verificar o plano da chave do Gemini (gratuito pode treinar com seus dados) — https://aistudio.google.com/apikey
-- [ ] Segurança F9–F12, F26 (SSH por senha/ufw, portas do WhatBot, escopos OAuth e login do Windmill, Tailscale serve antigo) — `docs/security/findings.md` § Ações do usuário
-- [ ] Confirmar de outra máquina da rede que `curl -m3 http://192.168.15.32:8002/health` e `:8001/` falham (000)
-- [ ] Verificar em 24 h que `docker logs evi-agent-api-1` não tem `/webhooks/evolution ... 401` e que mensagens do WhatsApp continuam chegando (webhook global desligado)
+- [x] **Segurança F5 (alto, sudo)**: Ollama responde na LAN/tailnet sem auth — comandos exatos em `docs/security/findings.md` § Ações do usuário (1) — `sudo systemctl edit ollama` → `OLLAMA_HOST=172.17.0.1:11434`
+- [x] **Segurança F6 (alto provisório)**: verificar o plano da chave do Gemini (gratuito pode treinar com seus dados) — https://aistudio.google.com/apikey
+- [x] Segurança F9–F12, F26 (SSH por senha/ufw, portas do WhatBot, escopos OAuth e login do Windmill, Tailscale serve antigo) — `docs/security/findings.md` § Ações do usuário
+- [x] Confirmar de outra máquina da rede que `curl -m3 http://192.168.15.32:8002/health` e `:8001/` falham (000)
+- [x] Verificar em 24 h que `docker logs evi-agent-api-1` não tem `/webhooks/evolution ... 401` e que mensagens do WhatsApp continuam chegando (webhook global desligado)
 - [ ] Apagar os backups de rotação quando não precisar mais deles: `data/backups/env-pre-rotate-*` e `pre-rotate-*.sql` (guardam segredos/dados antigos)
 - [ ] Limite de crédito mensal na chave do OpenRouter — https://openrouter.ai/settings/keys
-- [ ] Publicar o schedule diário das 03:30 do conhecimento de contatos: `cd windmill && wmill sync push` (cria `f/integrations/contact_learn_daily`; confirmar `enabled` na UI) — evi-contact-knowledge 3.2
-- [ ] Contact-knowledge: aplicar as migrações de dados reais — `./scripts/evi-test contact-knowledge-migrate` (dry-run: 44 perfis, 1 síntese a mover) e depois `--apply`; `./scripts/evi-test contact-identity-migrate` (dry-run hoje: 0 pastas @lid com alias conhecido; os aliases se acumulam com o tráfego — repetir em alguns dias)
-- [ ] Contact-knowledge: primeira execução do lote com você (`curl -X POST -H "X-Api-Key: $EVI_API_KEY" "localhost:8002/jobs/contact-learn?wait=true"`; envia até 60 mensagens × 15 contatos para o OpenRouter ZDR, aprovado em 2026-10-12) e auditoria de 5 perfis (nenhum fato sem evidência, nenhum fato de metadado)
+- [x] Publicar o schedule diário das 03:30 do conhecimento de contatos: `cd windmill && wmill sync push` (cria `f/integrations/contact_learn_daily`; confirmar `enabled` na UI) — evi-contact-knowledge 3.2
+- [x] Contact-knowledge: aplicar as migrações de dados reais — `./scripts/evi-test contact-knowledge-migrate` (dry-run: 44 perfis, 1 síntese a mover) e depois `--apply`; `./scripts/evi-test contact-identity-migrate` (dry-run hoje: 0 pastas @lid com alias conhecido; os aliases se acumulam com o tráfego — repetir em alguns dias) — migrações sem nada a mover (`moved=0`); lote e auditoria feitos (`data/eval/audit_profiles.md`)
+- [x] Contact-knowledge: primeira execução do lote com você (`curl -X POST -H "X-Api-Key: $EVI_API_KEY" "localhost:8002/jobs/contact-learn?wait=true"`; envia até 60 mensagens × 15 contatos para o OpenRouter ZDR, aprovado em 2026-10-12) e auditoria de 5 perfis (nenhum fato sem evidência, nenhum fato de metadado)
 - [ ] Avaliar em 2026-10-20 a validação do conhecimento de contato: ≥ 80% dos contatos ativos com Fatos/Em aberto atualizados na semana; auditoria de 10 perfis; títulos de promessa com objeto+pessoa ≥ 70%
-- [ ] Teste instável observado uma vez (suíte completa 1 falha, 3 reexecuções verdes) após os últimos commits — identificar na próxima falha com `pytest tests/unit -q -x`
+- [x] Teste instável observado uma vez (suíte completa 1 falha, 3 reexecuções verdes) após os últimos commits — identificar na próxima falha com `pytest tests/unit -q -x`
 - [ ] Contact-names (ativar a sincronização da agenda): (1) Google Cloud → habilitar a People API e o escopo `contacts.readonly` na tela de consentimento; (2) Windmill (via túnel, `docs/remote-access.md`) → criar o resource OAuth `gcontacts` (mesmo Client ID/Secret do `gcal`); (3) `WINDMILL_GCONTACTS_RESOURCE` no `.env`; (4) `cd windmill && wmill sync push`; (5) `./scripts/evi-test contact-names-sync` (dry-run, revisar contagens) e `--apply`; (6) ligar o schedule `contact_names_sync_daily` (03:15) na UI — passos em `windmill/README.md` § Google Contacts
 - [ ] Avaliar em 2026-10-20 a validação dos nomes de contato: ≥ 90% das conversas diretas ativas (30 dias) com nome de agenda ou do usuário; 0 nomes do usuário sobrescritos
 - [ ] Nota de produto (BACKLOG): combinados antigos (`pending_commitments.source_label`) continuam mostrando o número depois da sincronização

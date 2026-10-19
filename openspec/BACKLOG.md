@@ -41,7 +41,7 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 Do [`docs/security/findings.md`](../docs/security/findings.md); abrir como change só se/quando fizer sentido:
 F13 backup diário (`pg_dump` evi/windmill/evolution + teste de restore); F18 `agent-api` sem root;
 F20 `/jobs/import-contacts` restrito a diretórios montados; F22 `wrap_external` no resumo diário com LLM;
-F11 (Calendar) escopos mínimos; nomes em `pending_commitments.source_label` (combinados criados quando o contato era só número continuam mostrando o número após a sincronização da agenda). Ações do usuário abertas: F5 Ollama, F6 plano Gemini, F9–F12, F26.
+F11 (Calendar) escopos mínimos; nomes em `pending_commitments.source_label` (combinados criados quando o contato era só número continuam mostrando o número após a sincronização da agenda). Segurança: F5, F6, F10, F12, F26 corrigidos e F9/F11 aceitos em 2026-10-19; sem ação de usuário aberta.
 
 **Revisão de UX (2026-10)** — achados P3 de [`docs/ux/review-2026-10.md`](../docs/ux/review-2026-10.md) não corrigidos no change `evi-ux-review`:
 
