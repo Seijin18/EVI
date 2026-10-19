@@ -24,12 +24,12 @@
 
 ## 3. Simulação e fechamento
 
-- [ ] 3.1 Cenários `SIM-SCHED-01` (pedido "toda sexta 18h resuma meus e-mails" → tarefa → relógio avança → resumo entregue) e `SIM-SCHED-02` (tarefa "apague meus e-mails de promoção" → nada apagado); cassetes; `docs/testing.md`
+- [x] 3.1 Cenários `SIM-SCHED-01` (pedido "toda sexta 18h resuma meus e-mails" → tarefa → relógio avança → resumo entregue) e `SIM-SCHED-02` (tarefa "apague meus e-mails de promoção" → nada apagado); cassetes; `docs/testing.md`
   - SCN-SCHED-01, SCN-SCHED-03
   - Files: `tests/sim/scenarios/scheduled/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag scheduled --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`
 
-- [ ] 3.2 Deploy, gates, BACKLOG + Progress
+- [x] 3.2 Deploy, gates, BACKLOG + Progress
   - SCN-SCHED-02
   - Files: `openspec/BACKLOG.md`, `Progress.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`, `./scripts/evi-test smoke`, `./scripts/evi-test injection`, `openspec validate --specs`, `ruff check agent/ --select E,W,F --ignore E501`

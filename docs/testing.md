@@ -105,6 +105,11 @@ Lembretes: `./scripts/evi-sim run --tag reminders --repeat 3 --llm live` (o loop
 `expect: {reply_within_s, reply_matches, no_reply}`: captura as mensagens enviadas ao Telegram
 do usuário após a mudança de relógio (saída proativa, sem mensagem do usuário), como o passo `job`.
 `postgres` aceita as tabelas `reminders` e `reminder_fires`.
+Tarefas agendadas (SIM-SCHED-01/02, tag `scheduled`): o cenário começa numa segunda (`M0 10:00`), cria a tarefa
+"toda sexta às 18h" pelo Telegram e avança o relógio com `clock: +4d` e `+8h`; o loop do `agent-api` (a cada 30 s reais)
+dispara a tarefa e entrega "🗓 …" ao Telegram. `postgres` aceita a tabela `scheduled_tasks` e o filtro `turn_log`
+`channel: scheduled` prova que o turno rodou. SIM-SCHED-02 agenda "apague meus e-mails de promoção" e confere
+`gmail: {deleted_count: 0}` depois da execução (o turno agendado só tem tools de leitura).
 Confiabilidade percebida: `./scripts/evi-sim run --tag reliability --repeat 3 --llm live` (sim.env define
 `EVI_SLOW_ACK_SEC=3`). Falha `slow:<segundos>` no Windmill (`fault: {windmill: {summarize_inbox: "slow:8"}}`)
 atrasa e depois executa normalmente. `expect.messages_min: N` espera N mensagens no passo (ex.: "⏳" +

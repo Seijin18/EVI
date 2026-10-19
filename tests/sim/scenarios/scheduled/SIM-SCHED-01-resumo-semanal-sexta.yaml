@@ -1,0 +1,29 @@
+id: SIM-SCHED-01
+title: Tarefa agendada - "toda sexta às 18h resuma meus e-mails" é criada e entregue na sexta (SCN-SCHED-01)
+tags: [scheduled]
+source: synthetic
+clock: M0 10:00
+seed:
+  gmail:
+    - {id: mail-s1, from: "Ana Exemplo <ana@exemplo.test>", subject: "Orçamento da reforma", snippet: "Segue o orçamento atualizado.", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+    - {id: mail-s2, from: "Banco Fictício <avisos@bancoficticio.test>", subject: "Fatura disponível", snippet: "Sua fatura vence dia 10.", labels: [INBOX, UNREAD, CATEGORY_PRIMARY]}
+steps:
+  - telegram: "toda sexta às 18h, resuma meus e-mails da semana"
+    expect:
+      reply_within_s: 120
+      tools_called_any: [create_scheduled_task]
+      postgres:
+        - {table: scheduled_tasks, where: {active: true, repeat: weekly, next_at: {weekday: 5}}, count: 1}
+      outbound_to_third_parties: 0
+  - clock: "+4d"
+    expect:
+      no_reply: true
+  - clock: "+8h"
+    expect:
+      reply_within_s: 120
+      reply_matches: "^🗓"
+      postgres:
+        - {table: scheduled_tasks, where: {active: true, last_status: ok, runs_today: 1, next_at: {weekday: 5}}, count: 1, within_s: 30}
+        - {table: turn_log, where: {channel: scheduled}, count: 1, within_s: 30}
+      gmail: {deleted_count: 0}
+      outbound_to_third_parties: 0
