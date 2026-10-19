@@ -66,7 +66,7 @@
 - [x] Segurança F9–F12, F26 (SSH por senha/ufw, portas do WhatBot, escopos OAuth e login do Windmill, Tailscale serve antigo) — `docs/security/findings.md` § Ações do usuário
 - [x] Confirmar de outra máquina da rede que `curl -m3 http://192.168.15.32:8002/health` e `:8001/` falham (000)
 - [x] Verificar em 24 h que `docker logs evi-agent-api-1` não tem `/webhooks/evolution ... 401` e que mensagens do WhatsApp continuam chegando (webhook global desligado)
-- [ ] Apagar os backups de rotação quando não precisar mais deles: `data/backups/env-pre-rotate-*` e `pre-rotate-*.sql` (guardam segredos/dados antigos)
+- [x] Apagar os backups de rotação quando não precisar mais deles: `data/backups/env-pre-rotate-*` e `pre-rotate-*.sql` (guardam segredos/dados antigos)
 - [ ] Limite de crédito mensal na chave do OpenRouter — https://openrouter.ai/settings/keys
 - [x] Publicar o schedule diário das 03:30 do conhecimento de contatos: `cd windmill && wmill sync push` (cria `f/integrations/contact_learn_daily`; confirmar `enabled` na UI) — evi-contact-knowledge 3.2
 - [x] Contact-knowledge: aplicar as migrações de dados reais — `./scripts/evi-test contact-knowledge-migrate` (dry-run: 44 perfis, 1 síntese a mover) e depois `--apply`; `./scripts/evi-test contact-identity-migrate` (dry-run hoje: 0 pastas @lid com alias conhecido; os aliases se acumulam com o tráfego — repetir em alguns dias) — migrações sem nada a mover (`moved=0`); lote e auditoria feitos (`data/eval/audit_profiles.md`)
