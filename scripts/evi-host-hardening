@@ -35,12 +35,15 @@ ollama() {
 Hoje: OLLAMA_HOST=0.0.0.0:11434 (qualquer máquina da rede usa sua GPU e seus modelos, sem autenticação).
 Depois: OLLAMA_HOST=$BRIDGE_IP:11434 — só a ponte do Docker. Os containers do EVI (e do WhatBot) alcançam
 via host.docker.internal; o host passa a usar OLLAMA_HOST=$BRIDGE_IP:11434 no CLI.
-Desfazer: sudo rm /etc/systemd/system/ollama.service.d/20-evi-bind.conf && sudo systemctl daemon-reload && sudo systemctl restart ollama
+Desfazer: sudo rm /etc/systemd/system/ollama.service.d/zz-evi-bind.conf && sudo systemctl daemon-reload && sudo systemctl restart ollama
 EOF
   ip -4 -o addr show docker0 >/dev/null 2>&1 || { echo "docker0 não existe — suba o Docker antes."; exit 1; }
   ask "Aplicar?" || { echo "cancelado"; return; }
   sudo install -d /etc/systemd/system/ollama.service.d
-  sudo tee /etc/systemd/system/ollama.service.d/20-evi-bind.conf >/dev/null <<EOF
+  # Drop-ins são lidos em ordem alfabética e o último vence: o nome precisa vir DEPOIS de override.conf
+  # (que define OLLAMA_HOST=0.0.0.0). Remove a versão anterior, que ficava antes e perdia.
+  sudo rm -f /etc/systemd/system/ollama.service.d/20-evi-bind.conf
+  sudo tee /etc/systemd/system/ollama.service.d/zz-evi-bind.conf >/dev/null <<EOF
 [Unit]
 After=docker.service
 Wants=docker.service
@@ -49,7 +52,8 @@ Environment="OLLAMA_HOST=$BRIDGE_IP:11434"
 EOF
   sudo systemctl daemon-reload
   sudo systemctl restart ollama
-  sleep 3
+  for _ in $(seq 1 30); do curl -s -m 2 -o /dev/null "http://$BRIDGE_IP:11434/api/version" && break; sleep 1; done
+  echo "-- OLLAMA_HOST efetivo:"; systemctl show ollama -p Environment | tr ' ' '\n' | grep OLLAMA_HOST
   echo "-- agora escutando:"; ss -ltnH | grep ':11434' || echo "ATENÇÃO: nada escutando"
   echo "-- de dentro do container do EVI:"
   docker exec evi-agent-api-1 python3 -c "import urllib.request;print(urllib.request.urlopen('http://host.docker.internal:11434/api/version',timeout=5).status)" || echo "FALHOU"
