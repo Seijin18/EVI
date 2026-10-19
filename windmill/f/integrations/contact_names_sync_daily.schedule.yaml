@@ -5,4 +5,4 @@ script_path: f/integrations/contact_names_sync
 is_flow: false
 args:
   apply: true
-enabled: false
+enabled: true
