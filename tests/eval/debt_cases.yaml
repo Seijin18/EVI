@@ -1,0 +1,116 @@
+# Dívida de resposta: o juiz (debt_judge.py) só vê mensagens ambíguas
+# (reply_debts.is_ambiguous). C = contato, U = usuário; context = mensagens antes da última.
+# expect.needs_reply = a última mensagem do contato espera resposta do usuário.
+# ambiguous: true = caso realmente incerto, fora da pontuação.
+- id: D01-boa-apos-vou-esperar
+  context: [[C, "tá terminando aí?"], [U, "Vou esperar essa terminar e aí já subo"]]
+  message: "Boa, aguardo então"
+  expect: {needs_reply: false}
+- id: D02-show-de-bola
+  context: [[U, "fechei o contrato com o fornecedor"]]
+  message: "Show de bola"
+  expect: {needs_reply: false}
+- id: D03-fechou-entao
+  context: [[U, "amanhã às 9h então"]]
+  message: "Fechou então"
+  expect: {needs_reply: false}
+- id: D04-perfeito-anotado
+  context: [[U, "o código do portão é 4821"]]
+  message: "Perfeito, anotado"
+  expect: {needs_reply: false}
+- id: D05-kkkk-morri
+  context: [[U, "o gato derrubou a árvore de natal de novo"]]
+  message: "kkkk morri"
+  expect: {needs_reply: false}
+- id: D06-tmj-irmao
+  context: [[U, "valeu pela força ontem"]]
+  message: "Tmj irmão"
+  expect: {needs_reply: false}
+- id: D08-combinado-entao
+  context: [[C, "te encontro às 19h no mercado"], [U, "beleza, 19h lá"]]
+  message: "Combinado então"
+  expect: {needs_reply: false}
+- id: D09-e-isso-ai
+  context: [[U, "acho que a gente deve seguir com a opção B"]]
+  message: "É isso aí"
+  expect: {needs_reply: false}
+- id: D10-bom-demais
+  context: [[U, "o resultado do exame saiu e deu tudo normal"]]
+  message: "Bom demais"
+  expect: {needs_reply: false}
+- id: D11-boa-noite-descanse
+  context: [[U, "vou dormir, amanhã a gente fala"]]
+  message: "Boa noite, descansa"
+  expect: {needs_reply: false}
+- id: D12-fico-feliz
+  context: [[U, "passei na entrevista!"]]
+  message: "Fico muito feliz por você"
+  expect: {needs_reply: false}
+- id: D13-ja-resolvi
+  context: [[C, "tô com problema na impressora"], [U, "reinicia ela e tenta de novo"]]
+  message: "Reiniciei e voltou a funcionar"
+  expect: {needs_reply: false}
+- id: D14-ta-bom-ta-bom
+  context: [[U, "vou chegar uns 10 minutos atrasado"]]
+  message: "Tranquilo, sem pressa"
+  expect: {needs_reply: false}
+- id: D15-hahaha-verdade
+  context: [[U, "segunda-feira devia ser opcional"]]
+  message: "hahaha verdade"
+  expect: {needs_reply: false}
+- id: D16-ja-peguei
+  context: [[U, "deixei a chave com o porteiro"]]
+  message: "Já peguei aqui, valeu"
+  expect: {needs_reply: false}
+- id: D17-bau-na-frente
+  context: [[U, "chego aí em meia hora pra montar o palco"]]
+  message: "coloca o bau na frente das cases"
+  expect: {needs_reply: true}
+- id: D18-relatorio-amanha
+  context: [[U, "como está o andamento do projeto"]]
+  message: "amanhã o relatório tem que estar na minha mesa"
+  expect: {needs_reply: true}
+- id: D19-boleto-vence-sexta
+  context: [[U, "tem alguma conta pendente?"]]
+  message: "o boleto vence sexta"
+  expect: {needs_reply: true}
+- id: D20-pacote-chegou
+  context: [[U, "meu pacote já chegou?"]]
+  message: "chegou o pacote aqui, retiro hoje ou amanhã"
+  expect: {needs_reply: true}
+- id: D21-pensei-melhor
+  context: [[U, "então domingo a gente vai na praia"]]
+  message: "Pensei melhor e não vou mais"
+  expect: {needs_reply: true}
+- id: D22-esperando-portaria
+  context: [[U, "já estou saindo de casa"]]
+  message: "tô te esperando na portaria"
+  expect: {needs_reply: true}
+- id: D23-reuniao-mudou
+  context: [[U, "reunião amanhã às 10h, certo"]]
+  message: "a reunião mudou pra 15h"
+  expect: {needs_reply: true}
+- id: D24-sistema-caiu
+  context: [[U, "deixei o deploy rodando"]]
+  message: "o sistema caiu de novo"
+  expect: {needs_reply: true}
+- id: D26-nao-consegui-entrar
+  context: [[U, "mandei o link da reunião"]]
+  message: "não consegui entrar no link"
+  expect: {needs_reply: true}
+- id: D27-estoque-acabou
+  context: [[U, "separa 20 caixas pro pedido da loja"]]
+  message: "o estoque acabou, só tenho 12 caixas"
+  expect: {needs_reply: true}
+- id: D28-vou-sair-mais-cedo
+  context: [[U, "a gente se vê às 18h no escritório"]]
+  message: "vou precisar sair mais cedo hoje, 16h"
+  expect: {needs_reply: true}
+- id: D29-liguei-ontem
+  context: [[U, "vi suas ligações perdidas"]]
+  message: "liguei ontem e hoje de manhã"
+  expect: {needs_reply: true}
+- id: D30-orcamento-subiu
+  context: [[U, "fecha o serviço por 800"]]
+  message: "o orçamento subiu para 1200 por causa do material"
+  expect: {needs_reply: true}

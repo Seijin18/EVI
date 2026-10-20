@@ -19,7 +19,7 @@ from services.untrusted import wrap_external
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 CONTEXT_MAX = 8
 TEXT_MAX = 300
 MAX_DAYS = 7
@@ -63,8 +63,8 @@ CONVERSA (a última mensagem está marcada):
 Pergunta: A última mensagem do contato espera uma resposta do usuário?
 
 Regras:
-- false: aceno, concordância, graça, despedida, ou informação que encerra o assunto.
-- true: pergunta, pedido, instrução ao usuário, ou informação que exige confirmação ou decisão.
+- false: aceno, concordância, graça, despedida, ou informação que só confirma algo já combinado.
+- true: pergunta, pedido, instrução ao usuário, cancelamento, mudança de plano ou decisão que o usuário precisa reconhecer, aviso de que o contato está esperando ou chegou, problema que exige ação, ou informação que exige confirmação ou decisão.
 - Na dúvida, true.
 
 Responda o JSON: needs_reply (boolean) e reason (até 120 caracteres)."""

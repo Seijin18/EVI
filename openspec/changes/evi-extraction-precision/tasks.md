@@ -15,7 +15,7 @@
   - Files: `agent/services/debt_judge.py`, `agent/services/llm_structured.py`, `agent/services/reply_debts.py`, `agent/services/reminder_loop.py`, `tests/unit/test_debt_judge.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_debt_judge.py tests/unit/test_reply_debts.py tests/unit/test_llm_structured.py -q`
 
-- [ ] 1.4 `llm-eval debt` (casos sintéticos incl. a conversa do Felipe e pedidos sem "?") com limiar de acurácia
+- [x] 1.4 `llm-eval debt` (casos sintéticos incl. a conversa do Felipe e pedidos sem "?") com limiar de acurácia
   - SCN-PREC-04
   - Files: `agent/testing/llm_eval/debt.py`, `agent/testing/cli.py`, `tests/eval/debt_cases.yaml`, `tests/unit/test_llm_eval.py`
   - Verify: `./scripts/evi-test llm-eval debt`

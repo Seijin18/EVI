@@ -420,3 +420,84 @@ def test_cli_dispatches_contact_name_hint(monkeypatch):
     monkeypatch.setattr(nev, "main", lambda argv, cwd=None: seen.append(argv) or 0)
     assert cli.run_llm_eval(["contact-name-hint", "--cases", "synthetic"], ".") is True
     assert seen == [["contact-name-hint", "--cases", "synthetic"]]
+
+
+# ---------------------------------------------------------------- debt judge eval
+
+from testing.llm_eval import debt as dv  # noqa: E402
+
+
+def test_debt_yaml_loads_and_is_balanced():
+    cases = dv.load_synthetic()
+    assert len(cases) >= 24
+    assert len({c["id"] for c in cases}) == len(cases)
+    yes = sum(1 for c in cases if c["expect"]["needs_reply"])
+    assert 0.35 <= yes / len(cases) <= 0.65
+
+
+def test_debt_every_case_message_is_ambiguous_in_production():
+    from services import reply_debts
+
+    bad = [c["id"] for c in dv.load_synthetic() if not reply_debts.is_ambiguous(c["message"])]
+    assert bad == []
+
+
+def test_debt_prompt_uses_production_builder_with_marked_last_message():
+    from services import debt_judge
+
+    case = dv.load_synthetic()[0]
+    prompt = dv.build_prompt(case)
+    assert debt_judge.FINAL_MARK in prompt
+    assert case["message"] in prompt and "Usuário:" in prompt
+
+
+def test_debt_score_with_valid_wrong_and_failed_answers():
+    case = {"id": "x", "kind": "synthetic", "expect": {"needs_reply": True}}
+    assert dv.score(case, {"needs_reply": True, "reason": "r"})["ok"]
+    wrong = dv.score(case, {"needs_reply": False, "reason": "r"})
+    assert not wrong["ok"] and wrong["fn"]
+    assert not dv.score(case, None)["valid"]
+    assert not dv.score(case, {"needs_reply": "yes"})["ok"]
+
+
+def _debt_oracle(monkeypatch, correct: bool):
+    by_prompt = {dv.build_prompt(c): c["expect"]["needs_reply"] for c in dv.load_synthetic()}
+
+    def fake(task, prompt, schema, *, provider=None, models=None):
+        assert task == "DEBT" and provider == "openrouter"
+        return {"needs_reply": by_prompt[prompt] == correct, "reason": "fake"}
+
+    monkeypatch.setattr(llm_structured, "run_structured", fake)
+
+
+def test_debt_threshold_gate_exit_codes(monkeypatch):
+    _debt_oracle(monkeypatch, correct=True)
+    out: list[str] = []
+    assert dv.run("synthetic", "openrouter", ["m1"], out=out.append) == 0
+    assert "accuracy=100%" in out[0]
+    _debt_oracle(monkeypatch, correct=False)
+    out = []
+    assert dv.run("synthetic", "openrouter", ["m1"], out=out.append) == 1
+    assert any("GATE FAILED" in line for line in out) and any("FAIL " in line for line in out)
+    assert dv.run("synthetic", "openrouter", ["m1"], min_accuracy=0.0, out=lambda _s: None) == 0
+
+
+def test_debt_ambiguous_cases_are_not_scored(tmp_path, monkeypatch):
+    path = tmp_path / "c.yaml"
+    path.write_text(
+        '- {id: a, context: [], message: "ok entao", expect: {needs_reply: false}}\n'
+        '- {id: b, context: [], message: "talvez", expect: {needs_reply: true}, ambiguous: true}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        llm_structured, "run_structured", lambda *a, **k: {"needs_reply": False, "reason": ""}
+    )
+    out: list[str] = []
+    assert dv.run("synthetic", "openrouter", ["m"], synthetic_path=path, out=out.append) == 0
+    assert "n=1 (excluded 1)" in out[0]
+
+
+def test_debt_main_flags(monkeypatch):
+    _debt_oracle(monkeypatch, correct=False)
+    assert dv.main(["debt", "--model", "a", "--min-accuracy", "0.0"]) == 0
+    assert dv.main(["debt", "--model", "a", "--min-accuracy", "0.99"]) == 1
