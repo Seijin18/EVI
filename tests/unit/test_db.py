@@ -1045,6 +1045,23 @@ def test_list_debt_candidates_returns_out_preview():
 
 
 @pytest.mark.ephemeral_db
+def test_set_debt_verdict_is_valid_only_for_the_judged_inbound():
+    import db
+
+    now = dt.datetime(2026, 6, 10, 12, 0, tzinfo=dt.timezone.utc)
+    jid = f"{_uid()}@s.whatsapp.net"
+    db.record_inbound(jid, now - dt.timedelta(hours=6), "Boa", "m1")
+    assert db.set_debt_verdict(jid, "m1", False) is True
+    row = next(r for r in db.list_debt_candidates(now, dt.timedelta(hours=4), dt.timedelta(days=7)) if r["jid"] == jid)
+    assert row["last_in_id"] == "m1" and row["judge_in_id"] == "m1" and row["judge_needs_reply"] is False
+    assert db.set_debt_verdict(jid, "stale", True) is False  # not the latest inbound: nothing written
+    db.record_inbound(jid, now - dt.timedelta(hours=5), "Boa 2", "m2")  # newer message invalidates
+    row = next(r for r in db.list_debt_candidates(now, dt.timedelta(hours=4), dt.timedelta(days=7)) if r["jid"] == jid)
+    assert row["last_in_id"] == "m2" and row["judge_in_id"] != row["last_in_id"]
+    assert db.set_debt_verdict("nobody@s.whatsapp.net", "m1", True) is False
+
+
+@pytest.mark.ephemeral_db
 def test_wa_conversation_state_outbound_first_then_inbound():
     import db
 

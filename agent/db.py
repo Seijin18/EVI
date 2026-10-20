@@ -235,6 +235,9 @@ def _run_migrations() -> None:
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
                 );
                 ALTER TABLE wa_conversation_state ADD COLUMN IF NOT EXISTS last_out_preview TEXT;
+                ALTER TABLE wa_conversation_state ADD COLUMN IF NOT EXISTS judge_in_id TEXT;
+                ALTER TABLE wa_conversation_state ADD COLUMN IF NOT EXISTS judge_needs_reply BOOLEAN;
+                ALTER TABLE wa_conversation_state ADD COLUMN IF NOT EXISTS judge_at TIMESTAMPTZ;
                 CREATE TABLE IF NOT EXISTS awaiting_dismissed (
                     jid TEXT NOT NULL,
                     out_at TIMESTAMPTZ NOT NULL,
@@ -2041,7 +2044,8 @@ def list_debt_candidates(now, min_age, max_age, limit: int = 200) -> List[Dict[s
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "SELECT jid, last_in_at, last_in_preview, last_out_at, last_out_preview "
+                "SELECT jid, last_in_at, last_in_preview, last_in_id, last_out_at, last_out_preview, "
+                "judge_in_id, judge_needs_reply, judge_at "
                 "FROM wa_conversation_state "
                 "WHERE last_in_at IS NOT NULL "
                 "AND last_in_at > COALESCE(last_out_at, '-infinity') "
@@ -2051,6 +2055,21 @@ def list_debt_candidates(now, min_age, max_age, limit: int = 200) -> List[Dict[s
                 (now - min_age, now - max_age, limit),
             )
             return [dict(r) for r in cur.fetchall()]
+
+
+def set_debt_verdict(jid: str, in_id: str, needs_reply: bool) -> bool:
+    """Store the LLM debt verdict for the inbound ``in_id``. A newer inbound message
+    (different ``last_in_id``) invalidates it: then nothing is written, returns False."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE wa_conversation_state SET judge_in_id = %s, judge_needs_reply = %s, "
+                "judge_at = now() WHERE jid = %s AND last_in_id = %s",
+                (in_id, bool(needs_reply), jid, in_id),
+            )
+            ok = cur.rowcount > 0
+        conn.commit()
+    return ok
 
 
 def action_rates_by_type(since, until, debt_hours: float) -> Dict[str, Dict[str, int]]:

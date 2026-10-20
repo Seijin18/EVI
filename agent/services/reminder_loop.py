@@ -148,6 +148,13 @@ def _run(stop: threading.Event, interval: float) -> None:
                     _maybe_sweep()
                 except Exception as exc:
                     soft_fail("reminder_loop.promise_sweep_hook", exc)
+            try:
+                from services import debt_judge
+
+                if debt_judge.judge_enabled():
+                    debt_judge.judge_candidates(limit=1)  # after reminders fired; soft-fails inside
+            except Exception as exc:
+                soft_fail("reminder_loop.debt_judge", exc)
         stop.wait(interval)
 
 

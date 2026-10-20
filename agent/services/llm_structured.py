@@ -38,6 +38,10 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "provider": "openrouter",
         "model": "google/gemma-4-31b-it,qwen/qwen3.8-27b",
     },
+    "DEBT": {
+        "provider": "openrouter",
+        "model": "google/gemma-4-31b-it,qwen/qwen3.8-27b",
+    },
     "CONTACT_KNOWLEDGE": {
         "provider": "openrouter",
         "model": "google/gemma-4-26b-a4b-it,qwen/qwen3.8-27b",

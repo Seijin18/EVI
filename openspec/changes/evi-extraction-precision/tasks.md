@@ -10,7 +10,7 @@
   - Files: `agent/db.py`, `agent/services/reply_debts.py`, `agent/services/briefing.py`, `tests/unit/test_briefing.py`, `tests/unit/test_db.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_db.py -q`
 
-- [ ] 1.3 Juiz de dívida: tarefa `DEBT` em `llm_structured`, `debt_judge.py` (contexto da timeline, `wrap_external`, veredito por `last_in_id`), colunas `judge_*`, `list_debts` lê veredito; `judge_candidates` no `reminder_loop` e antes do briefing; flag `EVI_DEBT_JUDGE`
+- [x] 1.3 Juiz de dívida: tarefa `DEBT` em `llm_structured`, `debt_judge.py` (contexto da timeline, `wrap_external`, veredito por `last_in_id`), colunas `judge_*`, `list_debts` lê veredito; `judge_candidates` no `reminder_loop` e antes do briefing; flag `EVI_DEBT_JUDGE`
   - SCN-PREC-04, SCN-PREC-05
   - Files: `agent/services/debt_judge.py`, `agent/services/llm_structured.py`, `agent/services/reply_debts.py`, `agent/services/reminder_loop.py`, `tests/unit/test_debt_judge.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_debt_judge.py tests/unit/test_reply_debts.py tests/unit/test_llm_structured.py -q`

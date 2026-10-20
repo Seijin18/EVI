@@ -151,6 +151,31 @@ def is_closing_message(text: str | None) -> bool:
     return False
 
 
+_PLACEHOLDER_RE = re.compile(r"\[[^\]]+\]")
+
+
+def is_ambiguous(preview: str | None) -> bool:
+    """Neither a closing nor a clear request: the only messages the LLM judge sees."""
+    t = (preview or "").strip()
+    if not t or _PLACEHOLDER_RE.fullmatch(t):  # "[áudio]", "[mídia]": content unknown
+        return False
+    import db
+
+    if len(preview or "") >= getattr(db, "_PREVIEW_MAX", 160):  # truncated: a "?" may sit in the cut tail
+        return False
+    return not is_closing_message(t) and not looks_like_request(t)
+
+
+def has_valid_verdict(row: dict) -> bool:
+    """The judge verdict counts only for the inbound message it was made for."""
+    jid_in = row.get("last_in_id")
+    return (
+        bool(jid_in)
+        and row.get("judge_in_id") == jid_in
+        and row.get("judge_needs_reply") is not None
+    )
+
+
 _ACK_WINDOW = timedelta(minutes=10)
 _ACK_MAX_WORDS = 3
 
@@ -226,6 +251,10 @@ def list_debts(
         if is_one_way_jid(r["jid"]) or is_closing_message(preview):
             continue
         if is_acknowledgement(preview, r["last_in_at"], r.get("last_out_at")):
+            continue
+        # LLM verdict (stored out of band by debt_judge; never called here). No valid
+        # verdict -> stays listed.
+        if is_ambiguous(preview) and has_valid_verdict(r) and r["judge_needs_reply"] is False:
             continue
         since = r["last_in_at"]
         out.append(

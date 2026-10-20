@@ -390,6 +390,13 @@ def _collect_whatsapp(today: date | None = None) -> list[Row]:
         return rows
     from services.reply_debts import list_debts
 
+    try:
+        from services import debt_judge
+
+        if debt_judge.judge_enabled():
+            debt_judge.judge_candidates(limit=2)
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("briefing.debt_judge", exc)
     for d in list_debts():
         line = (
             f"{wrap_external(d.get('name') or d['jid'], 'whatsapp', 60)} — "
