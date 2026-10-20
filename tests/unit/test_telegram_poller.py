@@ -294,4 +294,4 @@ def test_fetch_updates_asks_for_callback_queries(monkeypatch):
     calls = _urlopen(monkeypatch, [{"ok": True, "result": []}])
     tp.fetch_updates("TOK", offset=5)
     qs = urllib.parse.parse_qs(urllib.parse.urlparse(calls["urls"][0]).query)
-    assert json.loads(qs["allowed_updates"][0]) == ["message", "callback_query"]
+    assert json.loads(qs["allowed_updates"][0]) == ["message", "callback_query", "message_reaction"]

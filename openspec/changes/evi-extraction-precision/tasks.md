@@ -1,6 +1,6 @@
 ## 1. Dívidas de resposta
 
-- [ ] 1.1 Vocabulário de encerramento v3 e regra de aceno (≤ 3 palavras, sem pedido, ≤ 10 min após a última fala do usuário; precisa de `last_out_at`)
+- [x] 1.1 Vocabulário de encerramento v3 e regra de aceno (≤ 3 palavras, sem pedido, ≤ 10 min após a última fala do usuário; precisa de `last_out_at`)
   - SCN-PREC-01, SCN-PREC-02
   - Files: `agent/services/reply_debts.py`, `agent/db.py`, `tests/unit/test_reply_debts.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reply_debts.py tests/unit/test_db.py -q`
@@ -34,7 +34,7 @@
 
 ## 3. Reações do Telegram
 
-- [ ] 3.1 `message_reaction` em `ALLOWED_UPDATES` e no modelo do webhook; reação 👍/👎 em mensagem do briefing → `set_briefing_feedback` (última vence; só chat autorizado)
+- [x] 3.1 `message_reaction` em `ALLOWED_UPDATES` e no modelo do webhook; reação 👍/👎 em mensagem do briefing → `set_briefing_feedback` (última vence; só chat autorizado)
   - SCN-PREC-08
   - Files: `agent/services/telegram_poller.py`, `agent/services/telegram_handler.py`, `agent/main.py`, `tests/unit/test_telegram_handler.py`, `tests/unit/test_telegram_poller.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_handler.py tests/unit/test_telegram_poller.py -q`

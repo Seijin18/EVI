@@ -17,7 +17,7 @@ from services.telegram_notify import telegram_api_base
 
 logger = logging.getLogger("evi.telegram_poller")
 
-ALLOWED_UPDATES = ["message", "callback_query"]  # callback_query: briefing buttons
+ALLOWED_UPDATES = ["message", "callback_query", "message_reaction"]  # buttons; 👍/👎 reactions
 
 _stop = threading.Event()
 _thread: Optional[threading.Thread] = None

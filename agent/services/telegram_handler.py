@@ -257,6 +257,47 @@ def handle_briefing_callback(cq: Dict[str, Any]) -> Dict[str, Any]:
         return reply(_CB_ERROR, "error")
 
 
+_REACTION_FEEDBACK = {"👍": "up", "👎": "down"}
+
+
+def handle_briefing_reaction(reaction: Dict[str, Any]) -> Dict[str, Any]:
+    """A 👍/👎 reaction on a briefing message is briefing feedback (last one wins).
+
+    Silent by design: no reply; other emojis, removed reactions, unknown messages and
+    foreign chats change nothing. Never raises.
+    """
+    try:
+        import db
+        from datetime import date as _date
+
+        chat_id = (reaction.get("chat") or {}).get("id")
+        if chat_id is None or not _chat_allowed(chat_id):
+            return {"ok": True, "skipped": "chat not allowed"}
+        user_id = (reaction.get("user") or {}).get("id")
+        if user_id is None or not _chat_allowed(user_id):  # anonymous (actor_chat) reactions are ignored
+            return {"ok": True, "skipped": "user not allowed"}
+        emojis = [r.get("emoji") for r in reaction.get("new_reaction") or [] if r.get("type") == "emoji"]
+        feedback = _REACTION_FEEDBACK.get(emojis[-1]) if emojis else None
+        message_id = reaction.get("message_id")
+        if feedback is None or message_id is None:
+            return {"ok": True, "skipped": "not a thumb"}
+        for row in db.load_tool_snapshots(f"telegram-{chat_id}", limit=50):
+            payload = row.get("payload") or {}
+            if row.get("tool_name") != "morning_briefing" or payload.get("message_id") != message_id:
+                continue
+            bkind = str(payload.get("kind") or "")
+            if bkind not in ("morning", "evening"):
+                break
+            db.set_briefing_feedback(_date.fromisoformat(str(payload["day"])), bkind, feedback)
+            return {"ok": True, "reaction": feedback}
+        return {"ok": True, "skipped": "not a briefing"}
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+
+        soft_fail("telegram_handler.briefing_reaction", exc)
+        return {"ok": True, "skipped": "error"}
+
+
 def _run_briefing_action(payload: Dict[str, Any], session_id: str, n: int, action: str, reply) -> Dict[str, Any]:
     import db
     from datetime import date as _date
@@ -496,6 +537,8 @@ def process_telegram_update(
     """Process one Telegram update dict; invoke_chat(message, session_id) -> {response: ...}."""
     if update.get("callback_query"):
         return handle_briefing_callback(update["callback_query"])
+    if update.get("message_reaction"):
+        return handle_briefing_reaction(update["message_reaction"])
     message = update.get("message") or {}
     sender = (message.get("chat") or {}).get("id", "telegram")
     if not _chat_allowed(sender):

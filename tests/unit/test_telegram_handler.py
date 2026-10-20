@@ -840,3 +840,54 @@ def test_text_reply_lembra_n_creates_the_awaiting_reminder(awaiting, monkeypatch
     _, sent = _say("lembra 1", monkeypatch)
     assert len(awaiting.created) == 1 and sent == ["Já estava agendado."]
     assert not awaiting.sent_to_contact
+
+
+# --- SCN-PREC-08: 👍/👎 reactions on a briefing message are feedback --------------------------
+
+
+def _react(emojis, chat=OWNER, message_id=77):
+    return {"update_id": 2, "message_reaction": {
+        "chat": {"id": chat, "type": "private"}, "message_id": message_id, "user": {"id": chat},
+        "old_reaction": [], "new_reaction": [{"type": "emoji", "emoji": e} for e in emojis]}}
+
+
+def test_scn_prec_08_reaction_last_wins_without_reply(buttons):
+    assert _go(_react(["👎"]))["reaction"] == "down" and buttons.feedback == "down"
+    _go(_react(["👍"]))
+    assert buttons.feedback == "up"
+    assert not buttons.answers and not buttons.edits and not buttons.turns
+
+
+def test_scn_prec_08_uses_last_emoji_of_new_reaction(buttons):
+    _go(_react(["👍", "👎"]))
+    assert buttons.feedback == "down"
+
+
+@pytest.mark.parametrize("update", [
+    _react(["👍"], chat=111),            # another chat
+    _react(["👍"], message_id=999),      # unknown message
+    _react(["❤"]),                       # not a thumb
+    _react([]),                          # reaction removed
+])
+def test_scn_prec_08_ignored_reactions_change_nothing(buttons, update):
+    out = _go(update)
+    assert buttons.feedback is None and "reaction" not in out
+    assert not buttons.replied and not buttons.answers
+
+
+def test_scn_prec_08_reaction_without_or_with_foreign_user_changes_nothing(buttons):
+    anonymous = _react(["👍"])
+    del anonymous["message_reaction"]["user"]
+    anonymous["message_reaction"]["actor_chat"] = {"id": 555}
+    foreign = _react(["👍"])
+    foreign["message_reaction"]["user"] = {"id": 111}
+    for update in (anonymous, foreign):
+        assert "reaction" not in _go(update)
+    assert buttons.feedback is None
+
+
+def test_scn_prec_08_reaction_never_raises(buttons, monkeypatch):
+    import db
+
+    monkeypatch.setattr(db, "load_tool_snapshots", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("db")))
+    assert _go(_react(["👍"]))["ok"] is True and buttons.feedback is None

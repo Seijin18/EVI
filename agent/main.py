@@ -205,6 +205,7 @@ class ResetRequest(BaseModel):
 class TelegramUpdate(BaseModel):
     message: Optional[Dict[str, Any]] = None
     callback_query: Optional[Dict[str, Any]] = None  # briefing buttons
+    message_reaction: Optional[Dict[str, Any]] = None  # 👍/👎 on a briefing
 
 
 @app.get("/")
@@ -451,7 +452,7 @@ def telegram_webhook(
     """Telegram webhook → EVI chat (use TELEGRAM_MODE=polling to skip tunnel)."""
     from services.telegram_handler import process_telegram_update
 
-    payload = update.model_dump() if hasattr(update, "model_dump") else {"message": update.message, "callback_query": update.callback_query}
+    payload = update.model_dump() if hasattr(update, "model_dump") else {"message": update.message, "callback_query": update.callback_query, "message_reaction": update.message_reaction}
     flagged = _header_is_test(x_evi_test)
     return process_telegram_update(
         payload,
