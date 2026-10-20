@@ -374,3 +374,98 @@ def test_scn_ux_01_missing_item_error_states_the_valid_range(monkeypatch):
                      "refs": {"1": "reply_debt:a@s.whatsapp.net", "2": "reply_debt:b@s.whatsapp.net"}}}])
     ids, errors = briefing.resolve_briefing_items([9], session_id="s", kind="reply_debt")
     assert ids == [] and errors == ["item 9 não existe no briefing (o briefing vai de 1 a 2)"]
+
+
+# --- closings v3 + acknowledgement rule (SCN-PREC-01, SCN-PREC-02) -----------
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Boa", "boa!", "bom", "massa", "legal", "bacana", "dahora", "demorou", "falou",
+     "isso", "uhum", "aham", "sim", "pode crer", "haha", "hahaha", "hehe", "kkk",
+     "kkkkk", "rs", "rsrs", "Boa, valeu", "kkk 👍"],
+)
+def test_closing_v3_positive(text):
+    assert reply_debts.is_closing_message(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["boa tarde", "boa, me manda o contrato?", "sim, me manda", "isso funciona?",
+     "coloca o bau na frente das cases"],
+)
+def test_closing_v3_negative(text):
+    assert not reply_debts.is_closing_message(text)
+
+
+def _debts(monkeypatch, rows, now):
+    class Db:
+        def init_db(self):
+            pass
+
+        def list_debt_candidates(self, n, mn, mx, limit=200):
+            return rows
+
+        def get_whatsapp_contact(self, jid):
+            return None
+
+    monkeypatch.setitem(sys.modules, "db", Db())
+    return reply_debts.list_debts(now=now)
+
+
+def test_scn_prec_01_ack_within_10min_not_listed(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    out_at = datetime(2026, 10, 12, 22, 13, 10, tzinfo=timezone.utc)
+    now = out_at + timedelta(hours=6)
+    rows = [
+        {"jid": "a@s.whatsapp.net", "last_in_at": out_at + timedelta(seconds=22),
+         "last_in_preview": "Boa", "last_out_at": out_at},
+        {"jid": "b@s.whatsapp.net", "last_in_at": out_at + timedelta(minutes=2),
+         "last_in_preview": "vou ver", "last_out_at": out_at},
+    ]
+    assert _debts(monkeypatch, rows, now) == []
+
+
+def test_scn_prec_02_closing_word_hours_later_not_listed(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 10, 13, 6, 0, tzinfo=timezone.utc)
+    out_at = now - timedelta(hours=9)
+    rows = [{"jid": "a@s.whatsapp.net", "last_in_at": out_at + timedelta(hours=3),
+             "last_in_preview": "boa", "last_out_at": out_at}]
+    assert _debts(monkeypatch, rows, now) == []
+
+
+def test_ack_rule_keeps_real_debts(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 10, 13, 6, 0, tzinfo=timezone.utc)
+    out_at = now - timedelta(hours=12)
+    near = out_at + timedelta(minutes=1)
+    late = out_at + timedelta(hours=3)
+    rows = [
+        {"jid": "a@s.whatsapp.net", "last_in_at": near,
+         "last_in_preview": "coloca o bau na frente das cases", "last_out_at": out_at},
+        {"jid": "b@s.whatsapp.net", "last_in_at": near,
+         "last_in_preview": "e aí?", "last_out_at": out_at},
+        {"jid": "c@s.whatsapp.net", "last_in_at": late,
+         "last_in_preview": "boa tarde", "last_out_at": out_at},
+        {"jid": "d@s.whatsapp.net", "last_in_at": late,
+         "last_in_preview": "vou ver", "last_out_at": out_at},
+        {"jid": "e@s.whatsapp.net", "last_in_at": near,
+         "last_in_preview": "boa, me manda o contrato?", "last_out_at": out_at},
+    ]
+    out = _debts(monkeypatch, rows, now)
+    assert sorted(d["jid"][0] for d in out) == ["a", "b", "c", "d", "e"]
+
+
+def test_is_acknowledgement_boundaries():
+    from datetime import datetime, timedelta, timezone
+
+    o = datetime(2026, 10, 12, 22, 0, tzinfo=timezone.utc)
+    assert reply_debts.is_acknowledgement("vou ver", o + timedelta(minutes=10), o)
+    assert not reply_debts.is_acknowledgement("vou ver", o + timedelta(minutes=11), o)
+    assert not reply_debts.is_acknowledgement("vou ver", o + timedelta(minutes=1), None)
+    assert not reply_debts.is_acknowledgement("vou ver", o - timedelta(minutes=1), o)
+    assert not reply_debts.is_acknowledgement("vou ver isso agora", o + timedelta(minutes=1), o)

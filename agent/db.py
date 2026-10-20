@@ -1979,7 +1979,7 @@ def list_debt_candidates(now, min_age, max_age, limit: int = 200) -> List[Dict[s
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "SELECT jid, last_in_at, last_in_preview FROM wa_conversation_state "
+                "SELECT jid, last_in_at, last_in_preview, last_out_at FROM wa_conversation_state "
                 "WHERE last_in_at IS NOT NULL "
                 "AND last_in_at > COALESCE(last_out_at, '-infinity') "
                 "AND last_in_at > COALESCE(acknowledged_at, '-infinity') "

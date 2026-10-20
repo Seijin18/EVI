@@ -84,11 +84,14 @@ def track_conversation(messages: Iterable) -> int:
 # Versioned: bump when the vocabulary changes. A message is "closing" only when
 # EVERY word is one of these (or it has no words at all: emoji/punctuation only),
 # so "ok, me manda amanhã?" still counts as a debt.
-CLOSING_VERSION = 2
+CLOSING_VERSION = 3
 _CLOSING_TOKEN = (
     r"(?:ok(?:ay)?|blz|beleza|valeu|vlw|obrigad[oa]s?|brigad[oa]s?|brigadao|"
     r"de\s+nada|tmj|show|top|muito|joia|tranquilo|fechou|fechado|otimo|"
-    r"perfeito|combinado|certo|entendido)"
+    r"perfeito|combinado|certo|entendido|"
+    # v3 (SCN-PREC-01/02): short approvals, agreement and laughter
+    r"boa|bom|massa|legal|bacana|dahora|demorou|falou|isso|uhum|aham|sim|"
+    r"pode\s+crer|ha(?:ha)+|haha+|hehe+|k{2,}|(?:rs)+|rs+)"
 )
 CLOSING_RE = re.compile(
     rf"[\W_]*(?:{_CLOSING_TOKEN}(?:[\W_]+|$))+", re.IGNORECASE | re.UNICODE
@@ -135,7 +138,8 @@ def is_closing_message(text: str | None) -> bool:
     if _NO_WORDS_RE.fullmatch(t):
         return True
     f = _fold(t)
-    if looks_like_request(f):
+    # "pode crer" is agreement, not the request word "pode"
+    if looks_like_request(re.sub(r"\bpode\s+crer\b", "", f, flags=re.IGNORECASE)):
         return False
     if CLOSING_RE.fullmatch(f):
         return True
@@ -144,6 +148,27 @@ def is_closing_message(text: str | None) -> bool:
         name = m.group("name") or ""
         return not any(w.lower() in _NOT_A_NAME for w in name.split())
     return False
+
+
+_ACK_WINDOW = timedelta(minutes=10)
+_ACK_MAX_WORDS = 3
+
+
+def is_acknowledgement(preview, last_in_at, last_out_at) -> bool:
+    """A short non-request reply (<= 3 words) sent within 10 min after the user's
+    last message: an "aceno" ("Boa", "vou ver"), not a debt."""
+    if last_out_at is None or last_in_at is None:
+        return False
+    try:
+        delta = last_in_at - last_out_at
+    except TypeError:
+        return False
+    if not (timedelta(0) <= delta <= _ACK_WINDOW):
+        return False
+    text = (preview or "").strip()
+    if len(re.findall(r"[^\W_]+", text, re.UNICODE)) > _ACK_MAX_WORDS:
+        return False
+    return not looks_like_request(text)
 
 
 def _min_hours() -> float:
@@ -198,6 +223,8 @@ def list_debts(
     for r in rows:
         preview = r.get("last_in_preview") or ""
         if is_one_way_jid(r["jid"]) or is_closing_message(preview):
+            continue
+        if is_acknowledgement(preview, r["last_in_at"], r.get("last_out_at")):
             continue
         since = r["last_in_at"]
         out.append(
