@@ -1,0 +1,24 @@
+id: SIM-DEBT-11
+title: Reply debts - mensagem ambígua é julgada; pedido continua dívida com o contexto, encerramento sai (SCN-PREC-03/04/05)
+tags: [reply-debts]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "Te mando o orçamento hoje", from_me: true, jid: "5511955550401@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - whatsapp_contact: {text: "Fechado então, falamos depois", from_me: true, jid: "5511955550402@s.whatsapp.net", push_name: "Bruno Exemplo"}
+  - clock: D0 09:30
+  - whatsapp_contact: {text: "o sistema caiu de novo", jid: "5511955550401@s.whatsapp.net", push_name: "Ana Exemplo"}
+  - whatsapp_contact: {text: "É isso aí", jid: "5511955550402@s.whatsapp.net", push_name: "Bruno Exemplo"}
+    expect:
+      postgres:
+        - {table: wa_conversation_state, count: 2}
+  - clock: D0 15:00
+  - job: briefing
+    expect:
+      reply_within_s: 90
+      reply_matches: '(?s)esperando sua resposta.*Ana.*sistema caiu.*você: .?Te mando o orçamento hoje'
+      reply_not_matches: "Bruno"
+      postgres:
+        - {table: wa_conversation_state, where: {judge_needs_reply: true}, count: 1}
+        - {table: wa_conversation_state, where: {judge_needs_reply: false}, count: 1}
+      outbound_to_third_parties: 0

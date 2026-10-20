@@ -85,6 +85,14 @@ relógio simulado. A chamada `run_structured("promise")` vai ao OpenRouter real 
 `EVI_LLM_TASK_DAILY_USD=0.50`) com a chave de `OPENROUTER_API_KEY` do `.env` (ou
 `EVI_SIM_OPENROUTER_API_KEY`); em `record`/`replay` é gravada/servida no mesmo cassete do cenário
 (chave `structured:<sha256>` de task+prompt+schema, com data/dia da semana/horários normalizados).
+Precisão de extração (evi-extraction-precision, tag `reply-debts`): SIM-DEBT-10 prova que "Boa" 22 s depois da fala
+do usuário não vira dívida sem veredito do juiz (`judge_needs_reply` nulo); SIM-DEBT-11 faz o briefing julgar
+uma mensagem ambígua ("o sistema caiu de novo" continua listada com `você: "Te mando o orçamento hoje"`; "É isso aí"
+julgado `needs_reply=false` sai) — o veredito é gravado em `wa_conversation_state.judge_needs_reply`; SIM-PREC-01
+mostra o juiz de tarefa (`needs_eval` → `dismissed`/`auto-eval` para a frase genérica da NF, `undated` com título
+"contrato" para o pedido real). Não há endpoint de avaliação: o `clock: D0 09:11` basta, o `reminder_loop` (sim.env,
+varredura de 5 s) roda `process_due_task_evaluations` como faz com as promessas. As chamadas `DEBT`/`TASK` vão ao
+OpenRouter ZDR em `live`/`record` e ao cassete em `replay`; o contador "LLM calls" do relatório só conta Gemini.
 Conhecimento de contato: `./scripts/evi-sim run --tag contact-memory --repeat 3 --llm live` (SIM-MEM-01/02/04).
 O passo `job: contact-learn` chama `POST /jobs/contact-learn?wait=true` (atualiza fatos/"Em aberto" dos contatos com
 mensagens novas; a chamada estruturada `CONTACT_KNOWLEDGE` usa o OpenRouter ZDR em `live`/`record` e o cassete em `replay`).

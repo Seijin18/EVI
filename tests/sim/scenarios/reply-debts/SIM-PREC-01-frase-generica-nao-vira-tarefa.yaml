@@ -1,0 +1,21 @@
+id: SIM-PREC-01
+title: Extraction precision - frase genérica com "enviar" é descartada pelo juiz de tarefa; pedido real fica undated com título da ação (SCN-PREC-06/07)
+tags: [reply-debts]
+source: synthetic
+clock: D0 09:00
+steps:
+  - whatsapp_contact: {text: "As empresas gostam do fornecedor enviar a NF pra eles darem baixa no sistema", jid: "5511955550501@s.whatsapp.net", push_name: "Carla Exemplo"}
+  - whatsapp_contact: {text: "Preciso te pedir pra enviar o contrato assinado", jid: "5511955550502@s.whatsapp.net", push_name: "Diego Exemplo"}
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {type: task, status: needs_eval}, count: 2}
+        - {table: pending_commitments, where: {type: task, status: pending}, count: 0}
+        - {table: pending_commitments, where: {type: task, status: undated}, count: 0}
+      outbound_to_third_parties: 0
+  - clock: D0 09:11
+    expect:
+      postgres:
+        - {table: pending_commitments, where: {type: task, status: dismissed, confirmed_via: auto-eval}, count: 1, within_s: 90}
+        - {table: pending_commitments, where: {type: task, status: undated, title: {contains: "contrato"}}, count: 1, within_s: 90}
+        - {table: pending_commitments, where: {type: task, status: needs_eval}, count: 0}
+      outbound_to_third_parties: 0

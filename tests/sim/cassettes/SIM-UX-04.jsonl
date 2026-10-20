@@ -1,0 +1,1 @@
+{"key": "structured:352a935cfc6a56fa1fd0e38cb988b9f7e16512e98aef9bdec71a66e594b61b03", "prompt_tail": ", \"title\": null}\nMENSAGEM: te mando o relatório amanhã\n→ {\"keep\": true, \"title\": \"Enviar o relatório\"}\nMENSAGEM: consegue me mandar o contrato até sexta?\n→ {\"keep\": true, \"title\": \"Enviar o contrato\"}", "response": {"keep": true, "title": "Enviar o orçamento"}}
