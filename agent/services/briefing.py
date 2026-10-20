@@ -400,6 +400,10 @@ def _collect_whatsapp(today: date | None = None) -> list[Row]:
         user = f"{_bold(plain_external(who_user, 40))} · {_short_age(d['age_h'])}"
         if preview:
             user += f' · "{_esc(preview)}"'
+        out_prev = plain_external(d.get("out_preview") or "", 50)
+        if out_prev:
+            line += f" (você: {wrap_external(d['out_preview'], 'whatsapp', 50)})"
+            user += f' (você: "{_esc(out_prev)}")'
         debts.append(Row(line, {"kind": "reply_debt", "id": d["jid"]}, user, GROUP_DEBTS))
     return debts + promises + rows
 

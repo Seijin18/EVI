@@ -583,6 +583,22 @@ def test_scn_debt_06_three_labelled_groups(setup, monkeypatch):
     assert b.text.index("Esperando") < b.text.index("Suas promessas") < b.text.index("Combinados:")
 
 
+def test_scn_prec_03_debt_row_shows_what_user_said(setup, monkeypatch):
+    setup()
+    _debts_on(monkeypatch, [
+        {"jid": "55@s.whatsapp.net", "name": "Beto", "age_h": 5.0, "preview": "Boa",
+         "out_preview": 'Vou esperar <b>essa</b> & "terminar" ' + "x" * 80},
+        {"jid": "56@s.whatsapp.net", "name": "Ana", "age_h": 5.0, "preview": "Topa?", "out_preview": ""},
+    ])
+    wa = briefing.assemble_briefing(now=NOW).sections[3]
+    with_prev, without = wa.items[0], wa.items[1]
+    assert '"Boa" (você: "Vou esperar &lt;b&gt;essa&lt;/b&gt; &amp;' in with_prev.user
+    assert "<b>essa</b>" not in with_prev.user
+    assert with_prev.user.count("x") <= 50
+    assert "(você: «externo:whatsapp»" in with_prev.text  # model line keeps the wrap
+    assert "você:" not in without.user and "você:" not in without.text
+
+
 def test_groups_cap_three_with_plus_n_per_group(setup, monkeypatch):
     setup(commitments=[{**COMMITMENT, "id": i, "type": "event"} for i in range(5)])
     _debts_on(monkeypatch, [])

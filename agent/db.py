@@ -142,6 +142,9 @@ def _run_migrations() -> None:
                 ALTER TABLE turn_log ADD COLUMN IF NOT EXISTS tokens_in INTEGER;
                 ALTER TABLE turn_log ADD COLUMN IF NOT EXISTS tokens_out INTEGER;
                 ALTER TABLE turn_log ADD COLUMN IF NOT EXISTS input_kind VARCHAR(8) NOT NULL DEFAULT 'text';
+                ALTER TABLE turn_log ADD COLUMN IF NOT EXISTS tg_message_id BIGINT;
+                CREATE INDEX IF NOT EXISTS turn_log_tg_message
+                    ON turn_log (session_id, tg_message_id) WHERE tg_message_id IS NOT NULL;
                 CREATE INDEX IF NOT EXISTS turn_log_ts ON turn_log (ts);
                 CREATE INDEX IF NOT EXISTS turn_log_session
                     ON turn_log (session_id, ts);
@@ -231,6 +234,7 @@ def _run_migrations() -> None:
                     acknowledged_at TIMESTAMPTZ,
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
                 );
+                ALTER TABLE wa_conversation_state ADD COLUMN IF NOT EXISTS last_out_preview TEXT;
                 CREATE TABLE IF NOT EXISTS awaiting_dismissed (
                     jid TEXT NOT NULL,
                     out_at TIMESTAMPTZ NOT NULL,
@@ -1057,6 +1061,53 @@ def set_turn_feedback(session_id: str, feedback: str, note: str | None = None) -
     return int(row[0]) if row else None
 
 
+def set_turn_tg_message_id(session_id: str, user_text: str, message_id: int) -> int | None:
+    """Remember the Telegram message that carried the reply of the latest turn of this
+    session with this user text (not yet linked). Returns the turn id, or None."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE turn_log SET tg_message_id = %s
+                WHERE id = (
+                    SELECT id FROM turn_log
+                    WHERE session_id = %s AND user_text = %s AND tg_message_id IS NULL
+                      AND ts > now() - interval '5 minutes'
+                    ORDER BY ts DESC, id DESC
+                    LIMIT 1
+                )
+                RETURNING id
+                """,
+                (int(message_id), session_id, user_text),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return int(row[0]) if row else None
+
+
+def set_turn_feedback_by_message(session_id: str, message_id: int, feedback: str) -> int | None:
+    """Set feedback ('bom'|'ruim') on the turn whose reply was Telegram message `message_id`
+    (a reaction); the free-text note is left alone. Returns the turn id, or None."""
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE turn_log SET feedback = %s
+                WHERE id = (
+                    SELECT id FROM turn_log
+                    WHERE session_id = %s AND tg_message_id = %s
+                    ORDER BY ts DESC, id DESC
+                    LIMIT 1
+                )
+                RETURNING id
+                """,
+                (feedback, session_id, int(message_id)),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return int(row[0]) if row else None
+
+
 def list_turns(since, until, include_test: bool = False) -> List[Dict[str, Any]]:
     """Turns with since <= ts < until, oldest first. Test turns excluded by default."""
     with _conn() as conn:
@@ -1850,15 +1901,22 @@ def record_inbound(jid: str, ts, preview: str, msg_id: str) -> None:
         conn.commit()
 
 
-def record_outbound(jid: str, ts) -> None:
+def record_outbound(jid: str, ts, text: str | None = None) -> None:
+    """Latest outbound wins: an older message never overwrites a newer preview."""
+    preview = " ".join(text.split())[:80] if text else None
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO wa_conversation_state (jid, last_out_at) VALUES (%s, %s) "
+                "INSERT INTO wa_conversation_state (jid, last_out_at, last_out_preview) "
+                "VALUES (%s, %s, %s) "
                 "ON CONFLICT (jid) DO UPDATE SET "
+                "last_out_preview = CASE WHEN wa_conversation_state.last_out_at IS NULL "
+                "OR EXCLUDED.last_out_at >= wa_conversation_state.last_out_at "
+                "THEN COALESCE(EXCLUDED.last_out_preview, wa_conversation_state.last_out_preview) "
+                "ELSE wa_conversation_state.last_out_preview END, "
                 "last_out_at = GREATEST(wa_conversation_state.last_out_at, EXCLUDED.last_out_at), "
                 "updated_at = now()",
-                (jid, ts),
+                (jid, ts, preview),
             )
         conn.commit()
 
@@ -1904,7 +1962,7 @@ def merge_conversation_state(src_jid: str, dst_jid: str) -> bool:
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT last_in_at, last_in_preview, last_in_id, last_out_at, acknowledged_at "
+                "SELECT last_in_at, last_in_preview, last_in_id, last_out_at, acknowledged_at, last_out_preview "
                 "FROM wa_conversation_state WHERE jid = %s FOR UPDATE",
                 (src_jid,),
             )
@@ -1914,9 +1972,13 @@ def merge_conversation_state(src_jid: str, dst_jid: str) -> bool:
             t = "wa_conversation_state"
             cur.execute(
                 f"INSERT INTO {t} "  # noqa: S608 — `t` is the module-local constant table name; values are bound params
-                "(jid, last_in_at, last_in_preview, last_in_id, last_out_at, acknowledged_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s) "
+                "(jid, last_in_at, last_in_preview, last_in_id, last_out_at, acknowledged_at, last_out_preview) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (jid) DO UPDATE SET "
+                f"last_out_preview = CASE WHEN EXCLUDED.last_out_at IS NOT NULL AND "
+                f"({t}.last_out_at IS NULL OR EXCLUDED.last_out_at > {t}.last_out_at) "
+                f"THEN COALESCE(EXCLUDED.last_out_preview, {t}.last_out_preview) "
+                f"ELSE COALESCE({t}.last_out_preview, EXCLUDED.last_out_preview) END, "
                 f"last_in_preview = CASE WHEN EXCLUDED.last_in_at IS NOT NULL AND "
                 f"({t}.last_in_at IS NULL OR EXCLUDED.last_in_at > {t}.last_in_at) "
                 f"THEN EXCLUDED.last_in_preview ELSE {t}.last_in_preview END, "
@@ -1979,7 +2041,8 @@ def list_debt_candidates(now, min_age, max_age, limit: int = 200) -> List[Dict[s
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "SELECT jid, last_in_at, last_in_preview, last_out_at FROM wa_conversation_state "
+                "SELECT jid, last_in_at, last_in_preview, last_out_at, last_out_preview "
+                "FROM wa_conversation_state "
                 "WHERE last_in_at IS NOT NULL "
                 "AND last_in_at > COALESCE(last_out_at, '-infinity') "
                 "AND last_in_at > COALESCE(acknowledged_at, '-infinity') "

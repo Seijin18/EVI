@@ -32,7 +32,7 @@ class FakeDb:
     def record_inbound(self, jid, ts, preview, msg_id):
         self.inbound.append((jid, ts, preview, msg_id))
 
-    def record_outbound(self, jid, ts):
+    def record_outbound(self, jid, ts, text=None):
         self.outbound.append((jid, ts))
 
     def insert_pending_commitment(self, *a, **k):
@@ -220,7 +220,8 @@ def test_list_debts_filters_closing_and_formats(monkeypatch):
         {"jid": "a@s.whatsapp.net", "last_in_at": now - timedelta(hours=9),
          "last_in_preview": "valeu 👍"},
         {"jid": "b@s.whatsapp.net", "last_in_at": now - timedelta(hours=6),
-         "last_in_preview": "consegue me mandar o orçamento?"},
+         "last_in_preview": "consegue me mandar o orçamento?",
+         "last_out_preview": "Vou ver e te falo"},
     ]
     seen = {}
 
@@ -241,6 +242,7 @@ def test_list_debts_filters_closing_and_formats(monkeypatch):
     assert [d["name"] for d in out] == ["Fulana"]
     assert out[0]["preview"].startswith("consegue") and round(out[0]["age_h"]) == 6
     assert seen["mn"] == timedelta(hours=4) and seen["mx"] == timedelta(days=7)
+    assert out[0]["out_preview"] == "Vou ver e te falo"  # SCN-PREC-03
 
 
 def test_list_debts_v2_closings_dropped_but_closing_plus_request_kept(monkeypatch):

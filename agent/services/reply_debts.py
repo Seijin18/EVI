@@ -65,7 +65,8 @@ def track_conversation(messages: Iterable) -> int:
             jid = canonical_jid(jid)
             ts = _parse_ts(msg.ts)
             if msg.from_me:
-                db.record_outbound(jid, ts)
+                out_text = "[mídia]" if getattr(msg, "kind", "text") != "text" else msg.text
+                db.record_outbound(jid, ts, out_text)
                 # fromMe never reaches extraction; it still belongs in the timeline.
                 from services.message_timeline import record_whatsapp_message
 
@@ -234,6 +235,7 @@ def list_debts(
                 "since": since,
                 "age_h": (now - since).total_seconds() / 3600,
                 "preview": preview,
+                "out_preview": r.get("last_out_preview") or "",
             }
         )
         if len(out) >= limit:

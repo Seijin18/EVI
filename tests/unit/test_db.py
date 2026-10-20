@@ -1016,6 +1016,35 @@ def test_wa_conversation_state_forward_only_and_idempotent():
 
 
 @pytest.mark.ephemeral_db
+def test_record_outbound_preview_latest_wins_and_truncates():
+    import db
+
+    jid = f"{_uid()}@s.whatsapp.net"
+    t1 = dt.datetime(2026, 6, 3, 10, 0, tzinfo=dt.timezone.utc)
+    t2 = t1 + dt.timedelta(hours=1)
+    db.record_outbound(jid, t2, "nova  \n  mensagem")
+    db.record_outbound(jid, t1, "velha")  # older: must not overwrite the preview
+    st = db.get_state(jid)
+    assert st["last_out_preview"] == "nova mensagem" and st["last_out_at"] == t2
+    db.record_outbound(jid, t2 + dt.timedelta(hours=1), "x" * 300)
+    assert len(db.get_state(jid)["last_out_preview"]) == 80
+    db.record_outbound(jid, t2 + dt.timedelta(hours=2))  # no text: keeps previous
+    assert len(db.get_state(jid)["last_out_preview"]) == 80
+
+
+@pytest.mark.ephemeral_db
+def test_list_debt_candidates_returns_out_preview():
+    import db
+
+    now = dt.datetime(2026, 6, 10, 12, 0, tzinfo=dt.timezone.utc)
+    jid = f"{_uid()}@s.whatsapp.net"
+    db.record_outbound(jid, now - dt.timedelta(hours=30), "Vou esperar essa terminar")
+    db.record_inbound(jid, now - dt.timedelta(hours=6), "Boa", "m1")
+    rows = db.list_debt_candidates(now, dt.timedelta(hours=4), dt.timedelta(days=7))
+    assert [r["last_out_preview"] for r in rows if r["jid"] == jid] == ["Vou esperar essa terminar"]
+
+
+@pytest.mark.ephemeral_db
 def test_wa_conversation_state_outbound_first_then_inbound():
     import db
 
@@ -1216,3 +1245,21 @@ def test_scheduled_create_cap_is_atomic_and_soft_delete_keeps_run_count(sched_id
     db.set_scheduled_task_active(a, False)
     assert db.set_scheduled_task_active(a, True, max_active=db.count_active_scheduled_tasks()) is False
     assert db.set_scheduled_task_active(a, True, max_active=db.count_active_scheduled_tasks() + 1) is True
+
+
+@pytest.mark.ephemeral_db
+def test_reaction_feedback_targets_turn_by_telegram_message():
+    import db
+
+    sid = f"test-{_uid()}"
+    a = db.insert_turn(session_id=sid, channel="telegram", user_text="agenda?")
+    b = db.insert_turn(session_id=sid, channel="telegram", user_text="e amanhã?")
+    assert db.set_turn_tg_message_id(sid, "agenda?", 4321) == a
+    assert db.set_turn_tg_message_id(sid, "agenda?", 4322) is None  # already linked
+    assert db.set_turn_feedback(sid, "ruim", "nota") == b
+    assert db.set_turn_feedback_by_message(sid, 4321, "ruim") == a
+    assert db.set_turn_feedback_by_message(sid, 4321, "bom") == a  # last wins
+    assert db.get_turn(a)["feedback"] == "bom" and db.get_turn(a)["feedback_note"] is None
+    assert db.get_turn(b)["feedback"] == "ruim" and db.get_turn(b)["feedback_note"] == "nota"
+    assert db.set_turn_feedback_by_message(sid, 9999, "bom") is None
+    assert db.set_turn_feedback_by_message(f"other-{_uid()}", 4321, "bom") is None
