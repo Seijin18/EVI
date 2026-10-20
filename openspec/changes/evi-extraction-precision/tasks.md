@@ -27,7 +27,7 @@
   - Files: `agent/main.py`, `agent/services/task_judge.py`, `agent/services/reminder_loop.py`, `agent/db.py`, `tests/unit/test_task_judge.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_task_judge.py tests/unit/test_promises.py tests/unit/test_whatsapp_processor.py -q`
 
-- [ ] 2.2 `llm-eval task` (casos: "As empresas gostam do fornecedor enviar a NF" → descarta; "vou te mandar o relatório amanhã" → mantém)
+- [x] 2.2 `llm-eval task` (casos: "As empresas gostam do fornecedor enviar a NF" → descarta; "vou te mandar o relatório amanhã" → mantém)
   - SCN-PREC-06
   - Files: `agent/testing/llm_eval/task.py`, `agent/testing/cli.py`, `tests/eval/task_cases.yaml`, `tests/unit/test_llm_eval.py`
   - Verify: `./scripts/evi-test llm-eval task`

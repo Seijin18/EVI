@@ -1,0 +1,164 @@
+# Juiz de tarefa (task_judge.py): só vê mensagens que extract_commitment transforma em
+# tarefa SEM data. C = contato, U = usuário; context = mensagens antes da avaliada.
+# who = autor da mensagem avaliada. expect.keep = é algo que o USUÁRIO precisa fazer.
+# ambiguous: true = caso realmente incerto, fora da pontuação.
+- id: T01-nf-generica
+  context: [[C, "como funciona a baixa de nota no sistema deles?"]]
+  message: "As empresas gostam do fornecedor enviar a NF pra eles darem baixa no sistema"
+  who: C
+  expect: {keep: false}
+- id: T02-ele-vai-mandar
+  context: [[U, "o contrato do galpão já chegou?"]]
+  message: "Ele disse que vai mandar o contrato semana que vem"
+  who: C
+  expect: {keep: false}
+- id: T03-habito-relatorio
+  context: [[C, "você costuma passar o resultado do mês pra alguém?"]]
+  message: "Eu sempre mando o relatório no fim do mês"
+  who: C
+  expect: {keep: false}
+- id: T04-ja-mandei
+  context: [[C, "e aquele relatório, saiu?"]]
+  message: "Já mandei o relatório pro Marcos agora"
+  who: C
+  expect: {keep: false}
+- id: T05-nunca-esqueco
+  context: [[C, "cuidado pra não esquecer os papéis do financiamento"]]
+  message: "Nunca esqueço de enviar o comprovante"
+  who: C
+  expect: {keep: false}
+- id: T06-audio-kkk
+  context: [[C, "tô sem paciência de digitar hoje"]]
+  message: "Vou te mandar uma mensagem de áudio kkk"
+  who: C
+  expect: {keep: false}
+- id: T07-piada-demissao
+  context: [[C, "nossa, que rotina pesada"]]
+  message: "Se eu tivesse que mandar relatório todo dia eu já tinha pedido demissão"
+  who: C
+  expect: {keep: false}
+- id: T08-noticia
+  context: []
+  message: "O jornal diz que o governo vai entregar o relatório da auditoria"
+  who: C
+  expect: {keep: false}
+- id: T09-ana-vai-enviar
+  context: [[U, "alguém já falou com o cliente da proposta?"]]
+  message: "A Ana vai enviar a proposta pro cliente"
+  who: C
+  expect: {keep: false}
+- id: T10-sistema-envia
+  context: [[C, "e o boleto, como chega?"]]
+  message: "O sistema vai enviar o boleto por e-mail automaticamente"
+  who: C
+  expect: {keep: false}
+- id: T11-relato-passado
+  context: [[U, "o Marcos reclamou de alguma coisa?"]]
+  message: "Ontem o Marcos precisou enviar o relatório três vezes"
+  who: C
+  expect: {keep: false}
+- id: T12-opiniao-relatorio
+  context: [[U, "o que achou do material que fiz?"]]
+  message: "O relatório ficou ótimo, parabéns pelo trabalho"
+  who: C
+  expect: {keep: false}
+- id: T13-time-de-dados
+  context: [[U, "quem fecha a auditoria?"]]
+  message: "Quem vai entregar o relatório final é o time de dados"
+  who: C
+  expect: {keep: false}
+- id: T14-mandei-sem-resposta
+  context: [[C, "ela te respondeu?"]]
+  message: "Eu mandei o relatório e ela nem respondeu"
+  who: C
+  expect: {keep: false}
+- id: T15-planilha-pedido
+  context: [[C, "os números mudaram desde a última versão"]]
+  message: "Preciso que você me mande o relatório atualizado"
+  who: C
+  expect: {keep: true}
+- id: T16-manda-quando-puder
+  context: [[U, "ainda estou fechando os números"]]
+  message: "Me manda o relatório quando puder"
+  who: C
+  expect: {keep: true}
+- id: T17-vou-mandar-proposta
+  context: [[C, "pode ser que a gente feche essa semana, depende do valor"]]
+  message: "Vou te mandar a proposta"
+  who: C
+  expect: {keep: false}
+- id: T18-lembre-comprovante
+  context: [[C, "o Marcos ainda não recebeu o pagamento"]]
+  message: "Lembre de enviar o comprovante pro Marcos"
+  who: C
+  expect: {keep: true}
+- id: T19-entrega-relatorio
+  context: [[U, "terminei a revisão agora"]]
+  message: "Entrega o relatório pra mim"
+  who: C
+  expect: {keep: true}
+- id: T20-endereco-buscar
+  context: [[C, "a encomenda está pronta"]]
+  message: "Pode mandar o endereço pra eu buscar?"
+  who: C
+  expect: {keep: true}
+- id: T21-contrato-assinado
+  context: [[U, "assinei o contrato ontem"]]
+  message: "Consegue enviar o contrato assinado pra mim?"
+  who: C
+  expect: {keep: true}
+- id: T22-vou-entregar-relatorio
+  context: [[C, "precisamos do relatório pra fechar a pauta"]]
+  message: "Vou entregar o relatório pra você"
+  who: C
+  expect: {keep: false}
+- id: T23-preciso-orcamento
+  context: [[C, "o cliente está esperando valores"]]
+  message: "Preciso enviar o orçamento pro cliente"
+  who: C
+  expect: {keep: false}
+- id: T24-lembre-conta-luz
+  context: []
+  message: "Lembre de pagar a conta de luz"
+  who: C
+  expect: {keep: true}
+- id: T25-fotos-evento
+  context: [[U, "o evento foi demais"]]
+  message: "Pode mandar as fotos do evento pra eu ver?"
+  who: C
+  expect: {keep: true}
+- id: T26-mandar-relatorio-terminar
+  context: [[C, "tá tudo certo por aí?"]]
+  message: "Vou mandar o relatório assim que terminar aqui"
+  who: C
+  expect: {keep: false}
+- id: T27-documentacao-cartorio
+  context: [[U, "o que falta pro registro do imóvel?"]]
+  message: "Tem que entregar a documentação no cartório"
+  who: C
+  expect: {keep: true}
+- id: T28-curriculo-carla
+  context: [[U, "a Carla pediu uma indicação"]]
+  message: "Você pode enviar o currículo atualizado pra Carla?"
+  who: C
+  expect: {keep: true}
+- id: T29-contrato-assinado
+  context: [[C, "fechamos então"]]
+  message: "Preciso te pedir pra enviar o contrato assinado"
+  who: C
+  expect: {keep: true}
+- id: T30-entrega-marcos
+  context: [[C, "o Marcos tá esperando"]]
+  message: "Você pode entregar o relatório pro Marcos"
+  who: C
+  expect: {keep: true}
+- id: T31-lembre-comprovante-rafael
+  context: [[C, "o Rafael ligou de novo"]]
+  message: "Lembre de enviar o comprovante pro Rafael"
+  who: C
+  expect: {keep: true}
+- id: T32-manda-planilha
+  context: [[C, "olha só, preciso fechar isso"]]
+  message: "Pode mandar a planilha atualizada pra mim"
+  who: C
+  expect: {keep: true}

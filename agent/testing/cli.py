@@ -1361,7 +1361,7 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
 
 
 def run_llm_eval(extra: list[str], cwd: str) -> bool:
-    """``llm-eval promise|debt|contact-knowledge|contact-name-hint [flags]`` — real-LLM benchmarks (needs provider keys)."""
+    """``llm-eval promise|debt|task|contact-knowledge|contact-name-hint [flags]`` — real-LLM benchmarks (needs provider keys)."""
     if extra and extra[0] == "contact-knowledge":
         from testing.llm_eval import contact_knowledge
 
@@ -1374,6 +1374,10 @@ def run_llm_eval(extra: list[str], cwd: str) -> bool:
         from testing.llm_eval import debt
 
         return debt.main(extra, cwd) == 0
+    if extra and extra[0] == "task":
+        from testing.llm_eval import task
+
+        return task.main(extra, cwd) == 0
     from testing.llm_eval import promise
 
     return promise.main(extra, cwd) == 0

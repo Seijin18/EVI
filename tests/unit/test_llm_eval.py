@@ -501,3 +501,94 @@ def test_debt_main_flags(monkeypatch):
     _debt_oracle(monkeypatch, correct=False)
     assert dv.main(["debt", "--model", "a", "--min-accuracy", "0.0"]) == 0
     assert dv.main(["debt", "--model", "a", "--min-accuracy", "0.99"]) == 1
+
+
+# ---------------------------------------------------------------- task judge eval
+
+from testing.llm_eval import task as tk  # noqa: E402
+
+
+def test_task_yaml_loads_and_is_balanced():
+    cases = tk.load_synthetic()
+    assert len(cases) >= 24
+    assert len({c["id"] for c in cases}) == len(cases)
+    yes = sum(1 for c in cases if c["expect"]["keep"])
+    assert 0.35 <= yes / len(cases) <= 0.65
+
+
+def test_task_every_case_message_is_an_undated_task_in_production():
+    from services.message_sources import IncomingMessage
+    from services.whatsapp_processor import extract_commitment
+
+    bad = []
+    for c in tk.load_synthetic():
+        r = extract_commitment(
+            IncomingMessage(id=c["id"], sender="x", text=c["message"], ts="2026-10-12T14:00:00")
+        )
+        if not (r and r.type == "task" and not r.date and not r.due and not r.time):
+            bad.append(c["id"])
+    assert bad == []
+
+
+def test_task_prompt_uses_production_builder():
+    case = tk.load_synthetic()[0]
+    prompt = tk.build_prompt(case)
+    assert case["message"] in prompt and "MENSAGEM AVALIADA" in prompt
+
+
+def test_task_score_with_valid_wrong_and_failed_answers():
+    case = {"id": "x", "kind": "synthetic", "expect": {"keep": True}}
+    assert tk.score(case, {"keep": True, "title": "Enviar"})["ok"]
+    wrong = tk.score(case, {"keep": False, "title": None})
+    assert not wrong["ok"] and wrong["fn"]
+    assert not tk.score(case, None)["valid"]
+    assert not tk.score(case, {"keep": "yes"})["ok"]
+
+
+def _task_oracle(monkeypatch, correct: bool):
+    by_prompt = {tk.build_prompt(c): c["expect"]["keep"] for c in tk.load_synthetic()}
+
+    def fake(task, prompt, schema, *, provider=None, models=None):
+        assert task == "TASK" and provider == "openrouter"
+        return {"keep": by_prompt[prompt] == correct, "title": None}
+
+    monkeypatch.setattr(llm_structured, "run_structured", fake)
+
+
+def test_task_threshold_gate_exit_codes(monkeypatch):
+    _task_oracle(monkeypatch, correct=True)
+    out: list[str] = []
+    assert tk.run("synthetic", "openrouter", ["m1"], out=out.append) == 0
+    assert "accuracy=100%" in out[0]
+    _task_oracle(monkeypatch, correct=False)
+    out = []
+    assert tk.run("synthetic", "openrouter", ["m1"], out=out.append) == 1
+    assert any("GATE FAILED" in line for line in out) and any("FAIL " in line for line in out)
+    assert tk.run("synthetic", "openrouter", ["m1"], min_accuracy=0.0, out=lambda _s: None) == 0
+
+
+def test_task_ambiguous_cases_are_not_scored(tmp_path, monkeypatch):
+    path = tmp_path / "c.yaml"
+    path.write_text(
+        '- {id: a, context: [], message: "enviar x", expect: {keep: false}}\n'
+        '- {id: b, context: [], message: "mandar y", expect: {keep: true}, ambiguous: true}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        llm_structured, "run_structured", lambda *a, **k: {"keep": False, "title": None}
+    )
+    out: list[str] = []
+    assert tk.run("synthetic", "openrouter", ["m"], synthetic_path=path, out=out.append) == 0
+    assert "n=1 (excluded 1)" in out[0]
+
+
+def test_task_main_flags_and_cli_dispatch(monkeypatch):
+    from testing import cli
+
+    _task_oracle(monkeypatch, correct=False)
+    assert tk.main(["task", "--model", "a", "--min-accuracy", "0.0"]) == 0
+    assert tk.main(["task", "--model", "a", "--min-accuracy", "0.99"]) == 1
+    seen: list = []
+    monkeypatch.setattr(tk, "main", lambda argv, cwd=None: seen.append(argv) or 0)
+    assert cli.run_llm_eval(["task", "--cases", "synthetic"], ".") is True
+    assert seen == [["task", "--cases", "synthetic"]]

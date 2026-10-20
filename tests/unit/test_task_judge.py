@@ -81,12 +81,12 @@ def test_prompt_has_context_question_rules_and_wrapped_candidate(monkeypatch):
     assert "«externo:whatsapp»" in p and "te mando o relatório amanhã" in p
     assert "«externo:whatsapp» Ana" in p.replace("\n", " ") or p.count("«externo:whatsapp»") > 2
     assert "entre o usuário (\"Você\") e «externo" in p  # contact display name is wrapped
-    assert tj.PROMPT_VERSION == "v1"
+    assert tj.PROMPT_VERSION == "v2"
 
 
 def test_evaluate_task_title_validation(monkeypatch):
     _llm(monkeypatch, {"keep": True, "title": "enviar o relatório"})
-    assert tj.evaluate_task(_row(), NOW) == {"keep": True, "title": "Enviar o relatório", "prompt_version": "v1"}
+    assert tj.evaluate_task(_row(), NOW) == {"keep": True, "title": "Enviar o relatório", "prompt_version": "v2"}
     _llm(monkeypatch, {"keep": True, "title": "x" * 61})
     assert tj.evaluate_task(_row(), NOW)["title"] is None  # too long: original title stays
     _llm(monkeypatch, {"keep": False, "title": "Enviar"})
