@@ -316,6 +316,11 @@ Perplexity: "toda sexta 18h, resuma meus e-mails da semana".
 | Agendamento | Pedido em linguagem natural vira tarefa recorrente (mesmos presets dos lembretes) que roda uma pergunta no horário |
 | Execução | Turno sem usuário, só tools de leitura (allowlist por origem), resultado no Telegram; teto de execuções/dia |
 
+### Etapa 36 — Precisão da extração — `evi-extraction-precision` — **Done** (2026-10-20)
+
+Change: [`evi-extraction-precision`](../changes/archive/2026-10-20-evi-extraction-precision/proposal.md).
+As-built: dívida de resposta ignora acenos ("Boa" logo após fala do usuário, vocabulário v3) e só consulta o juiz LLM (`DEBT`, OpenRouter ZDR) em mensagens ambíguas, com veredito guardado por mensagem e falha segura (sem veredito = continua dívida); o item mostra a última fala do usuário. Tarefas por regex **sem data** passam pelo juiz `TASK` (`needs_eval`, ≤ 6 tentativas, fallback 48 h). Reações 👍/👎 (`message_reaction`) em mensagem do briefing ou de resposta do chat viram feedback. `llm-eval debt` 100 % (28), `llm-eval task` 97–100 % (32).
+
 ## Deferido (sem data)
 
 | Item | Notas |

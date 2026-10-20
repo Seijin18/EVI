@@ -130,7 +130,7 @@ For every direct WhatsApp conversation (not a group, not a control chat, not a o
 - **THEN** that channel is not listed
 
 ### Requirement: Reply debts are computed deterministically
-A conversation SHALL be a reply debt when its last inbound message is newer than the user's last outbound message and than its acknowledgement, is older than `EVI_REPLY_DEBT_HOURS` (default 4) and younger than 7 days, and is not a closing-only message ("ok", "valeu", "obrigado", "joia", "tranquilo", "fechou", approval emoji only, or a thanks followed by a short vocative such as "obrigado, Marcão!"). No LLM SHALL be used. `dismiss_reply_debt` SHALL acknowledge a debt until a new inbound message arrives.
+A conversation SHALL be a reply debt when its last inbound message is newer than the user's last outbound message and than its acknowledgement, is older than `EVI_REPLY_DEBT_HOURS` (default 4) and younger than 7 days, and is not a message that needs no reply. Rules SHALL decide first: a closing-only message (vocabulary version 3: "ok", "valeu", "obrigado", "joia", "tranquilo", "fechou", "boa", "massa", "demorou", "isso", "uhum", laughter, approval emoji only, or a thanks followed by a short vocative) is never a debt; a message with a question mark or request wording is always a debt; a message of at most 3 words without request wording sent within 10 minutes after the user's last outbound message is an acknowledgement and is never a debt. Only the remaining ambiguous messages SHALL be judged by the structured LLM task `DEBT` (when `EVI_DEBT_JUDGE` is not `false`), outside the read path, with up to 8 recent messages of the conversation (both sides; third-party text wrapped as external data), and the verdict SHALL be stored for that inbound message id. A message without a verdict (judge off, failed, capped or not yet run) SHALL remain a debt. Listing debts SHALL never call an LLM. A listed debt SHALL carry the user's last outbound message (truncated) as context. `dismiss_reply_debt` SHALL acknowledge a debt until a new inbound message arrives.
 
 #### Scenario: SCN-DEBT-01
 - **GIVEN** a contact wrote "consegue me mandar o orçamento?" 6 hours ago and the user did not reply
@@ -146,6 +146,31 @@ A conversation SHALL be a reply debt when its last inbound message is newer than
 - **GIVEN** the last inbound messages of two conversations are "Joia" and "obrigado, Marcão!"
 - **WHEN** reply debts are listed
 - **THEN** neither conversation is listed
+
+#### Scenario: SCN-PREC-01
+- **GIVEN** the user wrote "Vou esperar essa terminar e aí já subo" and 22 seconds later the contact wrote "Boa"
+- **WHEN** reply debts are listed 5 hours later
+- **THEN** that conversation is not listed and no LLM was called
+
+#### Scenario: SCN-PREC-02
+- **GIVEN** the contact wrote "boa" 3 hours after the user's last message, with no request wording
+- **WHEN** reply debts are listed (judge unavailable)
+- **THEN** the conversation is not listed because "boa" is a closing word
+
+#### Scenario: SCN-PREC-03
+- **GIVEN** a listed debt whose last user message was "Te mando o orçamento hoje"
+- **WHEN** the briefing is assembled
+- **THEN** the item shows the contact, the inbound preview and `você: "Te mando o orçamento hoje"`
+
+#### Scenario: SCN-PREC-04
+- **GIVEN** an ambiguous inbound message the judge answered with `needs_reply=false`
+- **WHEN** reply debts are listed
+- **THEN** the conversation is not listed, and a second listing does not call the LLM again
+
+#### Scenario: SCN-PREC-05
+- **GIVEN** an ambiguous inbound message and the LLM is unavailable
+- **WHEN** reply debts are listed
+- **THEN** the conversation is listed (fail-safe)
 
 ### Requirement: The user's own promises are captured by pattern
 When `EVI_REPLY_DEBTS_ENABLED=true`, a `fromMe` message in a direct conversation matching a versioned list of promise patterns SHALL be stored at once as a `pending_commitments` row with `type='promise'`, `source='whatsapp_from_me'` and `status='needs_eval'`, which is never listed, briefed or notified. When `EVI_PROMISE_CONTEXT_ENABLED=true` (default), the row SHALL be evaluated outside the webhook request no earlier than `EVI_PROMISE_EVAL_DELAY_MIN` (default 30) minutes after the message, with up to 10 messages of the previous 24 hours and the messages that followed (both sides; third-party text wrapped as external data). The evaluation SHALL use the structured LLM task `PROMISE`; the LLM SHALL return the deadline as the expression used in the conversation and the code SHALL resolve it to a date. A confirmed, unfulfilled promise SHALL become `pending` with a title naming what was promised; a rejected one SHALL become `dismissed`; a fulfilled one SHALL become `done`. When the evaluation fails it SHALL be retried, and a row still `needs_eval` after 48 hours SHALL become `pending` with the message as title (a deadline already in the past is dropped so the row is listed). Rejections by the evaluation are not counted as user actions in usage metrics, and rows still waiting are never exposed by any listing, count or agent tool. When the flag is turned off, rows waiting for evaluation are released to `pending`. When the flag is off, the row SHALL be stored as `pending` from the pattern alone, with a resolved date when the message has one.
@@ -240,4 +265,17 @@ A WhatsApp summary for the same period SHALL be reused for up to 10 minutes unle
 #### Scenario: SCN-WA-RECENT-03
 - **WHEN** the user asks for today's WhatsApp summary twice within 10 minutes with no new message in between
 - **THEN** the LLM is called once
+
+### Requirement: Pattern-extracted undated tasks are evaluated with context
+When `EVI_REPLY_DEBTS_ENABLED=true` and `EVI_TASK_JUDGE` is not `false`, a `task` produced by the extraction pattern WITHOUT a resolved date SHALL be stored as `needs_eval` (never listed, briefed, counted or notified) and evaluated outside the webhook request like promises (delay `EVI_PROMISE_EVAL_DELAY_MIN`, up to 10 previous and following messages, third-party text and contact names wrapped as external data) by the structured LLM task `TASK`, which SHALL decide whether the message is a commitment or request the user must act on. A kept task SHALL become `undated` with a title naming the action; a rejected one SHALL become `dismissed` with `confirmed_via='auto-eval'` (not counted as a user action nor in the weekly "dismissed" count). A failed evaluation SHALL be retried at most 6 times; after that, or after 48 hours, the row SHALL take its status from the pattern with its original title and any past date cleared. Tasks with a resolved date, events and promises SHALL NOT be delayed or evaluated by this judge. When the flag is turned off, waiting task rows SHALL be released.
+
+#### Scenario: SCN-PREC-06
+- **GIVEN** a contact wrote "As empresas gostam do fornecedor enviar a NF pra eles darem baixa no sistema" in a general discussion
+- **WHEN** the task is evaluated
+- **THEN** it becomes `dismissed` and is never listed
+
+#### Scenario: SCN-PREC-07
+- **GIVEN** the user wrote "te mando o relatório" (no date) to a contact
+- **WHEN** the task is evaluated and kept
+- **THEN** it becomes `undated` with a title naming the report, and a task "te mando o relatório amanhã" (dated) was never delayed
 

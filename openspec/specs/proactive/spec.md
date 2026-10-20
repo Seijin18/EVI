@@ -191,11 +191,15 @@ When `EVI_BRIEFING_BUTTONS` is not `false`, the Telegram briefing SHALL carry in
 - **THEN** nothing is changed and, for the old briefing, the tap is answered saying it is old
 
 ### Requirement: Briefing feedback is recorded
-Tapping 👍 or 👎 on a briefing SHALL store the rating for that briefing's day and kind (last tap wins) and the weekly report SHALL show the count of each.
+Tapping 👍 or 👎 on a briefing, or reacting 👍 or 👎 to the briefing message in Telegram, SHALL store the rating for that briefing's day and kind (last one wins) and the weekly report SHALL show the count of each. Reactions SHALL be accepted only from the authorised chat; other emojis and unknown messages SHALL be ignored.
 
 #### Scenario: SCN-UX-09
 - **WHEN** the user taps 👎 and then 👍 on today's briefing
 - **THEN** today's briefing is stored with feedback `up`
+
+#### Scenario: SCN-PREC-08
+- **WHEN** the user reacts 👎 to today's briefing message and later changes the reaction to 👍
+- **THEN** today's briefing is stored with feedback `up`, and a reaction from another chat changes nothing
 
 ### Requirement: The morning briefing suggests one unused capability
 When `EVI_BRIEFING_TIPS` is not `false`, the morning briefing SHALL end with at most one tip line about a capability the user has not used in the last 14 days (reminders, voice, contact knowledge, buttons), with a ready-to-copy example, rotating daily among unused ones; when every capability was used, no tip SHALL be shown. The tip SHALL be the first line dropped when the briefing exceeds its line budget.

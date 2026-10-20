@@ -46,8 +46,7 @@
 
 ## 4. Simulação, segurança e fechamento
 
-- [ ] 4.1 Cenários `SIM-DEBT-10` (aceno "Boa" logo após fala do usuário não vira dívida), `SIM-DEBT-11` (mensagem ambígua julgada como pedido continua dívida, com contexto) e `SIM-PREC-01` (frase genérica com "enviar" não vira tarefa); cassetes; `docs/testing.md`
-  - Estado 2026-10-20: cenários e cassetes novos gravados (live x3 verde); faltam regravar SIM-DEBT-06 e SIM-SCHED-02 (limite mensal do Gemini estourou)
+- [x] 4.1 Cenários `SIM-DEBT-10` (aceno "Boa" logo após fala do usuário não vira dívida), `SIM-DEBT-11` (mensagem ambígua julgada como pedido continua dívida, com contexto) e `SIM-PREC-01` (frase genérica com "enviar" não vira tarefa); cassetes; `docs/testing.md`
   - SCN-PREC-01, SCN-PREC-05, SCN-PREC-06
   - Files: `tests/sim/scenarios/reply-debts/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`
@@ -56,6 +55,6 @@
   - Files: `docs/security/threat-model.md`, `docs/security/findings.md`
   - Verify: `./scripts/evi-security-scan --ci`
 
-- [ ] 4.3 Deploy (recriar `agent-api`), gates e BACKLOG/Progress/roadmap
+- [x] 4.3 Deploy (recriar `agent-api`), gates e BACKLOG/Progress/roadmap
   - Files: `openspec/BACKLOG.md`, `Progress.md`, `openspec/specs/roadmap.md`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit -q`, `./scripts/evi-test smoke`, `openspec validate --specs`, `ruff check agent/ --select E,W,F --ignore E501`

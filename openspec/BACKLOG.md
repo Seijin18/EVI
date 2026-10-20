@@ -35,6 +35,7 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 55 | `evi-discovery-tips` | 33 | **Done** (2026-10-18) | Dica rotativa no briefing; prévia da noite às 21h |
 | 56 | `evi-awaiting-their-reply` | 34 | **Done** (2026-10-18) | Quem não respondeu você (follow-up) no briefing de segunda |
 | 57 | `evi-scheduled-tasks` | 35 | **Done** (2026-10-18) | Tarefas agendadas em linguagem natural, só leitura |
+| 58 | `evi-extraction-precision` | 36 | **Done** (2026-10-20) | Dívida de resposta mais precisa (vocabulário v3, aceno, juiz LLM só no ambíguo, contexto "você: …"), juiz de tarefa sem data, reações 👍/👎 do Telegram como feedback |
 
 ## Itens da revisão de segurança (2026-10-13)
 

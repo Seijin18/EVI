@@ -151,6 +151,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **22** | **Confiabilidade percebida** | **Done** | `evi-perceived-reliability` — watchdog, `/ajuda`, ack, OAuth no turno |
 | **23** | **Injeção (restante)** | **Done** | `evi-prompt-injection-model` — confirmação de exclusão, allowlist por origem, chat do Telegram restrito |
 | **35** | **Tarefas agendadas** | **Done** | `evi-scheduled-tasks` — pergunta agendada em linguagem natural, só leitura |
+| **36** | **Precisão da extração** | **Done** | `evi-extraction-precision` — juiz LLM só no ambíguo para dívidas, juiz de tarefa sem data, reações do Telegram como feedback |
 | **34** | **Esperando resposta deles** | **Done** | `evi-awaiting-their-reply` — follow-up semanal de quem não respondeu você, sem envio a terceiros |
 | **33** | **Descoberta e prévia da noite** | **Done** | `evi-discovery-tips` — dica rotativa, prévia às 21h, 🔔 lembrar amanhã |
 | **32** | **Resumo de WhatsApp rápido** | **Done** | `evi-whatsapp-summary-cache` — timeline local primeiro, Evolution em paralelo com orçamento, cache do resumo |
