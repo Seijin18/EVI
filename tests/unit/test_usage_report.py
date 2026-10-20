@@ -424,3 +424,11 @@ def test_scheduled_turns_are_cost_only_not_user_activity():
     assert k["success_rate"] == base["success_rate"] and k["latency_p50"] == base["latency_p50"]
     assert k["tokens"] == 2 * 110 + 3 * 1100 and k["cost_brl"] > base["cost_brl"]
     assert ur.compute_kpis(sched)["turns"] == 0
+
+
+def test_scn_prec_09_reaction_feedback_is_reviewed_like_ruim_command():
+    # a 👎 reaction writes turn_log.feedback='ruim', the same column /ruim uses
+    turns = [mk(1, feedback="ruim"), mk(2, feedback="bom"), mk(3)]
+    rev = ur.review_candidates(turns)
+    assert [i["turn"]["id"] for i in rev] == [1]
+    assert rev[0]["flags"] == ["ruim"]

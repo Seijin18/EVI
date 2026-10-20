@@ -52,6 +52,18 @@ def _persist_turn(session_id: str, user_text: str, assistant_text: str) -> None:
         soft_fail("telegram_handler._persist_turn", exc)
 
 
+def _link_turn_message(session_id: str, user_text: str, message_id: int) -> None:
+    """Remember which Telegram message carried this turn's reply (reactions -> feedback)."""
+    try:
+        import db
+
+        db.set_turn_tg_message_id(session_id, user_text, message_id)
+    except Exception as exc:
+        from services.soft_fail import soft_fail
+
+        soft_fail("telegram_handler.link_turn_message", exc)
+
+
 def _reply_direct(
     *,
     session_id: str,
@@ -61,6 +73,7 @@ def _reply_direct(
     tools: list,
     extra: Dict[str, Any] | None = None,
     reply_prefix: str = "",
+    link_turn: bool = False,
 ) -> Dict[str, Any]:
     from services.send_result import EMPTY_TEXT, send_outcome
 
@@ -73,6 +86,9 @@ def _reply_direct(
     sent, reason = send_outcome(result)
     if not ai_content:
         reason = EMPTY_TEXT
+    mid = getattr(result, "message_id", None)
+    if link_turn and sent and mid:
+        _link_turn_message(session_id, text, mid)
     _persist_turn(session_id, text, model_content if (model_content and ai_content) else ai_content)
     log_telegram_turn(
         session_id,
@@ -261,7 +277,8 @@ _REACTION_FEEDBACK = {"👍": "up", "👎": "down"}
 
 
 def handle_briefing_reaction(reaction: Dict[str, Any]) -> Dict[str, Any]:
-    """A 👍/👎 reaction on a briefing message is briefing feedback (last one wins).
+    """A 👍/👎 reaction on a briefing message is briefing feedback (last one wins); on a chat
+    reply it is feedback (bom/ruim) on the turn that produced it.
 
     Silent by design: no reply; other emojis, removed reactions, unknown messages and
     foreign chats change nothing. Never raises.
@@ -290,6 +307,10 @@ def handle_briefing_reaction(reaction: Dict[str, Any]) -> Dict[str, Any]:
                 break
             db.set_briefing_feedback(_date.fromisoformat(str(payload["day"])), bkind, feedback)
             return {"ok": True, "reaction": feedback}
+        # Not a briefing: a thumb on a chat reply is feedback on the turn that produced it.
+        turn_fb = "bom" if feedback == "up" else "ruim"
+        if db.set_turn_feedback_by_message(f"telegram-{chat_id}", int(message_id), turn_fb):
+            return {"ok": True, "reaction": feedback, "turn_feedback": turn_fb}
         return {"ok": True, "skipped": "not a briefing"}
     except Exception as exc:
         from services.soft_fail import soft_fail
@@ -715,4 +736,5 @@ def process_telegram_update(
         ai_content=result.get("response") or "",
         tools=audit_payload if isinstance(audit_payload, list) else [],
         extra={"llm": True},
+        link_turn=True,
     )

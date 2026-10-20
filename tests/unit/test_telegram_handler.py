@@ -425,6 +425,7 @@ def buttons(monkeypatch):
         }}],
         acked=[], commitments={12: "event"}, status={}, ignored=[], feedback=None, replied=[],
         answers=[], edits=[], turns=[], confirmed=[], promises=[],
+        turn_fb={}, linked=[], turn_msgs={4321: "turn-A"},
     )
     monkeypatch.setattr(briefing, "now_local", lambda: TODAY)
     monkeypatch.setattr(db, "init_db", lambda: None)
@@ -433,6 +434,11 @@ def buttons(monkeypatch):
                         lambda sid, name, payload: st.snaps.insert(0, {"tool_name": name, "payload": payload}))
     monkeypatch.setattr(db, "get_briefing", lambda day, kind: {"feedback": st.feedback})
     monkeypatch.setattr(db, "set_briefing_feedback", lambda day, kind, v: setattr(st, "feedback", v) or True)
+    monkeypatch.setattr(db, "set_turn_feedback_by_message",
+                        lambda sid, mid, v: st.turn_fb.__setitem__(st.turn_msgs[mid], v) or 1
+                        if mid in st.turn_msgs and sid == f"telegram-{OWNER}" else None)
+    monkeypatch.setattr(db, "set_turn_tg_message_id",
+                        lambda sid, text, mid: st.linked.append((sid, text, mid)) or 1)
     monkeypatch.setattr(db, "mark_briefing_replied", lambda day, kind: st.replied.append((str(day), kind)) or True)
     monkeypatch.setattr(db, "acknowledge", lambda jid, ts: st.acked.append(jid))
     monkeypatch.setattr(db, "set_name_prompt_ignored", lambda jid, until: st.ignored.append(jid))
@@ -891,3 +897,52 @@ def test_scn_prec_08_reaction_never_raises(buttons, monkeypatch):
 
     monkeypatch.setattr(db, "load_tool_snapshots", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("db")))
     assert _go(_react(["👍"]))["ok"] is True and buttons.feedback is None
+
+
+# --- SCN-PREC-09: a reaction on a chat reply is feedback on the turn that produced it --------
+
+
+def test_scn_prec_09_thumb_down_on_a_reply_marks_that_turn(buttons):
+    out = _go(_react(["👎"], message_id=4321))
+    assert buttons.turn_fb == {"turn-A": "ruim"} and out["turn_feedback"] == "ruim"
+    assert buttons.feedback is None  # the briefing feedback is untouched
+    _go(_react(["👍"], message_id=4321))
+    assert buttons.turn_fb == {"turn-A": "bom"}
+    assert not buttons.replied and not buttons.answers and not buttons.edits
+
+
+def test_scn_prec_09_unknown_message_and_foreign_chat_change_nothing(buttons):
+    _go(_react(["👎"], message_id=9999))
+    _go(_react(["👎"], message_id=4321, chat=111))
+    _go(_react(["❤"], message_id=4321))
+    assert buttons.turn_fb == {}
+
+
+def test_scn_prec_09_reply_message_id_is_stored_on_the_turn(buttons, monkeypatch):
+    from services.send_result import SendResult
+
+    monkeypatch.setenv("EVI_DIRECT_HANDLERS", "false")
+    monkeypatch.setattr("services.telegram_handler._persist_turn", lambda *a: None)
+    monkeypatch.setattr("services.telegram_handler.log_telegram_turn", lambda *a, **k: None)
+    monkeypatch.setattr("services.telegram_handler.send_telegram_message",
+                        lambda *a, **k: SendResult.ok(message_id=4321))
+    update = {"message": {"text": "agenda?", "chat": {"id": OWNER, "type": "private"}}}
+    out = process_telegram_update(update, lambda m, s: {"response": "ok", "tools": []})
+    assert out["telegram_sent"] is True
+    assert buttons.linked == [(f"telegram-{OWNER}", "agenda?", 4321)]
+
+
+def test_scn_prec_09_reply_still_sent_when_storing_the_id_fails(buttons, monkeypatch):
+    import db
+    from services.send_result import SendResult
+
+    monkeypatch.setenv("EVI_DIRECT_HANDLERS", "false")
+    monkeypatch.setattr("services.telegram_handler._persist_turn", lambda *a: None)
+    monkeypatch.setattr("services.telegram_handler.log_telegram_turn", lambda *a, **k: None)
+    monkeypatch.setattr("services.telegram_handler.send_telegram_message",
+                        lambda *a, **k: SendResult.ok(message_id=4321))
+    monkeypatch.setattr(db, "set_turn_tg_message_id",
+                        lambda *a: (_ for _ in ()).throw(RuntimeError("db down")))
+    update = {"message": {"text": "agenda?", "chat": {"id": OWNER, "type": "private"}}}
+    out = process_telegram_update(update, lambda m, s: {"response": "ok", "tools": []})
+    assert out["telegram_sent"] is True and out["response"] == "ok"

@@ -5,7 +5,7 @@
   - Files: `agent/services/reply_debts.py`, `agent/db.py`, `tests/unit/test_reply_debts.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_reply_debts.py tests/unit/test_db.py -q`
 
-- [ ] 1.2 Coluna `last_out_preview` (gravada em `record_outbound`) e contexto no item do briefing ("você: …")
+- [x] 1.2 Coluna `last_out_preview` (gravada em `record_outbound`) e contexto no item do briefing ("você: …")
   - SCN-PREC-03
   - Files: `agent/db.py`, `agent/services/reply_debts.py`, `agent/services/briefing.py`, `tests/unit/test_briefing.py`, `tests/unit/test_db.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_briefing.py tests/unit/test_db.py -q`
@@ -39,7 +39,7 @@
   - Files: `agent/services/telegram_poller.py`, `agent/services/telegram_handler.py`, `agent/main.py`, `tests/unit/test_telegram_handler.py`, `tests/unit/test_telegram_poller.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_handler.py tests/unit/test_telegram_poller.py -q`
 
-- [ ] 3.2 `turn_log.tg_message_id` gravado no envio da resposta do chat; reação 👍/👎 nessa mensagem → `feedback` `bom`/`ruim`; relatório semanal conta reações junto com botões e `/bom` `/ruim`
+- [x] 3.2 `turn_log.tg_message_id` gravado no envio da resposta do chat; reação 👍/👎 nessa mensagem → `feedback` `bom`/`ruim`; relatório semanal conta reações junto com botões e `/bom` `/ruim`
   - SCN-PREC-09
   - Files: `agent/db.py`, `agent/services/telegram_handler.py`, `agent/services/telegram_notify.py`, `agent/services/usage_report.py`, `tests/unit/test_telegram_handler.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_telegram_handler.py tests/unit/test_usage_report.py tests/unit/test_db.py -q`
