@@ -93,6 +93,8 @@ def build_promise_prompt(
     knowledge: str = "",
 ) -> str:
     """Prompt v4 (pure). ``before``/``after`` are already formatted lines."""
+    # The label can be the contact's own pushName (third-party text): wrap it too.
+    contact = wrap_external(contact, source="whatsapp", max_chars=60)
     prompt = _PROMPT.format(
         contact=contact,
         weekday=WEEKDAYS[ref.weekday()],

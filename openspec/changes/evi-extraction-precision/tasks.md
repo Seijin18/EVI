@@ -51,7 +51,7 @@
   - Files: `tests/sim/scenarios/reply-debts/`, `tests/sim/cassettes/`, `docs/testing.md`
   - Verify: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` e `./scripts/evi-sim run --tag critical --llm replay`
 
-- [ ] 4.2 Revisão leve de segurança (novas tarefas de LLM com conteúdo de terceiros): `docs/security/threat-model.md`, `./scripts/evi-security-scan`, `docs/security/findings.md`
+- [x] 4.2 Revisão leve de segurança (novas tarefas de LLM com conteúdo de terceiros): `docs/security/threat-model.md`, `./scripts/evi-security-scan`, `docs/security/findings.md`
   - Files: `docs/security/threat-model.md`, `docs/security/findings.md`
   - Verify: `./scripts/evi-security-scan --ci`
 

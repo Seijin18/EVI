@@ -44,7 +44,7 @@ instrução); **TB5** processo ↔ disco.
 | Tokens OAuth Google (Gmail `modify`, Calendar, Tasks) | Windmill (Postgres `windmill`) | Ler/apagar e-mail, criar/alterar eventos e tarefas; tomada de contas via reset de senha por e-mail |
 | Sessão do WhatsApp | Evolution (Postgres + volume) | Ler e enviar mensagens como o usuário |
 | Capacidade de agir do agente | `agent/tools/` (`delete_emails*`, `schedule_event`, `create_task`, envio Telegram/WhatsApp) | Ação em nome do usuário sem pedido dele |
-| Conversas de terceiros | `data/contact_memory/`, Postgres, `logs/evolution_webhook.jsonl` | Vazamento de dados pessoais de terceiros (LGPD) |
+| Conversas de terceiros | `data/contact_memory/`, Postgres (incl. `wa_conversation_state.last_out_preview/judge_*`, `turn_log.tg_message_id`), `logs/evolution_webhook.jsonl` | Vazamento de dados pessoais de terceiros (LGPD) |
 | Memória do usuário | `EVI_WORKSPACE/` (`USER.md`, `MEMORY.md`), Postgres | Perfil íntimo do usuário; envenenamento de memória |
 | Chaves e segredos | `.env` (600) | `EVI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `WINDMILL_TOKEN`, senhas de banco → pivô para todos os ativos acima; custo de LLM |
 | Disponibilidade | todos os containers | Lembretes/briefing não chegam (confiabilidade) |
@@ -54,7 +54,7 @@ instrução); **TB5** processo ↔ disco.
 | Destino | O que sai | Quando | Política |
 |---|---|---|---|
 | Gemini API | Turnos de chat (mensagem do usuário + contexto, incl. trechos `wrap_external` de e-mail/WhatsApp), embeddings se `EVI_EMBED_PROVIDER=gemini` | `EVI_LLM_PROVIDER=gemini` | Tier gratuito retém para treino → não usar com conteúdo pessoal (`docs/security.md`). Tier da chave de produção: **a verificar** |
-| OpenRouter | Prompts das tarefas de fundo (`llm_structured`: promessas, conhecimento de contato) | `EVI_LLM_TASK_<T>_PROVIDER=openrouter` | Forçado em código: `provider.zdr=true`, `data_collection="deny"`; teto diário `EVI_LLM_TASK_DAILY_USD` (fail-closed). **Decisão do usuário 2026-10-12** (teto US$ 5/mês) |
+| OpenRouter | Prompts das tarefas de fundo (`llm_structured`: promessas, conhecimento de contato, `DEBT` — `debt_judge.py`, `TASK` — `task_judge.py`; estas duas enviam trecho de mensagem de terceiros) | `EVI_LLM_TASK_<T>_PROVIDER=openrouter` | Forçado em código: `provider.zdr=true`, `data_collection="deny"`; teto diário `EVI_LLM_TASK_DAILY_USD` (fail-closed). `DEBT`/`TASK`: só devolvem booleano/título curto, nunca chamam tools, texto de terceiros e nome do contato em `wrap_external`, prompts não registram o texto da mensagem em log; sem veredito (erro/teto) = continua sendo dívida/tarefa (fail-safe). **Decisão do usuário 2026-10-12** (teto US$ 5/mês) |
 | Google APIs | Consultas/escritas de e-mail, agenda, tarefas | Via Windmill | Escopos OAuth mínimos: **a verificar** (2.8) |
 | Telegram | Respostas, briefing, alertas do watchdog | Saída HTTPS; entrada por long polling (sem porta) | Bot com allowlist de chat |
 | WhatsApp (Evolution) | Respostas no chat de controle | Saída | Só para `EVI_WHATSAPP_CONTROL_JIDS` — outras rotas de envio: **a verificar** |
@@ -80,7 +80,7 @@ instrução); **TB5** processo ↔ disco.
 | `/run-task` | idem | Chave; executa **qualquer** tool registrada com params livres | Sem turno → canal `None` → `check_write` libera escrita; deleção ainda exige token+confirmação do turno (sem turno, recusa) — confirmar em 2.3 |
 | `/jobs/*` | idem | Chave | `/jobs/import-contacts` lê `request.path` sem restrição de diretório (qualquer arquivo visível no container; conteúdo não volta inteiro) — baixo |
 | Webhook Evolution `/webhooks/evolution` | rede Docker | `X-Api-Key` no webhook da instância; filtros (`INCOMING_ONLY`, `SKIP_GROUPS`, dedupe, idade, `MAX_PER_WEBHOOK`) | Webhook global: `WEBHOOK_GLOBAL_ENABLED=false` no compose (2026-10-13, ainda não commitado; recriação do container: **a verificar**, task 1.2). Limite de taxa/tamanho: **a verificar** (2.9) |
-| Webhook Telegram / polling | sem porta (polling) | `_chat_allowed`: `TELEGRAM_CHAT_ID` + `TELEGRAM_ALLOWED_CHAT_IDS` | **Fail-open**: sem `TELEGRAM_CHAT_ID` aceita qualquer chat (só loga aviso) |
+| Webhook Telegram / polling | sem porta (polling) | `_chat_allowed`: `TELEGRAM_CHAT_ID` + `TELEGRAM_ALLOWED_CHAT_IDS`. Update `message_reaction` (`handle_briefing_reaction`): só de chat **e** usuário autorizados, sem resposta ao usuário, só grava `feedback` do turno/briefing (sem tools, sem escrita externa); briefing mais antigo que os 50 últimos snapshots é ignorado | **Fail-open**: sem `TELEGRAM_CHAT_ID` aceita qualquer chat (só loga aviso) |
 | Chat de controle WhatsApp | via webhook | `parse_control_jids()` (`EVI_WHATSAPP_CONTROL_JIDS`) → `/chat` com canal `whatsapp_control` | Confiança no JID informado pela Evolution; spoofing de `fromMe`/JID: **a verificar** |
 | Ferramentas de escrita | LLM | `write_guard`: allowlist por canal (`WRITE_TOOLS` × `USER_CHANNELS`={telegram, whatsapp_control, api}); deleção em duas etapas (token, turno seguinte, confirmação literal, TTL 10 min, máx. 50) | Tools de envio de mensagem fora de `WRITE_TOOLS`? Tarefas novas (`llm_structured`) sem tools? — **a verificar** (2.6) |
 | Conteúdo de terceiros no prompt | LLM | `wrap_external` (marcadores neutralizados, NFKC, controle removido, truncado) | Cobertura em todos os caminhos (briefing, promessas, contato): **a verificar** (2.6) |
@@ -131,6 +131,9 @@ ou `:8001` pela LAN/tailnet (design, Riscos).
 | Evolution é API não oficial do WhatsApp | Aceito: risco de banimento/quebra da sessão |
 | Gemini/OpenRouter veem os prompts | Aceito sob ZDR (OpenRouter); Gemini conforme tier (a verificar) |
 | Teto de custo pode ser ultrapassado por chamadas concorrentes | Aceito (documentado em `llm_structured.py`) |
+| Backoff em processo dos juízes DEBT/TASK zera no restart | Aceito (F30): chamadas extras limitadas pelo teto diário em USD |
+| Juiz DEBT errar para `false` e esconder conversa ambígua | Aceito (F32): só mensagens curtas ambíguas, fail-safe em erro, eval 100% em 28 casos |
+| Reação a briefing fora dos 50 últimos snapshots | Aceito (F31): ignorada; só perde feedback |
 
 ## 8. Rotina — quando reabrir este modelo
 

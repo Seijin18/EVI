@@ -26,8 +26,8 @@ Status: `aberto` · `corrigido (<task/data>)` · `em correção (<task>)` · `BA
 | crítico | 1 | — (F1 corrigido) |
 | alto | 3 | todos corrigidos (F2, F5, F6) |
 | médio | 9 | ver tabela |
-| baixo | 9 | F13, F18, F20, F22 (BACKLOG) |
-| info | 6 | ver tabela |
+| baixo | 11 | F13, F18, F20, F22 (BACKLOG); F29 e F33 corrigidos |
+| info | 9 | ver tabela (F30–F32 aceitos) |
 
 ## Achados
 
@@ -61,6 +61,11 @@ Status: `aberto` · `corrigido (<task/data>)` · `em correção (<task>)` · `BA
 | F26 | Tailscale: `serve` antigo; ACLs não verificadas | info | corrigido (2026-10-19) | `serve` 443 → `:8094` removido (`tailscale serve --https=443 off`; agora "No serve config"); funnel off | ACLs no console (opcional) |
 | F27 | Spec base `remote-access` contradiz o delta | info | corrigido (5.1: MODIFIED no delta) | SCN-OPS-04 permite agent-api/windmill sem host IP | MODIFIED no delta antes do archive |
 | F28 | Webhooks sem limite de taxa/tamanho | info | aceito | chave + só rede Docker/loopback; `MAX_PER_WEBHOOK`, dedupe, idade 2 h | Aceito |
+| F29 | Nome do contato (pushName do WhatsApp) entrava sem `wrap_external` no prompt PROMISE | baixo | corrigido (4.2 do `evi-extraction-precision`, 2026-10-20) | `promise_context.build_promise_prompt` interpolava `{contact}` (e `SOBRE {contact}`) cru; o nome já passava por `sanitize_contact_name` (1 linha, 40 chars, sem marcadores, nomes com cara de instrução → neutro), tarefa sem tools | `wrap_external(contact, 'whatsapp', 60)` em `build_promise_prompt` + teste `test_contact_name_is_wrapped_in_prompt`. `task_judge` já embrulhava |
+| F30 | Backoff dos juízes (DEBT/TASK) é um dict em processo; zera no restart | info | aceito | `debt_judge.py`/`task_judge.py`: após reinício o mesmo item pode ser reavaliado → chamadas pagas extras | Aceito: limitado pelo teto diário em USD (`EVI_LLM_TASK_DAILY_USD`, fail-closed) |
+| F31 | Reação (👍/👎) a briefing fora dos últimos 50 snapshots é ignorada | info | aceito | `handle_briefing_reaction` só resolve o `message_id` entre os 50 snapshots mais recentes; sem resposta ao usuário, nada é gravado | Aceito: só perde feedback; sem efeito de escrita além de `feedback` |
+| F32 | Veredito do juiz DEBT pode esconder uma conversa se o modelo errar para `false` | info | aceito | Só mensagens curtas e ambíguas vão ao juiz; erro/ausência de veredito = continua sendo dívida (fail-safe); eval `debt` 100% em 28 casos | Aceito: mitigado por escopo estreito, fail-safe e eval |
+| F33 | pip-audit: `aiohttp==3.14.3` com 3 CVEs (correção em 3.14.4) | baixo | corrigido (2026-10-20: `agent/requirements.txt` → `aiohttp==3.14.4`; imagem reconstruída no deploy) | `./scripts/evi-security-scan --ci` → `deps.audit` FAIL: CVE-2026-111064, GHSA-2g87-pp6c-29x5, CVE-2026-111063; `agent/requirements.txt:2` | Subir para `aiohttp>=3.14.4` e rodar a suíte (change/commit à parte) |
 
 ## Checklist (design §2)
 
