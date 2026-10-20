@@ -16,8 +16,9 @@ feedback mais barato e hoje não é capturado.
   de fala sua" (≤ 3 palavras, sem pedido, ≤ 10 min após sua última mensagem); **juiz LLM só
   para os ambíguos** (últimas mensagens da conversa, veredito guardado por mensagem, falha
   segura = regra determinística); o item do briefing mostra o que o usuário disse antes.
-- **Tarefas extraídas por regex** (tipo `task`) passam pelo mesmo caminho assíncrono das
-  promessas (`needs_eval`) com um juiz próprio: "isso é um compromisso/pedido que o usuário
+- **Tarefas extraídas por regex sem data** (tipo `task`, as ruidosas) passam pelo mesmo caminho
+  assíncrono das promessas (`needs_eval`) com um juiz próprio; tarefas com data seguem o caminho
+  imediato de hoje: "isso é um compromisso/pedido que o usuário
   precisa cumprir?".
 - **Reações do Telegram** (`message_reaction`): 👍/👎 em mensagem do briefing ou resposta do
   chat vira o mesmo feedback dos botões e de `/bom` `/ruim`.

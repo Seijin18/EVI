@@ -45,8 +45,8 @@ A conversation SHALL be a reply debt when its last inbound message is newer than
 
 ## ADDED Requirements
 
-### Requirement: Pattern-extracted tasks are evaluated with context
-When `EVI_TASK_JUDGE` is not `false`, a `task` produced by the extraction pattern SHALL be stored as `needs_eval` (never listed, briefed or notified) and evaluated outside the webhook request like promises (delay `EVI_PROMISE_EVAL_DELAY_MIN`, up to 10 previous and following messages, third-party text wrapped as external data) by the structured LLM task `TASK`, which SHALL decide whether the message is a commitment or request the user must act on. A kept task SHALL receive its final status from the pattern's date rules (`pending` or `undated`) and a title naming the action; a rejected one SHALL become `dismissed` with `confirmed_via='auto-eval'` (not counted as a user action). When evaluation fails, a row still `needs_eval` after 48 hours SHALL take the status from the pattern. Events SHALL not be evaluated.
+### Requirement: Pattern-extracted undated tasks are evaluated with context
+When `EVI_REPLY_DEBTS_ENABLED=true` and `EVI_TASK_JUDGE` is not `false`, a `task` produced by the extraction pattern WITHOUT a resolved date SHALL be stored as `needs_eval` (never listed, briefed, counted or notified) and evaluated outside the webhook request like promises (delay `EVI_PROMISE_EVAL_DELAY_MIN`, up to 10 previous and following messages, third-party text and contact names wrapped as external data) by the structured LLM task `TASK`, which SHALL decide whether the message is a commitment or request the user must act on. A kept task SHALL become `undated` with a title naming the action; a rejected one SHALL become `dismissed` with `confirmed_via='auto-eval'` (not counted as a user action nor in the weekly "dismissed" count). A failed evaluation SHALL be retried at most 6 times; after that, or after 48 hours, the row SHALL take its status from the pattern with its original title and any past date cleared. Tasks with a resolved date, events and promises SHALL NOT be delayed or evaluated by this judge. When the flag is turned off, waiting task rows SHALL be released.
 
 #### Scenario: SCN-PREC-06
 - **GIVEN** a contact wrote "As empresas gostam do fornecedor enviar a NF pra eles darem baixa no sistema" in a general discussion
@@ -54,6 +54,6 @@ When `EVI_TASK_JUDGE` is not `false`, a `task` produced by the extraction patter
 - **THEN** it becomes `dismissed` and is never listed
 
 #### Scenario: SCN-PREC-07
-- **GIVEN** the user wrote "te mando o relatório amanhã" to a contact
+- **GIVEN** the user wrote "te mando o relatório" (no date) to a contact
 - **WHEN** the task is evaluated and kept
-- **THEN** it becomes `pending` with tomorrow's date and a title naming the report
+- **THEN** it becomes `undated` with a title naming the report, and a task "te mando o relatório amanhã" (dated) was never delayed

@@ -23,11 +23,16 @@ snapshot (`session_tool_snapshots`); respostas de chat não guardam `message_id`
    Tarefa `DEBT`, mesmo provedor/ZDR/teto diário das demais (`EVI_LLM_TASK_DEBT_*`).
 4. **Contexto no item**: nova coluna `last_out_preview` (texto da última mensagem do usuário,
    truncado em 80); o briefing mostra `Felipe · "Boa" (você: "Vou esperar essa terminar…")`.
-5. **Juiz de tarefa**: `task` vindo de `extract_commitment` entra como `needs_eval` (o mesmo
-   atraso de 30 min e fallback de 48 h das promessas, `commitment_status_for` preservado para o
-   estado final). Tarefa `TASK`: `{keep: bool, title, due}`; `keep=false` → `dismissed` com
-   `confirmed_via='auto-eval'`. Falha/48 h → estado calculado pela regra (`pending`/`undated`).
-   Eventos continuam sem juiz.
+5. **Juiz de tarefa**: só `task` **sem data resolvida** vindo de `extract_commitment` e só com
+   `EVI_REPLY_DEBTS_ENABLED` (o estado final de uma tarefa sem data é `undated`, que não notifica):
+   entra como `needs_eval` (mesmo atraso de 30 min e fallback de 48 h das promessas). Tarefas com data
+   e eventos mantêm o caminho imediato (ingest, grafo, notificação, digest urgente) — o atraso do
+   juiz não pode esconder um compromisso com prazo curto. Tarefa `TASK`: `{keep: bool, title}`
+   (a data continua a do padrão); `keep=false` → `dismissed` com `confirmed_via='auto-eval'`
+   (fora das métricas de ação e do "dispensados" do relatório); `keep=true` → `undated` com o título
+   do modelo. Falha: nova tentativa a cada 30 min, no máximo 6; depois disso, ou após 48 h, vale o
+   estado do padrão com o título original (datas passadas são limpas). Desligar a flag libera as
+   linhas em espera.
 6. **Reações**: `ALLOWED_UPDATES` ganha `message_reaction`; `process_telegram_update` trata
    `message_reaction` só do chat autorizado: 👍 → `up`, 👎 → `down` (outros emojis ignorados;
    remover a reação não apaga). Alvo: (a) `message_id` do snapshot do briefing → `set_briefing_feedback`;

@@ -22,7 +22,7 @@
 
 ## 2. Tarefas extraídas por regex
 
-- [ ] 2.1 Juiz de tarefa: `task` de `extract_commitment` entra como `needs_eval`; `task_judge.py` (tarefa `TASK`, `keep=false` → `dismissed`/`auto-eval`), fallback de 48 h; flag `EVI_TASK_JUDGE`; eventos inalterados
+- [x] 2.1 Juiz de tarefa: `task` sem data de `extract_commitment` (com reply debts ligado) entra como `needs_eval`; `task_judge.py` (tarefa `TASK`, `keep=false` → `dismissed`/`auto-eval`), fallback de 48 h; flag `EVI_TASK_JUDGE`; eventos inalterados
   - SCN-PREC-06, SCN-PREC-07
   - Files: `agent/main.py`, `agent/services/task_judge.py`, `agent/services/reminder_loop.py`, `agent/db.py`, `tests/unit/test_task_judge.py`
   - Verify: `PYTHONPATH=agent python3 -m pytest tests/unit/test_task_judge.py tests/unit/test_promises.py tests/unit/test_whatsapp_processor.py -q`

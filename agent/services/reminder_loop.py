@@ -2,7 +2,7 @@
 
 Started in the FastAPI lifespan when EVI_REMINDERS_ENABLED is truthy, promise context
 evaluation is on, or EVI_SCHEDULED_TASKS_ENABLED is not false (it also drains the
-`needs_eval` promise queue, ≤1/min, and hands due scheduled tasks to their own
+`needs_eval` promise and task queues, ≤1/min, and hands due scheduled tasks to their own
 executor every 30 s). The first
 tick runs immediately so reminders that fell due while the process was down are
 delivered right away. Pacing uses Event.wait (monotonic, unaffected by libfaketime);
@@ -24,6 +24,7 @@ DEFAULT_TICK_SEC = 30.0
 MIN_TICK_SEC = 5.0
 PROMISE_EVAL_EVERY_SEC = 60.0
 PROMISE_EVAL_BATCH = 3
+TASK_EVAL_BATCH = 3
 SCHEDULED_EVERY_SEC = 30.0  # due scheduled tasks are claimed at most this often
 SWEEP_HOUR, SWEEP_MINUTE = 6, 45  # daily fulfilment sweep, before the 07:00 briefing
 
@@ -59,6 +60,31 @@ def _promise_context_enabled() -> bool:
     except Exception as exc:  # noqa: BLE001
         soft_fail("reminder_loop.promise_flag", exc)
         return False
+
+
+def _task_judge_on() -> bool:
+    try:
+        from services.task_judge import task_judge_enabled
+
+        return task_judge_enabled()
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("reminder_loop.task_judge_flag", exc)
+        return False
+
+
+def release_stranded_tasks() -> int:
+    """Task judge off: waiting needs_eval tasks take their pattern status (never hidden)."""
+    if _task_judge_on() or not os.getenv("DATABASE_URL"):
+        return 0
+    try:
+        import db
+
+        from tools.calendar_time import now_local
+
+        return db.release_needs_eval_tasks(now_local().date().isoformat())
+    except Exception as exc:  # noqa: BLE001
+        soft_fail("reminder_loop.release_tasks", exc)
+        return 0
 
 
 def _reminders_on() -> bool:
@@ -148,6 +174,15 @@ def _run(stop: threading.Event, interval: float) -> None:
                     _maybe_sweep()
                 except Exception as exc:
                     soft_fail("reminder_loop.promise_sweep_hook", exc)
+            if not _task_judge_on():
+                release_stranded_tasks()  # flag flipped off while running
+            else:
+                try:
+                    from services import task_judge
+
+                    task_judge.process_due_task_evaluations(batch=TASK_EVAL_BATCH)
+                except Exception as exc:
+                    soft_fail("reminder_loop.task_eval", exc)
             try:
                 from services import debt_judge
 
@@ -162,7 +197,8 @@ def start_loop() -> bool:
     """Start the daemon thread if enabled and DB configured. Idempotent."""
     global _thread, _stop
     release_stranded_promises()
-    if not (_reminders_on() or _promise_context_enabled() or _scheduled_on()):
+    release_stranded_tasks()
+    if not (_reminders_on() or _promise_context_enabled() or _scheduled_on() or _task_judge_on()):
         return False
     if not os.getenv("DATABASE_URL"):
         logger.warning("DATABASE_URL unset; reminder loop not started")

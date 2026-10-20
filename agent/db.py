@@ -367,7 +367,7 @@ def list_promises_to_evaluate(now: Any, limit: int = 10) -> List[Dict[str, Any]]
                 SELECT id, source_id, title, due_date::text, raw_text, source_chat,
                        msg_ts, next_eval_at, eval_attempts, created_at
                 FROM pending_commitments
-                WHERE status = 'needs_eval' AND next_eval_at <= %s
+                WHERE status = 'needs_eval' AND type <> 'task' AND next_eval_at <= %s
                 ORDER BY next_eval_at ASC, id ASC
                 LIMIT %s
                 """,
@@ -384,7 +384,8 @@ def list_stale_needs_eval(cutoff: Any, limit: int = 100) -> List[Dict[str, Any]]
                 """
                 SELECT id, title, due_date::text, msg_ts, created_at
                 FROM pending_commitments
-                WHERE status = 'needs_eval' AND COALESCE(msg_ts, created_at) < %s
+                WHERE status = 'needs_eval' AND type <> 'task'
+                  AND COALESCE(msg_ts, created_at) < %s
                 ORDER BY id ASC
                 LIMIT %s
                 """,
@@ -400,6 +401,7 @@ def finish_promise_evaluation(
     due_date: str | None = None,
     *,
     clear_due: bool = False,
+    clear_event: bool = False,
     confirmed_via: str | None = None,
 ) -> bool:
     """Leave needs_eval: set the final status (+ title/due when given). Only from needs_eval.
@@ -415,11 +417,13 @@ def finish_promise_evaluation(
                 SET status = %s,
                     title = COALESCE(%s, title),
                     due_date = CASE WHEN %s THEN NULL ELSE COALESCE(%s, due_date) END,
+                    event_date = CASE WHEN %s THEN NULL ELSE event_date END,
                     confirmed_via = COALESCE(%s, confirmed_via),
                     next_eval_at = NULL
                 WHERE id = %s AND status = 'needs_eval'
                 """,
-                (new_status, title or None, clear_due, due_date or None, confirmed_via, commitment_id),
+                (new_status, title or None, clear_due, due_date or None, clear_event,
+                 confirmed_via, commitment_id),
             )
             ok = cur.rowcount > 0
         conn.commit()
@@ -440,9 +444,81 @@ def release_needs_eval(today: str | None = None) -> int:
                 SET status = 'pending', next_eval_at = NULL,
                     due_date = CASE WHEN due_date < COALESCE(%s::date, CURRENT_DATE)
                                     THEN NULL ELSE due_date END
-                WHERE status = 'needs_eval'
+                WHERE status = 'needs_eval' AND type <> 'task'
                 """,
                 (today,),
+            )
+            n = cur.rowcount
+        conn.commit()
+    return n
+
+
+# --- task judge queue (evi-extraction-precision): same needs_eval rows, type='task' ----
+
+def list_tasks_to_evaluate(now: Any, limit: int = 3) -> List[Dict[str, Any]]:
+    """needs_eval tasks whose next_eval_at is due (oldest first)."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, source_id, title, event_date::text, due_date::text, raw_text,
+                       source_chat, source_label, msg_ts, next_eval_at, eval_attempts, created_at
+                FROM pending_commitments
+                WHERE status = 'needs_eval' AND type = 'task' AND next_eval_at <= %s
+                ORDER BY next_eval_at ASC, id ASC
+                LIMIT %s
+                """,
+                (now, limit),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+def list_stale_task_evals(cutoff: Any, limit: int = 100) -> List[Dict[str, Any]]:
+    """needs_eval tasks whose message is older than `cutoff` (48 h fallback)."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, source_id, title, event_date::text, due_date::text, raw_text,
+                       source_chat, source_label, msg_ts, created_at
+                FROM pending_commitments
+                WHERE status = 'needs_eval' AND type = 'task'
+                  AND COALESCE(msg_ts, created_at) < %s
+                ORDER BY id ASC
+                LIMIT %s
+                """,
+                (cutoff, limit),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+def release_needs_eval_tasks(today: str | None = None) -> int:
+    """Task judge turned off: waiting tasks take the pattern-final status.
+
+    Past event/due dates (before `today`, YYYY-MM-DD; default CURRENT_DATE) are cleared
+    so the row is listed. 'undated' when no date is left and reply debts are on, else
+    'pending'. No capture side effects (ingest/graph/notify) run on release.
+    """
+    from services.whatsapp_processor import reply_debts_enabled
+
+    undated = reply_debts_enabled()
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE pending_commitments
+                SET event_date = CASE WHEN event_date < COALESCE(%(t)s::date, CURRENT_DATE)
+                                      THEN NULL ELSE event_date END,
+                    due_date = CASE WHEN due_date < COALESCE(%(t)s::date, CURRENT_DATE)
+                                    THEN NULL ELSE due_date END,
+                    next_eval_at = NULL,
+                    status = CASE WHEN %(u)s
+                                       AND (event_date IS NULL OR event_date < COALESCE(%(t)s::date, CURRENT_DATE))
+                                       AND (due_date IS NULL OR due_date < COALESCE(%(t)s::date, CURRENT_DATE))
+                                  THEN 'undated' ELSE 'pending' END
+                WHERE status = 'needs_eval' AND type = 'task'
+                """,
+                {"t": today, "u": undated},
             )
             n = cur.rowcount
         conn.commit()
@@ -2109,6 +2185,7 @@ def action_rates_by_type(since, until, debt_hours: float) -> Dict[str, Dict[str,
             cur.execute(
                 "SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'scheduled') "
                 "FROM pending_commitments WHERE type <> 'promise' AND status <> 'undated' "
+                "AND status <> 'needs_eval' AND confirmed_via IS DISTINCT FROM 'auto-eval' "
                 "AND source <> 'evi-test' AND created_at >= %s AND created_at < %s",
                 (since, until),
             )

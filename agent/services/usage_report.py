@@ -440,6 +440,7 @@ def _fetch_commitments(start: datetime, end: datetime) -> Dict[str, int]:
                 """
                 SELECT status, COUNT(*) FROM pending_commitments
                 WHERE created_at >= %s AND created_at < %s AND source <> 'evi-test'
+                  AND confirmed_via IS DISTINCT FROM 'auto-eval'
                 GROUP BY status
                 """,
                 (start, end),

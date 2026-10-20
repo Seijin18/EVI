@@ -646,6 +646,8 @@ def evolution_webhook(
     queued_ids: list[int] = []
     try:
         from db import init_db, insert_pending_commitment
+        from services.promises import _msg_dt
+        from services.task_judge import eval_delay, task_judge_enabled
         from services.whatsapp_processor import commitment_status_for
 
         init_db()
@@ -654,6 +656,13 @@ def evolution_webhook(
             raw = msg_by_id.get(c.source_id)
             raw_text = raw.text if raw else ""
             c_status = commitment_status_for(c)
+            judge_extra: dict = {}
+            if c.type == "task" and not (c.date or c.due) and task_judge_enabled():
+                # undated regex task waits for the LLM judge (same queue as promises);
+                # dated tasks keep the immediate path. Final status: task_judge.final_status
+                msg_dt = _msg_dt(raw.ts if raw else "")
+                c_status = "needs_eval"
+                judge_extra = {"next_eval_at": msg_dt + eval_delay(), "msg_ts": msg_dt}
             row_id = insert_pending_commitment(
                 source="evolution",
                 source_id=c.source_id,
@@ -667,6 +676,7 @@ def evolution_webhook(
                 source_chat=raw.sender if raw else "",
                 source_label=raw.label if raw else "",
                 status=c_status,
+                **judge_extra,
             )
             if row_id and c_status == "pending":
                 queued_ids.append(row_id)

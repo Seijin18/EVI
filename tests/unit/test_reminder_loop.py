@@ -22,7 +22,9 @@ def _clean(monkeypatch):
     monkeypatch.delenv("EVI_REMINDERS_TICK_SEC", raising=False)
     monkeypatch.delenv("EVI_PROMISE_CONTEXT_ENABLED", raising=False)
     monkeypatch.delenv("EVI_REPLY_DEBTS_ENABLED", raising=False)
+    monkeypatch.setenv("EVI_TASK_JUDGE", "false")  # task judge has its own tests
     monkeypatch.setattr(reminder_loop, "release_stranded_promises", lambda: 0)
+    monkeypatch.setattr(reminder_loop, "release_stranded_tasks", lambda: 0)
     reminder_loop.stop_loop()
     yield
     reminder_loop.stop_loop()
@@ -168,7 +170,8 @@ def test_start_loop_releases_stranded_promises_when_context_disabled(monkeypatch
     monkeypatch.setenv("EVI_SCHEDULED_TASKS_ENABLED", "false")
     monkeypatch.setenv("EVI_REMINDERS_ENABLED", "false")
     monkeypatch.setenv("EVI_PROMISE_CONTEXT_ENABLED", "false")
-    with patch("db.release_needs_eval", return_value=2) as rel:
+    monkeypatch.setenv("EVI_TASK_JUDGE", "false")  # undo() dropped the fixture's value
+    with patch("db.release_needs_eval", return_value=2) as rel, patch("db.release_needs_eval_tasks"):
         assert reminder_loop.start_loop() is False
         rel.assert_called_once()
     with patch("db.release_needs_eval", side_effect=RuntimeError("down")):
