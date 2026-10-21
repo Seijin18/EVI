@@ -23,8 +23,9 @@ Recorded responses store ISO dates as the same offsets (``@@D+1@@``) and are shi
 the replay day, so a tool call recorded as "tomorrow" stays "tomorrow".
 
 ``sim-fill`` (``--llm fill``) serves every recorded key like replay and calls the real model only
-for keys that are new (or used more times than recorded); the cassette is rewritten with exactly
-the calls used, in order (SCN-SIM-10). Every served/real call appends one line to ``STATS_FILE``
+for keys that are new (or used more times than recorded), appending only those to the cassette
+(append-only: background calls that do not fire in every attempt keep their recorded answers;
+SCN-SIM-10). Every served/real call appends one line to ``STATS_FILE``
 so the runner can report real vs served calls (SCN-SIM-11).
 
 Same key several times in a scenario -> answers served in recorded order; asking more
@@ -262,7 +263,8 @@ class _Cassette:
         self.cursor: dict[str, int] = {}
 
     def _sync(self, mode: str) -> None:
-        """New attempt (new nonce): replay/fill load the shipped cassette; record/fill start an empty one."""
+        """New attempt (new nonce): replay/fill load the shipped cassette; record starts an empty one;
+        fill keeps it and only appends new calls."""
         try:
             ctl = json.loads((self.dir / "ctl").read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -277,7 +279,7 @@ class _Cassette:
                 if line.strip():
                     row = json.loads(line)
                     self.entries.setdefault(row["key"], []).append(row["response"])
-        if mode in ("record", "fill"):
+        if mode == "record":
             path.write_text("", encoding="utf-8")
 
     def lookup(self, key: str, preview: str) -> dict:
@@ -365,9 +367,8 @@ class SimCassetteChatModel(BaseChatModel):
             _stat("served")
         else:
             raw = st.try_lookup(key) if self.fill else None
-            if raw is not None:  # fill: unchanged request -> recorded answer, copied to the new cassette
+            if raw is not None:  # fill: unchanged request -> recorded answer (already in the file)
                 msg = decode_response(raw, base, token)
-                st.append(key, _preview(messages), raw, mode="fill")
                 _stat("served")
             else:
                 model = self.inner.bind_tools(tools, **kwargs) if tools else self.inner
@@ -407,7 +408,6 @@ def structured_call(mode: str, task: str, prompt: str, schema: dict, call) -> di
     if mode == "fill":
         raw = st.try_lookup(key)
         if raw is not None:
-            st.append(key, prompt[-200:], raw, mode="fill")
             _stat("served")
             return _decode_dates(raw, _today())
     out = call()

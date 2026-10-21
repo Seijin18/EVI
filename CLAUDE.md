@@ -114,7 +114,10 @@ ruff check agent/ --select E,W,F --ignore E501      # mesmo gate do CI
 
 Níveis L0–L4 em [`docs/testing.md`](docs/testing.md). O `evi-sim-harness` está
 implementado: mudança de comportamento só fecha com
-`./scripts/evi-sim run --tag critical --repeat 3 --llm live` verde. **Não** usar os
+`./scripts/evi-sim run --tag critical --repeat 3 --llm fill` verde (serve do cassete o que não
+mudou e chama o LLM real só no que mudou; a tentativa aprovada regrava o cassete). `--llm live`
+completo fica para checagem de deriva do modelo; `llm-eval` usa cache (`--no-cache` ao trocar
+de modelo). Ver "Custo de LLM nos testes" em `docs/testing.md`. **Não** usar os
 scripts `*-verify.sh` nem `--live-*` para validar change: eles tocam contas e dados
 reais.
 

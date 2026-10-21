@@ -321,6 +321,11 @@ Perplexity: "toda sexta 18h, resuma meus e-mails da semana".
 Change: [`evi-extraction-precision`](../changes/archive/2026-10-20-evi-extraction-precision/proposal.md).
 As-built: dívida de resposta ignora acenos ("Boa" logo após fala do usuário, vocabulário v3) e só consulta o juiz LLM (`DEBT`, OpenRouter ZDR) em mensagens ambíguas, com veredito guardado por mensagem e falha segura (sem veredito = continua dívida); o item mostra a última fala do usuário. Tarefas por regex **sem data** passam pelo juiz `TASK` (`needs_eval`, ≤ 6 tentativas, fallback 48 h). Reações 👍/👎 (`message_reaction`) em mensagem do briefing ou de resposta do chat viram feedback. `llm-eval debt` 100 % (28), `llm-eval task` 97–100 % (32).
 
+### Etapa 38 — Custo de LLM nos testes — `evi-test-llm-budget` — **Done** (2026-10-20)
+
+Change: [`evi-test-llm-budget`](../changes/archive/2026-10-21-evi-test-llm-budget/proposal.md).
+As-built: `--llm fill` serve do cassete as requisições já gravadas e chama o LLM real só nas novas (append-only, snapshot por run para o `--repeat`); relatório `real N · served M`; cache do `llm-eval` em `data/eval/cache.jsonl`. Gate `critical --repeat 3` sem mudança de prompt: 0 chamadas reais (antes ~100 chamadas / ~580 mil tokens em `live`).
+
 ## Deferido (sem data)
 
 | Item | Notas |

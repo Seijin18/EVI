@@ -1,12 +1,12 @@
 ## ADDED Requirements
 
 ### Requirement: Fill mode calls the real LLM only for changed requests
-`evi-sim run --llm fill` SHALL serve every call whose normalized request key is in the scenario's cassette from the cassette, and SHALL call the real provider only for keys that are not recorded or are used more times than recorded, for chat and structured calls alike. With `--repeat N`, every attempt SHALL start from the cassette as it was when the run began, so that only the changed calls are exercised N times live. A passing attempt SHALL rewrite the cassette with exactly the calls it used, in order; a failed provider call SHALL NOT be recorded. The `sim-fill` provider SHALL exist only when `EVI_SIM=1`.
+`evi-sim run --llm fill` SHALL serve every call whose normalized request key is in the scenario's cassette from the cassette, and SHALL call the real provider only for keys that are not recorded or are used more times than recorded, for chat and structured calls alike. With `--repeat N`, every attempt SHALL start from the cassette as it was when the run began, so that only the changed calls are exercised N times live. A passing attempt SHALL save the cassette with every recorded answer kept and the new calls appended (calls made in the background may not fire in every attempt, so recorded answers are never dropped); a failed provider call SHALL NOT be recorded. The `sim-fill` provider SHALL exist only when `EVI_SIM=1`.
 
 #### Scenario: SCN-SIM-10
 - **GIVEN** the `critical` cassettes are up to date with the current prompts and tools
 - **WHEN** `evi-sim run --tag critical --repeat 3 --llm fill` runs
-- **THEN** it makes 0 real LLM calls, passes, and leaves the cassettes unchanged
+- **THEN** its scenario attempts are served from the cassettes, it passes, and the cassettes are unchanged
 - **AND** after a change to one tool's docstring, only the calls whose request changed go to the real LLM, 3 times each
 
 ### Requirement: The simulation report separates real from served LLM calls

@@ -92,9 +92,9 @@ Você (Opus) escreve a proposta — é trabalho de julgamento, não delegue a So
 Passo 1 e Passo 2 de `implement-change.md`, com estas diferenças:
 - No fechamento, **ative o próximo change** (não pare para perguntar).
 - Verificação final de cada change, depois que o `evi-sim-harness` existir:
-  `./scripts/evi-sim run --tag critical --repeat 3 --llm live` além dos gates de sempre,
-  e `--llm replay` para garantir que a CI continua verde. Mudou prompt? Regrave os
-  cassettes afetados (`--llm record`) no mesmo commit.
+  `./scripts/evi-sim run --tag critical --repeat 3 --llm fill` além dos gates de sempre
+  (LLM real só nas chamadas que mudaram; a tentativa aprovada já regrava o cassete — commite
+  os cassetes alterados), e `--llm replay` para garantir que a CI continua verde.
 - A janela de "Validação em uso real" (7–14 dias) **não** é esperada: o archive acontece
   quando tasks e gates passam; o KPI e o limiar vão para "Pendências do usuário" como
   "avaliar em <data>".
@@ -111,7 +111,7 @@ Antes de declarar um bloqueio, tente o contorno razoável e registre o que tento
 | Situação | Contorno |
 |---|---|
 | Teste/implementação falha | 2 rodadas de `implementer` + seu diagnóstico; depois considere simplificar a abordagem dentro do design |
-| Cota do Gemini esgotada (429) / rede instável | siga com tasks que não usam LLM live; adie as verificações `--llm live` para o fim do change; use `--llm replay` onde houver cassette; espere e tente de novo uma vez |
+| Cota do Gemini esgotada (429) / rede instável | siga com tasks que não usam LLM; adie as verificações `--llm fill` com prompt alterado para o fim do change; use `--llm replay` onde houver cassette; espere e tente de novo uma vez |
 | Container não sobe / porta ocupada | `docker compose logs` via `test-runner`; recrie só o serviço do change; nunca derrube volumes |
 | Dependência Python nova | adicione pinada em `agent/requirements.txt`, reconstrua a imagem, rode o container smoke |
 | Path/design defasado | corrija o change (sincronização) e registre |

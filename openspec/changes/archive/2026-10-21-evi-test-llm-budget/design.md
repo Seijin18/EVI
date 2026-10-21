@@ -16,12 +16,17 @@
 
 ### 1. Provedor `sim-fill`
 `build_sim_llm("sim-fill")` = `SimCassetteChatModel(inner=gemini, fill=True)`. No `_sync` do
-modo fill, o cassete enviado é carregado em memória (`entries`) e o arquivo é zerado. Em cada
-chamada:
-- `try_lookup(key)` acha → devolve a resposta gravada e **copia** a linha para o arquivo novo;
-- não acha (chave nova ou usada mais vezes que o gravado) → chama o modelo real e grava a linha.
+modo fill, o cassete enviado é carregado em memória (`entries`) e o arquivo é **mantido**. Em
+cada chamada:
+- `try_lookup(key)` acha → devolve a resposta gravada (nada é escrito);
+- não acha (chave nova ou usada mais vezes que o gravado) → chama o modelo real e **acrescenta**
+  a linha.
 
-Ao fim, o arquivo tem exatamente as chamadas usadas, na ordem, sem chaves mortas. Chamadas
+**Append-only (as-built).** A primeira versão reescrevia o cassete só com as chamadas usadas. Na
+prova no sistema montado, o juiz de tarefas do SIM-SCHED-02 (loop em background) não disparou na
+tentativa aprovada e a linha dele sumiu, o que deixaria o replay da CI instável quando o loop
+dispara. Com append-only, chamadas em background mantêm a resposta gravada, uma tentativa sem
+chamadas novas deixa o arquivo idêntico (sem diff) e chaves mortas só saem com `--llm record`. Chamadas
 estruturadas: `llm_structured._sim_cassette_mode()` mapeia `sim-fill` → `"fill"`, e
 `structured_call("fill", …)` faz o mesmo (servir ou chamar e gravar). Falha do provedor não é
 gravada, como no record.
@@ -30,7 +35,7 @@ gravada, como no record.
 O runner lê o cassete do host **uma vez no início do run** (snapshot por cenário) e envia esse
 original em toda tentativa do modo fill. Assim, com `--repeat 3`, as chamadas que mudaram vão ao
 vivo 3 vezes (a não-determinância é medida onde importa) e as que não mudaram são servidas.
-A tentativa aprovada sobrescreve o cassete no host, como no record. Cenário sem cassete =
+A tentativa aprovada salva o cassete no host (original + linhas novas). Cenário sem cassete =
 snapshot vazio = tudo ao vivo (cenário novo).
 
 Por que confiar na resposta servida: a requisição é idêntica, byte a byte depois da normalização,

@@ -87,7 +87,7 @@ def test_sim_report_tokens_and_cost(tmp_path):
         assert rec["cost_brl"] == pytest.approx(0.55 * 5.5)
         s = report.summarize([rec], 1)
         meta = {"ts": "T", "repeat": 1, "max_llm_calls": 200, "llm_calls": 2, "budget_hit": False}
-        assert "LLM: 2 calls, 1000000 in / 100000 out tok" in report.console_summary(s, meta, [rec])
+        assert "LLM: real 2 · served 0, 1000000 in / 100000 out tok" in report.console_summary(s, meta, [rec])
         _, md = report.write_reports([rec], s, meta, tmp_path, "T")
     assert "estimated cost: R$ 3.0" in md.read_text()
 

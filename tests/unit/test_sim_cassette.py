@@ -203,17 +203,28 @@ def test_fill_serves_recorded_and_calls_only_new(sim_dir):
     assert model.invoke(b).content == "live 1"
     assert fake.calls() == 1
     assert _stats(sim_dir) == ["served", "real"]
-    keys = [r["key"] for r in _rows(sim_dir)]  # rewritten with exactly the calls used, in order
+    keys = [r["key"] for r in _rows(sim_dir)]  # recorded rows kept, the new call appended
     assert keys == [cs.request_key(a, None, date(2026, 10, 10)), cs.request_key(b, None, date(2026, 10, 10))]
 
 
-def test_fill_drops_dead_keys_and_calls_live_beyond_recorded_count(sim_dir):
-    a, dead = [HumanMessage(content="oi")], [HumanMessage(content="não é mais pedido")]
-    _write_cassette(sim_dir, "SIM-X", [(a, None, "um"), (dead, None, "morto")])
+def test_fill_keeps_unused_rows_and_calls_live_beyond_recorded_count(sim_dir):
+    """A background call that does not fire in this attempt keeps its recorded answer (no flaky replay)."""
+    a, bg = [HumanMessage(content="oi")], [HumanMessage(content="juiz em background")]
+    _write_cassette(sim_dir, "SIM-X", [(a, None, "um"), (bg, None, "veredito")])
     _announce(sim_dir)
     model = cs.SimCassetteChatModel(inner=_CountingFake().model, fill=True)
     assert [model.invoke(a).content for _ in range(2)] == ["um", "live 1"]
-    assert len(_rows(sim_dir)) == 2 and all(r["key"] == cs.request_key(a, None, date(2026, 10, 10)) for r in _rows(sim_dir))
+    d = date(2026, 10, 10)
+    assert [r["key"] for r in _rows(sim_dir)] == [cs.request_key(a, None, d), cs.request_key(bg, None, d), cs.request_key(a, None, d)]
+
+
+def test_fill_without_new_calls_leaves_the_file_identical(sim_dir):
+    a = [HumanMessage(content="oi")]
+    _write_cassette(sim_dir, "SIM-X", [(a, None, "um")])
+    before = (sim_dir / "SIM-X.jsonl").read_text()
+    _announce(sim_dir)
+    cs.SimCassetteChatModel(inner=_CountingFake().model, fill=True).invoke(a)
+    assert (sim_dir / "SIM-X.jsonl").read_text() == before
 
 
 def test_fill_result_replays_offline(sim_dir):
@@ -250,14 +261,17 @@ def test_structured_fill_serves_or_calls(sim_dir):
 def test_structured_fill_failure_not_recorded(sim_dir):
     _announce(sim_dir)
     assert cs.structured_call("fill", "PROMISE", "p", _SCHEMA, lambda: None) is None
-    assert _rows(sim_dir) == []
+    assert not (sim_dir / "SIM-X.jsonl").exists()
 
 
 def test_fill_provider_built_only_under_evi_sim(monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "x")
+    inner = _CountingFake().model
+    monkeypatch.setattr(llm, "build_llm", lambda **kw: inner)  # the real Gemini client is not needed here
+    built = cs.build_sim_llm("sim-fill")
+    assert isinstance(built, cs.SimCassetteChatModel) and built.fill and built.inner is inner
+    assert built._llm_type == "sim-fill"
     monkeypatch.setenv("EVI_SIM", "1")
-    built = llm.build_llm(provider="sim-fill")
-    assert isinstance(built, cs.SimCassetteChatModel) and built.fill and built._llm_type == "sim-fill"
+    assert llm._is_sim_provider("sim-fill")
     monkeypatch.delenv("EVI_SIM")
     assert not llm._is_sim_provider("sim-fill")
 

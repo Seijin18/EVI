@@ -150,6 +150,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **21** | **Voz** | **Done** | `evi-voice-input` — Telegram + controle WhatsApp via Gemini |
 | **22** | **Confiabilidade percebida** | **Done** | `evi-perceived-reliability` — watchdog, `/ajuda`, ack, OAuth no turno |
 | **23** | **Injeção (restante)** | **Done** | `evi-prompt-injection-model` — confirmação de exclusão, allowlist por origem, chat do Telegram restrito |
+| **38** | **Custo de LLM nos testes** | **Done** | `evi-test-llm-budget` — `evi-sim --llm fill` (LLM real só no que mudou; gate `critical` ×3 de ~100 chamadas/580k tokens para 0 sem mudança de prompt), cache do `llm-eval` |
 | **37** | **Concluir tarefas** | **Done** | `evi-task-complete` — `complete_tasks` (lote com exceções), IDs curtos em `list_tasks` |
 | **35** | **Tarefas agendadas** | **Done** | `evi-scheduled-tasks` — pergunta agendada em linguagem natural, só leitura |
 | **36** | **Precisão da extração** | **Done** | `evi-extraction-precision` — juiz LLM só no ambíguo para dívidas, juiz de tarefa sem data, reações do Telegram como feedback |

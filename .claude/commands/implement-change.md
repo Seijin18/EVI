@@ -51,7 +51,7 @@ Regras de economia:
 4. Levante **tudo o que vai exigir o usuário** ao longo do change (segredos, `sudo`,
    pacotes do sistema, chave de API, decisão de produto em aberto no design) e pergunte
    **de uma vez, agora**. Exemplo para `evi-sim-harness`: `EVI_SIM_GEMINI_API_KEY`
-   (projeto Gemini separado) para as tasks com `--llm live`. Depois disso, não
+   (projeto Gemini separado) para as tasks com `--llm fill` que mudam prompt/tool (chamadas novas vão ao LLM real). Depois disso, não
    interrompa o usuário salvo nos pontos de parada.
 
 ## Passo 1 — Loop de tasks
@@ -89,7 +89,7 @@ si só o essencial (task, commit, decisões) — o detalhe já está no `tasks.m
 ## Passo 2 — Fechamento do change
 
 1. `test-runner`: suíte unitária, `./scripts/evi-test smoke`, ruff, `openspec validate --specs`
-   e os comandos de verificação final da última task (ex.: `./scripts/evi-sim run --tag critical --repeat 3 --llm live`).
+   e os comandos de verificação final da última task (ex.: `./scripts/evi-sim run --tag critical --repeat 3 --llm fill`, que só chama o LLM real no que mudou, e `--llm replay`).
 2. **Sincronizar**: compare o que foi implementado com `proposal.md`, `design.md` e as
    specs delta; ajuste o que divergiu para refletir o as-built.
 3. `openspec archive <slug>`; depois `openspec validate --specs`.

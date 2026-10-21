@@ -7,7 +7,7 @@
 | L0 unit | funções | tudo em volta | `pytest tests/unit -q` | sempre (CI) |
 | L1 `evi-test <feature>` | módulos + fixtures | LLM, Windmill, rede | `./scripts/evi-test <feature>` | sempre (CI) |
 | L1c container smoke | imagem montada, /health, /tools | dados | `./scripts/evi-test container` | CI |
-| **L2 `evi-sim`** | imagem, poller Telegram, webhook Evolution, LangGraph, LLM real, scripts Windmill, Postgres | Google, Telegram API, Evolution API, relógio | `./scripts/evi-sim run` | antes de cada change ser arquivado (`--tag critical --repeat 3 --llm live`); CI em modo replay |
+| **L2 `evi-sim`** | imagem, poller Telegram, webhook Evolution, LangGraph, LLM real, scripts Windmill, Postgres | Google, Telegram API, Evolution API, relógio | `./scripts/evi-sim run` | antes de cada change ser arquivado (`--tag critical --repeat 3 --llm fill`); CI em modo replay |
 | L3 staging (futuro) | + Windmill server e schedules | Google | — | release maior |
 | **L4 uso real** | tudo | nada | relatório semanal, sonda diária, `/bom` `/ruim` | contínuo — `evi-usage-validation` |
 
@@ -44,17 +44,17 @@ Google, Telegram API e Evolution API, e conduz cenários YAML contra ela.
 
 ```bash
 ./scripts/evi-sim guard                       # checa isolamento (não toca produção)
-./scripts/evi-sim up [--llm live|record|replay]
+./scripts/evi-sim up [--llm live|record|replay|fill]
 ./scripts/evi-sim run [--tag T] [--id SIM-RU-01] [--repeat N] \
-    [--llm live|record|replay] [--max-llm-calls N]
+    [--llm live|record|replay|fill] [--max-llm-calls N]
 ./scripts/evi-sim report                      # último relatório
 ./scripts/evi-sim down                        # derruba e apaga volumes
 ```
 
 `run` já faz `guard` + `up`. Gate de change:
-`./scripts/evi-sim run --tag critical --repeat 3 --llm live`. Offline (igual ao CI):
+`./scripts/evi-sim run --tag critical --repeat 3 --llm fill`. Offline (igual ao CI):
 `./scripts/evi-sim run --tag critical --llm replay`.
-Briefing: `./scripts/evi-sim run --tag briefing --repeat 3 --llm live` (passo `job: briefing`;
+Briefing: `./scripts/evi-sim run --tag briefing --repeat 3 --llm fill` (passo `job: briefing`;
 `reply_matches` do passo avalia o texto enviado ao Telegram).
 Briefing legível (SIM-UX-01..03): o briefing vai ao Telegram como HTML (`parse_mode=HTML`) sem
 marcadores `«externo`, em ≤ 25 linhas, com seções longas colapsadas em linha-resumo + comando.
@@ -72,10 +72,10 @@ briefing mais recente (ou o primeiro) e usa o `callback_data` do botão gravado,
 `telegram_message: {has_keyboard, callback_data_matches, callback_data_max_bytes}`; `postgres` aceita `briefing_log`.
 Dicas de descoberta (SIM-TIP-01/02, tag `briefing`): `job: briefing-evening` chama `/jobs/briefing?kind=evening&wait=true` e `telegram_tap` aceita `action: rm` (botão `N 🔔`, "lembrar amanhã às 9h"). A dica do briefing da manhã gira pelo dia do calendário entre as capacidades não usadas, então o SIM-TIP-01 conta a dica de lembrete em 4 manhãs seguidas (`telegram_sent_count_matching`, exatamente 1), cria um lembrete e prova que 4 manhãs seguintes não a repetem; o cassete normaliza a linha `💡 Dica:` para não depender do dia. O botão 🔔 respondido sai do teclado, então o segundo toque ("Já estava agendado") só é coberto pelos testes unitários.
 Esperando resposta deles (SIM-AWAIT-01, tag `reply-debts`, 0 chamadas de LLM): o cenário começa em `M-1 06:00` e usa `clock: +Nd` (soma ao relógio simulado) para que a pergunta sem resposta ao Bruno fique a 4 dias da segunda e o "valeu, abraço!" à Carla a 5. As mensagens `from_me` pelo webhook gravam `last_out_at` e o `[eu]` da timeline; o briefing de `M0 07:00` lista só o Bruno ("há 4 d"), `N ✖` grava `awaiting_dismissed` (tabela aceita em `postgres`), uma mensagem nova sua reabre na segunda seguinte e `N 🔔` cria o lembrete "Cobrar Bruno" sem enviar nada ao contato.
-Reply debts: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (sim.env liga
+Reply debts: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm fill` (sim.env liga
 `EVI_REPLY_DEBTS_ENABLED`; `postgres` aceita `wa_conversation_state`; `reply_not_matches` exige que
 o texto enviado ao Telegram NÃO case com a regex).
-Promessas com contexto: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm live` (SIM-DEBT-07/08/09;
+Promessas com contexto: `./scripts/evi-sim run --tag reply-debts --repeat 3 --llm fill` (SIM-DEBT-07/08/09;
 sim.env liga `EVI_PROMISE_CONTEXT_ENABLED`, atraso de 10 min do relógio simulado e varredura a cada 5 s).
 A avaliação não tem passo próprio: o cenário avança o relógio (`clock: +11m`) e o loop em processo
 avalia a fila `needs_eval`; `postgres` aceita `within_s` (espera até N s pela contagem) e, em `where`,
@@ -93,14 +93,14 @@ mostra o juiz de tarefa (`needs_eval` → `dismissed`/`auto-eval` para a frase g
 "contrato" para o pedido real). Não há endpoint de avaliação: o `clock: D0 09:11` basta, o `reminder_loop` (sim.env,
 varredura de 5 s) roda `process_due_task_evaluations` como faz com as promessas. As chamadas `DEBT`/`TASK` vão ao
 OpenRouter ZDR em `live`/`record` e ao cassete em `replay`; o contador "LLM calls" do relatório só conta Gemini.
-Conhecimento de contato: `./scripts/evi-sim run --tag contact-memory --repeat 3 --llm live` (SIM-MEM-01/02/04).
+Conhecimento de contato: `./scripts/evi-sim run --tag contact-memory --repeat 3 --llm fill` (SIM-MEM-01/02/04).
 O passo `job: contact-learn` chama `POST /jobs/contact-learn?wait=true` (atualiza fatos/"Em aberto" dos contatos com
 mensagens novas; a chamada estruturada `CONTACT_KNOWLEDGE` usa o OpenRouter ZDR em `live`/`record` e o cassete em `replay`).
 `expect.contact_profile: {jid, section?, matches?, not_matches?}` lê o `profile.md` do contato no container do sim e
 aplica regex (sem diferenciar maiúsculas) ao arquivo ou a uma seção (`Fatos`, `Em aberto`). SCN-MEM-18 (JSON inválido não
 altera o perfil) fica só nos testes unitários: o harness não injeta falha no LLM. Migração das sínteses antigas:
 `./scripts/evi-test contact-knowledge-migrate [--apply]` (dry-run por padrão; só contagens).
-Nomes de contato: `./scripts/evi-sim run --tag contact-names --repeat 3 --llm live` (SIM-NAME-01/02/03). O fake Google
+Nomes de contato: `./scripts/evi-sim run --tag contact-names --repeat 3 --llm fill` (SIM-NAME-01/02/03). O fake Google
 serve a People API (`people/me/connections`, paginada) a partir de `seed.contacts: [{name, phones, email?}]` e o script
 Windmill real `list_contacts` roda contra ele (o e-mail do seed existe só para provar que o script o descarta). O passo
 `job: contact-names-sync` chama `POST /jobs/contact-names-sync?apply=true&wait=true`; `expect.job_response_matches: <regex>`
@@ -108,7 +108,7 @@ Windmill real `list_contacts` roda contra ele (o e-mail do seed existe só para 
 pushName (número "pelado"). Relógio de segunda-feira: `M0 07:00` é a última segunda-feira até hoje, `M1` a seguinte
 (`D<n>` continua contando dias); o briefing semanal "Conversas sem nome" só roda nesse dia. A sugestão `CONTACT_NAME_HINT`
 é uma chamada estruturada (OpenRouter em `live`/`record`, cassete em `replay`); o prompt só depende do texto das mensagens.
-Lembretes: `./scripts/evi-sim run --tag reminders --repeat 3 --llm live` (o loop roda dentro do
+Lembretes: `./scripts/evi-sim run --tag reminders --repeat 3 --llm fill` (o loop roda dentro do
 `agent-api` com `EVI_REMINDERS_TICK_SEC=5` e lê o relógio libfaketime). Um passo `clock` aceita
 `expect: {reply_within_s, reply_matches, no_reply}`: captura as mensagens enviadas ao Telegram
 do usuário após a mudança de relógio (saída proativa, sem mensagem do usuário), como o passo `job`.
@@ -118,12 +118,12 @@ Tarefas agendadas (SIM-SCHED-01/02, tag `scheduled`): o cenário começa numa se
 dispara a tarefa e entrega "🗓 …" ao Telegram. `postgres` aceita a tabela `scheduled_tasks` e o filtro `turn_log`
 `channel: scheduled` prova que o turno rodou. SIM-SCHED-02 agenda "apague meus e-mails de promoção" e confere
 `gmail: {deleted_count: 0}` depois da execução (o turno agendado só tem tools de leitura).
-Confiabilidade percebida: `./scripts/evi-sim run --tag reliability --repeat 3 --llm live` (sim.env define
+Confiabilidade percebida: `./scripts/evi-sim run --tag reliability --repeat 3 --llm fill` (sim.env define
 `EVI_SLOW_ACK_SEC=3`). Falha `slow:<segundos>` no Windmill (`fault: {windmill: {summarize_inbox: "slow:8"}}`)
 atrasa e depois executa normalmente. `expect.messages_min: N` espera N mensagens no passo (ex.: "⏳" +
 resposta; `reply_matches` vê todas, unidas por `\n`); `expect.telegram_sent_count_matching: {regex, count}`
 conta as mensagens enviadas ao usuário em todo o cenário.
-Voz: `./scripts/evi-sim run --tag voice --repeat 3 --llm live` (sim.env liga `EVI_VOICE_ENABLED`).
+Voz: `./scripts/evi-sim run --tag voice --repeat 3 --llm fill` (sim.env liga `EVI_VOICE_ENABLED`).
 Passos de voz: `telegram_voice: {file, duration_s?}`, `whatsapp_control_voice: {file, duration_s?}` e
 `whatsapp_contact_voice: {file, duration_s?, jid?, push_name?}`, onde `file` é um nome em
 `tests/fixtures/audio/` (OGG/Opus sintético, fictício; geração e conteúdo no `README.md` da
@@ -167,12 +167,29 @@ desconhecida é erro. Exemplo: `tests/sim/scenarios/real-usage/SIM-RU-01*.yaml`.
 `critical` e `adversarial`: N/N repetições. Demais: ≥ 2/3. Relatórios em
 `logs/sim/`.
 
+### Custo de LLM nos testes
+
+| Modo | LLM real | Quando usar |
+|---|---|---|
+| `replay` | nunca (sem chave) | CI; conferir que nada mudou |
+| `fill` | **só** nas requisições que não estão no cassete (prompt, tool ou conversa mudou; cenário novo) | Verify de task e gate de change (`--repeat 3`: só o que mudou roda 3× ao vivo); a tentativa aprovada regrava o cassete |
+| `record` | todas | regravar um cassete inteiro de propósito |
+| `live` | todas, sem gravar | checagem de deriva do modelo (ex.: mensal ou ao trocar a versão do Gemini/OpenRouter) |
+
+O relatório mostra `real N · served M` e os tokens reais; `--max-llm-calls` conta só as reais.
+Se um change não mexe em prompt, docstring/schema de tool nem no que entra na conversa, o
+`fill` dele custa **0 chamadas**.
+
+`llm-eval` guarda as respostas em `data/eval/cache.jsonl` por (tarefa, provedor, modelos,
+prompt, schema): rodar de novo sem mudar nada custa 0. Use `--no-cache` (ou
+`EVI_LLM_EVAL_CACHE=0`) ao trocar de modelo ou para checar deriva.
+
 ### Cassetes (replay)
 
 Respostas do LLM gravadas em `tests/sim/cassettes/` alimentam o modo `replay` (CI,
 sem chave). **Regravar após qualquer mudança de prompt, docstring de tool ou schema
-de tool:** `./scripts/evi-sim run --tag critical --llm record` e commitar os
-cassetes.
+de tool:** `./scripts/evi-sim run --tag critical --llm fill` (só as chamadas que mudaram vão ao
+LLM real) e commitar os cassetes alterados. `--llm record` regrava o cassete inteiro.
 
 ### Isolamento
 
@@ -189,7 +206,7 @@ usa chave.
    `tests/sim/scenarios/real-usage/` (ou `failure/`), tags `real-usage` (+ `critical`
    se for regressão que não pode voltar).
 2. Reproduza o estado com `seed` e `clock`; asserte o efeito esperado em `expect`.
-3. `./scripts/evi-sim run --id <ID> --repeat 3 --llm live` deve falhar antes do fix
+3. `./scripts/evi-sim run --id <ID> --repeat 3 --llm fill` deve falhar antes do fix
    e passar depois; grave o cassete (`--llm record`) e commite.
 
 Tiers legados (ainda válidos):
