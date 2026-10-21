@@ -5,7 +5,31 @@
 **O porquê de cada item:** [`specs/roadmap.md`](specs/roadmap.md) · revisão de produto:
 [`docs/ux-review-2026-10.md`](../docs/ux-review-2026-10.md)
 
-## Fila atual (revisões de produto — 10 e 18 Out 2026)
+## Fila atual — "de avisa para resolve" (20 Out 2026)
+
+Origem: [`docs/drafts/brainstorm-assistente-2026-10-20.md`](../docs/drafts/brainstorm-assistente-2026-10-20.md)
+(rascunho; decisões do usuário na §5). **Ordem por consumo de LLM** (OpenRouter/Gemini), do menor
+para o maior, respeitando dependências. Verify de todos usa `evi-sim --llm fill` (`evi-test-llm-budget`).
+
+| # | Change | Status | LLM (OpenRouter/Gemini) | Resumo |
+|---|--------|--------|-------------------------|--------|
+| 60 | `evi-test-llm-budget` | **Done** (2026-10-20) | 0 (reduz o dos testes) | `evi-sim --llm fill`, cache do `llm-eval` |
+| 61 | `evi-contact-policy` | **Ativo** | 0 | Ler/enviar por contato e grupo; grupos fora por padrão; comandos com confirmação; apagar dados |
+| 62 | `evi-study-calendar` | Proposto ([`queued/`](queued/)) | 0 (embedding local) | Grade CSV → agenda "Estudos"; material pelo Telegram associado à aula; 📚 no briefing |
+| 63 | `evi-capability-gaps` | Proposto ([`queued/`](queued/)) | ~0 (tool no turno existente) | Lacunas registradas sem restrição inventada; 🧩 no relatório; exportar para `proposals-inbox/` |
+| 64 | `evi-approval-inbox` | Proposto ([`queued/`](queued/)) | 0 | Caixa de aprovação única (`proposals`), `/pendentes`, expiração, níveis de autonomia, API |
+| 65 | `evi-meeting-prep` | A propor | 0 (determinístico) | Ficha 30 min antes do evento: quem é, últimas conversas, pendências |
+| 66 | `evi-reply-drafts` | A propor | 1 chamada por rascunho **pedido** | Rascunho de resposta WhatsApp (`wa.me`) e e-mail (Gmail drafts), via caixa de aprovação |
+| 67 | `evi-incoming-requests` | A propor | juiz só no ambíguo (padrão = gatilho) | Pedido recebido no WhatsApp → proposta "tarefa + resposta confirmando" |
+| 68 | `evi-workshop-sandbox` | A propor | por job pedido (Haiku 5.5 ZDR, ~US$ 0,02/job) | Oficina em container, só arquivos/CLI, orçamento próprio |
+| 69 | `evi-study-summaries` | A propor | por toque em [resumo] | Resumo de material/aula, plano de ensino → prazos, revisão |
+| 70 | `evi-direct-send` (fase 1) | A propor | 0 no envio | Envio WhatsApp + e-mail aprovando cada um; libera com aprovação sem edição ≥ 70 % no #66 |
+| 71 | `evi-gap-to-proposal` | A propor | por exportação | Lacuna → rascunho de change gerado na oficina |
+| 72 | `evi-capture-forward` | A propor | por item enviado (visão) | Encaminhar/foto → tarefa, lembrete, boleto |
+| 73 | `evi-night-shift` | A propor | lote diário (maior consumo) | Preparar de madrugada o que o dia pede; relatório "o que fiz por você" |
+| — | `evi-console` | Futuro | 0 | Interface desktop/Android (PWA + Mini App), sobre a API |
+
+## Fila anterior (revisões de produto — 10 e 18 Out 2026)
 
 A base está fechada (Etapas 12–14, 17). A fila agora prioriza o que o usuário
 percebe: o EVI passar a chegar até a pessoa em vez de esperar ser perguntado.

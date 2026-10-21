@@ -19,7 +19,6 @@ Ordem: [`BACKLOG.md`](../BACKLOG.md) → "Fila atual".
 
 | Change | Por que está aqui |
 |---|---|
-| `evi-security-review` | Próximo (`evi-promise-context` arquivado em 2026-10-13); a contenção do F1 (task 1.1) pode ir antes como hotfix |
-| `evi-contact-knowledge` | Usa `llm_structured` e o avaliador do `evi-promise-context` (arquivado); task 2.3 liga o conhecimento ao prompt de promessas) |
-| `evi-contact-names` | Depende de `evi-contact-knowledge` (identidade canônica `@lid`↔telefone) |
-| `evi-ux-review` | Último da fila: a apresentação depende do conteúdo dos anteriores (títulos de promessa, nomes de contato) |
+| `evi-study-calendar` | Fila de 20/10, depois de `evi-contact-policy` (ativo); 0 LLM |
+| `evi-capability-gaps` | Depois de `evi-study-calendar`; ~0 LLM |
+| `evi-approval-inbox` | Depois de `evi-capability-gaps`: migra as confirmações criadas pelos três anteriores |
