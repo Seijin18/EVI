@@ -45,7 +45,7 @@ Status: `aberto` · `corrigido (<task/data>)` · `em correção (<task>)` · `BA
 | F10 | WhatBot publica portas em `0.0.0.0` no mesmo host | médio | corrigido (2026-10-19: patch aplicado com `--profile windmill --profile instagram`; 5432/6379/8000/8080/8090/11434 recusam na LAN/tailnet, loopback responde) | `whatbot-redis-1` 6379 sem senha, `windmill_server` 8000, `evolution_api` 8080, `whatbot_ingress` 8090 | Prefixar `127.0.0.1:` no compose do WhatBot |
 | F11 | Escopos OAuth Google além do necessário | médio | aberto — ação do usuário | resource `u/shiba144/stupendous_gcloud` (`cloud-platform`) sem uso em código; Gmail `modify` é necessário (`messages.trash`); Calendar via conector padrão (escopo amplo) | Apagar resource gcloud e variável; conferir conta Google; Calendar mínimo → BACKLOG |
 | F12 | Windmill: login/usuários/tokens | médio | corrigido (2026-10-19) | `admin@windmill.dev` / senha padrão → `Invalid login` (testado em 127.0.0.1:8000); Windmill só em loopback | Rota `telegram_to_evi` sem uso segue como item menor |
-| F13 | Sem backup de dados com estado; cópias antigas sem cifra | médio | BACKLOG | nenhum `pg_dump`/timer; `data/postgres.bak-20260812-*` e `data/postgres.broken-20260812` | BACKLOG: `pg_dump` diário + teste de restore; usuário decide sobre cópias antigas |
+| F13 | Sem backup de dados com estado | médio | BACKLOG (cópias antigas apagadas em 2026-10-21) | nenhum `pg_dump`/timer; `data/backups/` só tem dumps pontuais de OAuth e contatos | BACKLOG: `pg_dump` diário + teste de restore |
 | F14 | `/metrics` sem chave; rótulo `path` com cardinalidade ilimitada | baixo | corrigido (4.1) | `curl localhost:8002/metrics` → 200; sem PII; `request.url.path` cru | 4.1: exigir chave e rotular por rota |
 | F15 | `verify_api_key` com `!=` | baixo | corrigido (4.1) | `agent/auth.py` | `hmac.compare_digest` |
 | F16 | Allowlist do Telegram fail-open | baixo | corrigido (4.1) | `telegram_handler.py` `_chat_allowed` aceita tudo se `TELEGRAM_CHAT_ID` vazio; em produção está definido | 4.1: fail-closed |
@@ -130,3 +130,19 @@ Nova tool de escrita `complete_tasks` (conclui tarefas do Google Tasks). Classif
 externo (coberta por `test_write_tool_blocked_in_job_turn`). Sem rota, porta, segredo ou escopo OAuth
 novos (`gtasks` já cobre PATCH). Conclusão é reversível no Google Tasks. `./scripts/evi-security-scan`:
 sem achado novo; o único FAIL (`deps.audit`: certifi PYSEC-2026-4320, correção 2026.10.19) já existia.
+
+## Atualização de 2026-10-21 — limpeza
+
+- **F11:** o recurso `gcloud` (`stupendous_gcloud`) já não existe no Windmill (só `gtasks`, `gmail`,
+  `gcontacts`, `calendar`) e `WINDMILL_GCLOUD_RESOURCE` não está no `.env`. Resta conferir o acesso do app
+  em https://myaccount.google.com/connections (ação do usuário).
+- **F13 (parcial):** `data/postgres.bak-20260812-055124` e `data/postgres.broken-20260812` (cópias sem cifra
+  de 12/08, anteriores ao banco atual) foram apagadas. Backup diário + teste de restore continua aberto.
+- **Limite de crédito do OpenRouter** definido pelo usuário (item 9 das ações).
+- **F34 (info, aceito):** os 49 avisos `ruff --select S` do `agent/` são falsos positivos ou benignos:
+  S310 (`urlopen` só com URLs de Telegram/Evolution vindas de configuração, nunca de entrada do usuário
+  ou do LLM), S108 (`/tmp/evi-logs` é só o padrão; o compose define `EVI_LOG_DIR=/logs`), S105
+  (`_CLOSING_TOKEN` é uma regex), S110/S112 (`except: pass` de observabilidade). Sem S102/S307/S602/S604/S605/S608.
+- **F35 (baixo, corrigido):** `deps.audit` — `certifi` PYSEC-2026-4320; `agent/requirements.txt` → `certifi==2026.10.19`,
+  imagem reconstruída. `pip-audit -r agent/requirements.txt`: nenhuma vulnerabilidade conhecida. O `pip-audit`
+  do ambiente `.venv` (dev) ainda lista pacotes defasados (`langgraph-sdk`, `multidict`) que não estão no pin de produção.
