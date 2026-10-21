@@ -26,6 +26,7 @@ para o maior, respeitando dependências. Verify de todos usa `evi-sim --llm fill
 | 70 | `evi-direct-send` (fase 1) | A propor | 0 no envio | Envio WhatsApp + e-mail aprovando cada um; libera com aprovação sem edição ≥ 70 % no #66 |
 | 71 | `evi-gap-to-proposal` | A propor | por exportação | Lacuna → rascunho de change gerado na oficina |
 | 72 | `evi-capture-forward` | A propor | por item enviado (visão) | Encaminhar/foto → tarefa, lembrete, boleto |
+| 73 | `evi-backup-restore` | Proposto ([`queued/`](queued/)) | 0 | Backup diário cifrado (GPG) de `evidb`/`windmill`/memória/`.env`, retenção 7+4, verificação de restauração semanal, alerta no watchdog (F13) |
 | 73 | `evi-night-shift` | A propor | lote diário (maior consumo) | Preparar de madrugada o que o dia pede; relatório "o que fiz por você" |
 | — | `evi-console` | Futuro | 0 | Interface desktop/Android (PWA + Mini App), sobre a API |
 
