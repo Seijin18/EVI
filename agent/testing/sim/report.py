@@ -67,6 +67,7 @@ def attempt_record(scenario_id: str, tags: list[str], attempt: int, res) -> dict
         "tools": list(res.tools_called),
         "latencies_s": [None if s.latency_s is None else round(s.latency_s, 2) for s in res.steps],
         "llm_calls": res.llm_calls,
+        "llm_served": int(getattr(res, "llm_served", 0) or 0),
         "tokens_in": tin,
         "tokens_out": tout,
         "tokens_reasoning": int(getattr(res, "tokens_reasoning", 0) or 0),
@@ -87,6 +88,7 @@ def skipped_record(scenario_id: str, tags: list[str], attempt: int) -> dict:
         "tools": [],
         "latencies_s": [],
         "llm_calls": 0,
+        "llm_served": 0,
         "tokens_in": 0,
         "tokens_out": 0,
         "tokens_reasoning": 0,
@@ -149,10 +151,19 @@ def _pct(rate) -> str:
     return "n/a" if rate is None else f"{rate * 100:.0f}%"
 
 
+def calls_label(real: int, served: int) -> str:
+    """SCN-SIM-11: calls that reached a real provider vs answered from a cassette."""
+    return f"real {real} · served {served}"
+
+
+def _served(records: list[dict]) -> int:
+    return sum(r.get("llm_served", 0) for r in records)
+
+
 def _llm_line(records: list[dict], meta: dict) -> str:
     t = token_totals(records)
     return (
-        f"LLM: {meta['llm_calls']} calls, {t['tokens_in']} in / {t['tokens_out']} out tok "
+        f"LLM: {calls_label(meta['llm_calls'], _served(records))}, {t['tokens_in']} in / {t['tokens_out']} out tok "
         f"({t['tokens_reasoning']} reasoning), ≈ R$ {t['cost_brl']:.2f} (US$ {t['cost_usd']:.4f})"
     )
 
@@ -161,7 +172,7 @@ def console_summary(summary: dict, meta: dict, records: list[dict] | None = None
     lines = []
     for s in summary["scenarios"]:
         lines.append(f"{s['status']:<16} {s['scenario']}  {s['passed']}/{s['runs']} (need {s['required']}/{meta['repeat']})" + (f"  - {s['reason']}" if s["reason"] else ""))
-    lines.append(f"LLM calls: {meta['llm_calls']} (max {meta['max_llm_calls']})" + ("  BUDGET REACHED - partial report" if meta["budget_hit"] else ""))
+    lines.append(f"LLM calls: {meta['llm_calls']} real (max {meta['max_llm_calls']})" + ("  BUDGET REACHED - partial report" if meta["budget_hit"] else ""))
     if records is not None:
         lines.append(_llm_line(records, meta))
     lines.append("RESULT: " + ("OK" if summary["ok"] else "FAILED"))
@@ -173,7 +184,7 @@ def to_markdown(records: list[dict], summary: dict, meta: dict) -> str:
         f"# evi-sim report {meta['ts']}",
         "",
         f"- repeat: {meta['repeat']}",
-        f"- LLM calls: {meta['llm_calls']} (budget {meta['max_llm_calls']})" + (" - **budget reached, partial report**" if meta["budget_hit"] else ""),
+        f"- LLM calls: {calls_label(meta['llm_calls'], _served(records))} (budget {meta['max_llm_calls']} real)" + (" - **budget reached, partial report**" if meta["budget_hit"] else ""),
         f"- tokens: {token_totals(records)['tokens_in']} in / {token_totals(records)['tokens_out']} out "
         f"({token_totals(records)['tokens_reasoning']} reasoning)",
         f"- estimated cost: R$ {token_totals(records)['cost_brl']:.2f} (US$ {token_totals(records)['cost_usd']:.4f})",
@@ -190,10 +201,10 @@ def to_markdown(records: list[dict], summary: dict, meta: dict) -> str:
     out += ["", "## Tags", "", "| Tag | Scenarios | Passed runs | Rate | Failed scenarios |", "|---|---|---|---|---|"]
     for t, st in summary["tags"].items():
         out.append(f"| {t} | {st['scenarios']} | {st['passed']}/{st['runs']} | {_pct(st['rate'])} | {st['failed_scenarios']} |")
-    out += ["", "## Attempts", "", "| Scenario | # | Status | LLM calls | Tokens in/out | Cost (R$) | Duration (s) | Tools | Failure |", "|---|---|---|---|---|---|---|---|---|"]
+    out += ["", "## Attempts", "", "| Scenario | # | Status | LLM real/served | Tokens in/out | Cost (R$) | Duration (s) | Tools | Failure |", "|---|---|---|---|---|---|---|---|---|"]
     for r in records:
         fail = (r["failures"][0] if r["failures"] else "").replace("|", "\\|").replace("\n", " ")
-        out.append(f"| {r['scenario']} | {r['attempt']} | {r['status']} | {r['llm_calls']} | {r.get('tokens_in', 0)}/{r.get('tokens_out', 0)} | {r.get('cost_brl', 0.0):.4f} | {r['duration_s']} | {', '.join(r['tools'])} | {fail} |")
+        out.append(f"| {r['scenario']} | {r['attempt']} | {r['status']} | {r['llm_calls']}/{r.get('llm_served', 0)} | {r.get('tokens_in', 0)}/{r.get('tokens_out', 0)} | {r.get('cost_brl', 0.0):.4f} | {r['duration_s']} | {', '.join(r['tools'])} | {fail} |")
     return "\n".join(out) + "\n"
 
 

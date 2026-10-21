@@ -111,7 +111,13 @@ def test_over_asking_a_key_is_stale(sim_dir):
 def sim_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(cs, "_STATE", cs._Cassette(tmp_path))
     monkeypatch.setattr(cs, "_today", lambda: date(2026, 10, 10))
+    monkeypatch.setattr(cs, "STATS_FILE", tmp_path / "stats")
     return tmp_path
+
+
+def _stats(d) -> list[str]:
+    f = d / "stats"
+    return f.read_text().split() if f.exists() else []
 
 
 def _announce(d, scn="SIM-X", nonce="n1"):
@@ -168,6 +174,92 @@ def test_record_roundtrip(sim_dir):
     assert rec.invoke(msgs).content == "ola 2026-10-11"
     _announce(sim_dir, nonce="r2")
     assert cs.build_sim_llm("sim-replay").invoke(msgs).content == "ola 2026-10-11"
+
+
+# ------------------------------------------------------------------ fill mode (SCN-SIM-10)
+class _CountingFake:
+    """Inner model stand-in: counts real calls and answers 'live N'."""
+
+    def __init__(self):
+        from langchain_core.language_models.fake_chat_models import FakeListChatModel
+
+        self.model = FakeListChatModel(responses=[f"live {i}" for i in range(1, 20)])
+
+    def calls(self) -> int:
+        return self.model.i
+
+
+def _rows(d, scn="SIM-X") -> list[dict]:
+    return [json.loads(x) for x in (d / f"{scn}.jsonl").read_text().splitlines() if x.strip()]
+
+
+def test_fill_serves_recorded_and_calls_only_new(sim_dir):
+    a, b = [HumanMessage(content="oi")], [HumanMessage(content="prompt novo")]
+    _write_cassette(sim_dir, "SIM-X", [(a, None, "gravado")])
+    _announce(sim_dir)
+    fake = _CountingFake()
+    model = cs.SimCassetteChatModel(inner=fake.model, fill=True)
+    assert model.invoke(a).content == "gravado"
+    assert model.invoke(b).content == "live 1"
+    assert fake.calls() == 1
+    assert _stats(sim_dir) == ["served", "real"]
+    keys = [r["key"] for r in _rows(sim_dir)]  # rewritten with exactly the calls used, in order
+    assert keys == [cs.request_key(a, None, date(2026, 10, 10)), cs.request_key(b, None, date(2026, 10, 10))]
+
+
+def test_fill_drops_dead_keys_and_calls_live_beyond_recorded_count(sim_dir):
+    a, dead = [HumanMessage(content="oi")], [HumanMessage(content="não é mais pedido")]
+    _write_cassette(sim_dir, "SIM-X", [(a, None, "um"), (dead, None, "morto")])
+    _announce(sim_dir)
+    model = cs.SimCassetteChatModel(inner=_CountingFake().model, fill=True)
+    assert [model.invoke(a).content for _ in range(2)] == ["um", "live 1"]
+    assert len(_rows(sim_dir)) == 2 and all(r["key"] == cs.request_key(a, None, date(2026, 10, 10)) for r in _rows(sim_dir))
+
+
+def test_fill_result_replays_offline(sim_dir):
+    a, b = [HumanMessage(content="oi")], [HumanMessage(content="novo")]
+    _write_cassette(sim_dir, "SIM-X", [(a, None, "gravado")])
+    _announce(sim_dir)
+    fill = cs.SimCassetteChatModel(inner=_CountingFake().model, fill=True)
+    fill.invoke(a), fill.invoke(b)
+    _announce(sim_dir, nonce="n2")
+    replay = cs.build_sim_llm("sim-replay")
+    assert [replay.invoke(a).content, replay.invoke(b).content] == ["gravado", "live 1"]
+
+
+def test_fill_without_cassette_is_all_live(sim_dir):
+    _announce(sim_dir)
+    fake = _CountingFake()
+    cs.SimCassetteChatModel(inner=fake.model, fill=True).invoke([HumanMessage(content="oi")])
+    assert fake.calls() == 1 and _stats(sim_dir) == ["real"]
+
+
+def test_structured_fill_serves_or_calls(sim_dir):
+    prompt = _structured_prompt(date(2026, 10, 10), "sábado", "09:00")
+    _announce(sim_dir)
+    cs.structured_call("record", "PROMISE", prompt, _SCHEMA, lambda: {"x": "gravado"})
+    _announce(sim_dir, nonce="n2")
+    assert cs.structured_call("fill", "PROMISE", prompt, _SCHEMA, pytest.fail) == {"x": "gravado"}
+    calls = []
+    assert cs.structured_call("fill", "PROMISE", prompt + " mudou", _SCHEMA, lambda: calls.append(1) or {"x": "novo"}) == {"x": "novo"}
+    assert calls == [1]
+    assert _stats(sim_dir) == ["real", "served", "real"]
+    assert len(_rows(sim_dir)) == 2
+
+
+def test_structured_fill_failure_not_recorded(sim_dir):
+    _announce(sim_dir)
+    assert cs.structured_call("fill", "PROMISE", "p", _SCHEMA, lambda: None) is None
+    assert _rows(sim_dir) == []
+
+
+def test_fill_provider_built_only_under_evi_sim(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "x")
+    monkeypatch.setenv("EVI_SIM", "1")
+    built = llm.build_llm(provider="sim-fill")
+    assert isinstance(built, cs.SimCassetteChatModel) and built.fill and built._llm_type == "sim-fill"
+    monkeypatch.delenv("EVI_SIM")
+    assert not llm._is_sim_provider("sim-fill")
 
 
 # ----------------------------------------------------------------- production unaffected

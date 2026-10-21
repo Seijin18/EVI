@@ -54,7 +54,7 @@ def build_ollama_llm(*, temperature: float | None = None, num_ctx: int | None = 
     )
 
 
-_SIM_PROVIDERS = ("sim-replay", "sim-record")
+_SIM_PROVIDERS = ("sim-replay", "sim-record", "sim-fill")
 
 
 def _is_sim_provider(provider: str) -> bool:

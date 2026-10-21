@@ -390,10 +390,10 @@ def _attempt(
 
 
 def _sim_cassette_mode() -> str | None:
-    """"record" / "replay" under evi-sim (EVI_SIM=1 and EVI_LLM_PROVIDER=sim-record|sim-replay)."""
+    """"record" / "replay" / "fill" under evi-sim (EVI_SIM=1 and EVI_LLM_PROVIDER=sim-record|sim-replay|sim-fill)."""
     if os.getenv("EVI_SIM", "").strip() != "1":
         return None
-    return {"sim-record": "record", "sim-replay": "replay"}.get(os.getenv("EVI_LLM_PROVIDER", "").strip().lower())
+    return {"sim-record": "record", "sim-replay": "replay", "sim-fill": "fill"}.get(os.getenv("EVI_LLM_PROVIDER", "").strip().lower())
 
 
 def run_structured(

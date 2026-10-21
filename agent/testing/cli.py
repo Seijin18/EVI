@@ -1361,7 +1361,15 @@ def run_smoke(full: bool, live_windmill: bool, verbose: bool) -> int:
 
 
 def run_llm_eval(extra: list[str], cwd: str) -> bool:
-    """``llm-eval promise|debt|task|contact-knowledge|contact-name-hint [flags]`` — real-LLM benchmarks (needs provider keys)."""
+    """``llm-eval promise|debt|task|contact-knowledge|contact-name-hint [flags] [--no-cache]`` — real-LLM
+    benchmarks (needs provider keys). Answers are cached in ``data/eval/cache.jsonl`` (SCN-SIM-12)."""
+    from testing.llm_eval import cache
+
+    with cache.cached_structured(cache.cache_enabled(extra)):
+        return _run_llm_eval(cache.strip_flag(extra), cwd)
+
+
+def _run_llm_eval(extra: list[str], cwd: str) -> bool:
     if extra and extra[0] == "contact-knowledge":
         from testing.llm_eval import contact_knowledge
 

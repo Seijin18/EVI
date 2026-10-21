@@ -56,7 +56,7 @@ _wait_healthy() {
   done
 }
 
-# --llm live|record|replay (anywhere in the args of `run`/`up`) selects the agent's provider.
+# --llm live|record|replay|fill (anywhere in the args of `run`/`up`) selects the agent's provider.
 # replay never needs (nor receives) a Gemini key.
 LLM_MODE="live"
 _args=("$@")
@@ -70,7 +70,9 @@ case "$LLM_MODE" in
   live) export EVI_SIM_LLM_PROVIDER=gemini ;;
   record) export EVI_SIM_LLM_PROVIDER=sim-record ;;
   replay) export EVI_SIM_LLM_PROVIDER=sim-replay; unset EVI_SIM_GEMINI_API_KEY EVI_SIM_OPENROUTER_API_KEY ;;
-  *) echo "evi-sim: --llm must be live|record|replay" >&2; exit 64 ;;
+  # fill: cassette answers for unchanged requests, real LLM only for new ones (SCN-SIM-10)
+  fill) export EVI_SIM_LLM_PROVIDER=sim-fill ;;
+  *) echo "evi-sim: --llm must be live|record|replay|fill" >&2; exit 64 ;;
 esac
 
 cmd="${1:-}"

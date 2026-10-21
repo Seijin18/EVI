@@ -22,6 +22,11 @@ day replays on any other:
 Recorded responses store ISO dates as the same offsets (``@@D+1@@``) and are shifted back to
 the replay day, so a tool call recorded as "tomorrow" stays "tomorrow".
 
+``sim-fill`` (``--llm fill``) serves every recorded key like replay and calls the real model only
+for keys that are new (or used more times than recorded); the cassette is rewritten with exactly
+the calls used, in order (SCN-SIM-10). Every served/real call appends one line to ``STATS_FILE``
+so the runner can report real vs served calls (SCN-SIM-11).
+
 Same key several times in a scenario -> answers served in recorded order; asking more
 times than recorded is stale too (an extra identical round-trip is a behavior change). Unknown key -> ``CassetteStale``
 ("cassette stale: regrave com --llm record"); it is also appended to ``stale.log`` so the
@@ -46,6 +51,15 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 CASSETTE_DIR = Path(os.getenv("EVI_SIM_CASSETTE_DIR", "/tmp/evi-sim-cassettes"))
 STALE_LOG = "stale.log"
 STALE_MSG = "cassette stale: regrave com --llm record"
+STATS_FILE = Path(os.getenv("EVI_SIM_CASSETTE_STATS", "/tmp/evi-sim-cassette-stats"))  # "real"/"served" per call
+
+
+def _stat(kind: str) -> None:
+    try:
+        with open(STATS_FILE, "a", encoding="utf-8") as f:
+            f.write(kind + "\n")
+    except OSError:
+        pass
 
 _ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")  # also inside "2026-10-11T10:00:00"
 _TOKEN = re.compile(r"@@D([+-]\d+)@@")
@@ -247,7 +261,8 @@ class _Cassette:
         self.entries: dict[str, list[dict]] = {}
         self.cursor: dict[str, int] = {}
 
-    def _sync(self, record: bool) -> None:
+    def _sync(self, mode: str) -> None:
+        """New attempt (new nonce): replay/fill load the shipped cassette; record/fill start an empty one."""
         try:
             ctl = json.loads((self.dir / "ctl").read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -257,17 +272,17 @@ class _Cassette:
         self.nonce, self.scenario = ctl.get("nonce"), ctl.get("id")
         self.entries, self.cursor = {}, {}
         path = self.dir / f"{self.scenario}.jsonl"
-        if record:
-            path.write_text("", encoding="utf-8")
-        elif path.exists():
+        if mode in ("replay", "fill") and path.exists():
             for line in path.read_text(encoding="utf-8").splitlines():
                 if line.strip():
                     row = json.loads(line)
                     self.entries.setdefault(row["key"], []).append(row["response"])
+        if mode in ("record", "fill"):
+            path.write_text("", encoding="utf-8")
 
     def lookup(self, key: str, preview: str) -> dict:
         with self.lock:
-            self._sync(record=False)
+            self._sync("replay")
             rows = self.entries.get(key) or []
             i = self.cursor.get(key, 0)
             if i >= len(rows):  # unknown key, or asked more times than recorded
@@ -279,9 +294,20 @@ class _Cassette:
             self.cursor[key] = i + 1
             return rows[i]
 
-    def append(self, key: str, preview: str, response: dict) -> None:
+    def try_lookup(self, key: str) -> dict | None:
+        """Fill mode: the next recorded answer for ``key``, or None (new key / used more than recorded)."""
         with self.lock:
-            self._sync(record=True)
+            self._sync("fill")
+            rows = self.entries.get(key) or []
+            i = self.cursor.get(key, 0)
+            if i >= len(rows):
+                return None
+            self.cursor[key] = i + 1
+            return rows[i]
+
+    def append(self, key: str, preview: str, response: dict, mode: str = "record") -> None:
+        with self.lock:
+            self._sync(mode)
             row = {"key": key, "prompt_tail": _iso_to_offset(preview[:200], _today(), "D{:+d}"), "response": response}
             with open(self.dir / f"{self.scenario}.jsonl", "a", encoding="utf-8") as f:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -302,13 +328,17 @@ def _preview(messages: list[BaseMessage]) -> str:
 
 
 class SimCassetteChatModel(BaseChatModel):
-    """Chat model that records (``inner`` set) or replays (``inner`` None) cassette answers."""
+    """Chat model that records (``inner`` set), replays (``inner`` None) or fills (``inner`` set,
+    ``fill``: serve recorded keys, call ``inner`` only for new ones) cassette answers."""
 
     inner: Any = None
+    fill: bool = False
 
     @property
     def _llm_type(self) -> str:
-        return "sim-record" if self.inner is not None else "sim-replay"
+        if self.inner is None:
+            return "sim-replay"
+        return "sim-fill" if self.fill else "sim-record"
 
     def bind_tools(self, tools, *, tool_choice=None, **kwargs):  # noqa: ANN001
         extra = dict(kwargs)
@@ -329,12 +359,21 @@ class SimCassetteChatModel(BaseChatModel):
                     json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
             except OSError:
                 pass
+        token = _last_token(messages)
         if self.inner is None:
-            msg = decode_response(st.lookup(key, _preview(messages)), base, _last_token(messages))
+            msg = decode_response(st.lookup(key, _preview(messages)), base, token)
+            _stat("served")
         else:
-            model = self.inner.bind_tools(tools, **kwargs) if tools else self.inner
-            msg = model.invoke(messages, stop=stop)
-            st.append(key, _preview(messages), encode_response(msg, base, _last_token(messages)))
+            raw = st.try_lookup(key) if self.fill else None
+            if raw is not None:  # fill: unchanged request -> recorded answer, copied to the new cassette
+                msg = decode_response(raw, base, token)
+                st.append(key, _preview(messages), raw, mode="fill")
+                _stat("served")
+            else:
+                model = self.inner.bind_tools(tools, **kwargs) if tools else self.inner
+                msg = model.invoke(messages, stop=stop)
+                st.append(key, _preview(messages), encode_response(msg, base, token), mode="fill" if self.fill else "record")
+                _stat("real")
         return ChatResult(generations=[ChatGeneration(message=msg)])
 
 
@@ -353,7 +392,7 @@ def structured_key(task: str, prompt: str, schema: dict, base: date) -> str:
 
 
 def structured_call(mode: str, task: str, prompt: str, schema: dict, call) -> dict | None:  # noqa: ANN001
-    """Record (``call()`` is the real provider call) or replay one structured answer."""
+    """Record (``call()`` is the real provider call), replay, or fill (serve if recorded, else call) one structured answer."""
     key = structured_key(task, prompt, schema, _today())
     st = _state()
     if os.getenv("EVI_SIM_DUMP_STRUCTURED", "").strip() == "1":  # debug: full prompt per call, to diff stale keys
@@ -362,10 +401,19 @@ def structured_call(mode: str, task: str, prompt: str, schema: dict, call) -> di
         except OSError:
             pass
     if mode == "replay":
-        return _decode_dates(st.lookup(key, prompt[-200:]), _today())
+        out = _decode_dates(st.lookup(key, prompt[-200:]), _today())
+        _stat("served")
+        return out
+    if mode == "fill":
+        raw = st.try_lookup(key)
+        if raw is not None:
+            st.append(key, prompt[-200:], raw, mode="fill")
+            _stat("served")
+            return _decode_dates(raw, _today())
     out = call()
+    _stat("real")
     if isinstance(out, dict):  # failures are not recorded: a replay then reports it stale
-        st.append(key, prompt[-200:], _encode_dates(out, _today()))
+        st.append(key, prompt[-200:], _encode_dates(out, _today()), mode="fill" if mode == "fill" else "record")
     return out
 
 
@@ -382,8 +430,8 @@ def _decode_dates(out: dict, base: date) -> dict:
 
 def build_sim_llm(provider: str, *, temperature: float | None = None):
     """Factory used by ``llm.build_llm`` (only reachable with EVI_SIM=1)."""
-    if provider == "sim-record":
+    if provider in ("sim-record", "sim-fill"):
         from llm import build_llm
 
-        return SimCassetteChatModel(inner=build_llm(provider="gemini", temperature=temperature))
+        return SimCassetteChatModel(inner=build_llm(provider="gemini", temperature=temperature), fill=provider == "sim-fill")
     return SimCassetteChatModel()

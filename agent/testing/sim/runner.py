@@ -1,7 +1,7 @@
 """evi-sim scenario runner (task 3.1).
 
     PYTHONPATH=agent python -m testing.sim.runner run [--tag a,b] [--id X] [--repeat N]
-                                                      [--llm live|record|replay] [--max-llm-calls N]
+                                                      [--llm live|record|replay|fill] [--max-llm-calls N]
                                                       [--scenarios-dir DIR]
 
 Per scenario: reset (fakes + agent tables + session memory + audit logs), set clock,
@@ -59,7 +59,8 @@ LLM_USAGE_FILE = "/tmp/evi-sim-llm-usage"  # JSON lines {in,out,reasoning} per r
 DEFAULT_MAX_LLM_CALLS = 200
 CASSETTE_DIR = "/tmp/evi-sim-cassettes"  # inside the agent container (see testing.sim.cassette)
 CASSETTES_HOST_DIR = REPO_ROOT / "tests" / "sim" / "cassettes"
-LLM_MODES = ("live", "record", "replay")
+LLM_MODES = ("live", "record", "replay", "fill")
+CASSETTE_STATS_FILE = "/tmp/evi-sim-cassette-stats"  # "real"/"served" line per call (testing.sim.cassette)
 SIM_LOG_DIR = REPO_ROOT / "logs" / "sim"
 DEFAULT_REPLY_TIMEOUT_S = 120
 SETTLE_S = 2.0
@@ -83,6 +84,8 @@ class Ctx:
     agent_url: str = "http://127.0.0.1:18000"
     env: dict = field(default_factory=read_env)
     llm_mode: str = "live"
+    # fill: each scenario's cassette as it was when the run began, shipped to every attempt
+    snapshots: dict = field(default_factory=dict)
 
     @property
     def tz(self) -> str:
@@ -167,7 +170,8 @@ class Result:
     tools_called: list[str] = field(default_factory=list)
     outbound: dict = field(default_factory=dict)
     duration_s: float = 0.0
-    llm_calls: int = 0
+    llm_calls: int = 0  # calls that reached a real provider
+    llm_served: int = 0  # calls answered from a cassette (replay/fill)
     tokens_in: int = 0
     tokens_out: int = 0
     tokens_reasoning: int = 0
@@ -505,6 +509,16 @@ def llm_call_count(ctx: Ctx) -> int:
         return 0
 
 
+def cassette_stats(ctx: Ctx) -> tuple[int, int]:
+    """Cumulative (real, served) calls logged by the cassette providers (record/replay/fill)."""
+    try:
+        out = ctx.exec("agent-api", "sh", "-c", f"cat {CASSETTE_STATS_FILE} 2>/dev/null || true")
+    except RuntimeError:
+        return 0, 0
+    lines = out.split()
+    return lines.count("real"), lines.count("served")
+
+
 def llm_usage_totals(ctx: Ctx) -> tuple[int, int, int]:
     """Cumulative (in, out, reasoning) tokens recorded by the in-container counter."""
     tin = tout = treason = 0
@@ -524,7 +538,8 @@ def llm_usage_totals(ctx: Ctx) -> tuple[int, int, int]:
 
 
 def cassette_begin(ctx: Ctx, scn_id: str) -> None:
-    """Tell the agent which cassette is active (new nonce per attempt); in replay, ship the file in."""
+    """Tell the agent which cassette is active (new nonce per attempt); in replay, ship the file in;
+    in fill, ship the run-start snapshot (never what an earlier attempt of this run recorded)."""
     if ctx.llm_mode == "live":
         return
     ctx.exec("agent-api", "sh", "-c", f"mkdir -p {CASSETTE_DIR} && rm -f {CASSETTE_DIR}/stale.log {CASSETTE_DIR}/ctl {CASSETTE_DIR}/{scn_id}.jsonl")
@@ -533,12 +548,14 @@ def cassette_begin(ctx: Ctx, scn_id: str) -> None:
         if not host.exists():
             raise RuntimeError(f"cassette stale: regrave com --llm record (no cassette for {scn_id})")
         ctx.exec("agent-api", "sh", "-c", f"cat > {CASSETTE_DIR}/{scn_id}.jsonl", input_=host.read_text(encoding="utf-8"))
+    elif ctx.llm_mode == "fill" and ctx.snapshots.get(scn_id):
+        ctx.exec("agent-api", "sh", "-c", f"cat > {CASSETTE_DIR}/{scn_id}.jsonl", input_=ctx.snapshots[scn_id])
     ctl = json.dumps({"id": scn_id, "nonce": uuid.uuid4().hex})
     ctx.exec("agent-api", "sh", "-c", f"cat > {CASSETTE_DIR}/ctl", input_=ctl)
 
 
 def cassette_end(ctx: Ctx, scn_id: str, res: "Result") -> None:
-    """Surface stale-cassette errors as the failure reason; in record, save a passing attempt."""
+    """Surface stale-cassette errors as the failure reason; in record/fill, save a passing attempt."""
     if ctx.llm_mode == "live":
         return
     stale = ctx.exec("agent-api", "sh", "-c", f"cat {CASSETTE_DIR}/stale.log 2>/dev/null || true").strip()
@@ -546,7 +563,7 @@ def cassette_end(ctx: Ctx, scn_id: str, res: "Result") -> None:
         first = stale.splitlines()[0]
         n = len(stale.splitlines())
         res.failures.insert(0, first + (f" (+{n - 1} more)" if n > 1 else ""))
-    elif ctx.llm_mode == "record" and not res.failures:
+    elif ctx.llm_mode in ("record", "fill") and not res.failures:
         data = ctx.exec("agent-api", "sh", "-c", f"cat {CASSETTE_DIR}/{scn_id}.jsonl 2>/dev/null || true")
         # deterministic scenarios (e.g. a briefing-only flow) make no LLM calls: keep an empty
         # cassette so replay still has a file to ship (any unexpected call is then stale)
@@ -558,6 +575,7 @@ def run_scenario(scn: Scenario, ctx: Ctx) -> Result:
     res = Result(scn.id)
     t0 = time.monotonic()
     calls0 = llm_call_count(ctx)
+    stats0 = cassette_stats(ctx) if ctx.llm_mode != "live" else (0, 0)
     usage0 = llm_usage_totals(ctx)
     try:
         cassette_begin(ctx, scn.id)
@@ -587,7 +605,11 @@ def run_scenario(scn: Scenario, ctx: Ctx) -> Result:
     except Exception as exc:
         res.failures.append(f"runner error (cassette): {type(exc).__name__}: {exc}")
     res.duration_s = time.monotonic() - t0
-    res.llm_calls = max(0, llm_call_count(ctx) - calls0)
+    if ctx.llm_mode == "live":
+        res.llm_calls = max(0, llm_call_count(ctx) - calls0)
+    else:  # SCN-SIM-11: only calls that reached a provider count as real (and against the budget)
+        stats1 = cassette_stats(ctx)
+        res.llm_calls, res.llm_served = (max(0, b - a) for a, b in zip(stats0, stats1))
     usage1 = llm_usage_totals(ctx)
     res.tokens_in, res.tokens_out, res.tokens_reasoning = (max(0, b - a) for a, b in zip(usage0, usage1))
     res.passed = not res.failures
@@ -597,6 +619,15 @@ def run_scenario(scn: Scenario, ctx: Ctx) -> Result:
 # --------------------------------------------------------------------------- CLI
 def _csv(v: str | None) -> list[str] | None:
     return [x.strip() for x in v.split(",") if x.strip()] if v else None
+
+
+def fill_snapshots(scenarios: list[Scenario], cassettes_dir: Path = CASSETTES_HOST_DIR) -> dict[str, str]:
+    """Cassette text per scenario at run start ("" when none: everything goes live)."""
+    out = {}
+    for scn in scenarios:
+        path = cassettes_dir / f"{scn.id}.jsonl"
+        out[scn.id] = path.read_text(encoding="utf-8") if path.exists() else ""
+    return out
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -615,6 +646,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         print("evi-sim: no scenarios matched", file=sys.stderr)
         return 2
     ctx = Ctx(llm_mode=args.llm)
+    if args.llm == "fill":
+        ctx.snapshots = fill_snapshots(scenarios)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     records: list[dict] = []
     total_calls = 0
@@ -630,7 +663,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             res = run_scenario(scn, ctx)
             total_calls += res.llm_calls
             records.append(report.attempt_record(scn.id, scn.tags, n, res))
-            print(f"{'PASS' if res.passed else 'FAIL'} {label} ({res.duration_s:.1f}s, {res.llm_calls} LLM calls, {res.tokens_in} in / {res.tokens_out} out tok)")
+            calls = report.calls_label(res.llm_calls, res.llm_served) if args.llm != "live" else f"{res.llm_calls}"
+            print(f"{'PASS' if res.passed else 'FAIL'} {label} ({res.duration_s:.1f}s, LLM {calls}, {res.tokens_in} in / {res.tokens_out} out tok)")
             for f in res.failures:
                 print(f"    - {f}")
     summary = report.summarize(records, args.repeat)
