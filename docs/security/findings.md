@@ -122,3 +122,11 @@ desenho — o JID de controle é confiável), e texto encaminhado dentro de uma 
 - **F5 corrigido** no mesmo dia (o drop-in precisa se chamar `zz-evi-bind.conf`: o systemd lê em ordem alfabética e o `override.conf` com `0.0.0.0` vencia a primeira versão). No host, o CLI do Ollama passa a precisar de `export OLLAMA_HOST=172.17.0.1:11434`.
 - **F10 corrigido** (WhatBot): o `docker compose up -d` sem profile ignora `windmill-server` e `whatbot-ingress`; é preciso `--profile windmill --profile instagram` para recriá-los com as portas novas.
 - **Fechados em 2026-10-19:** F6 (faturamento do Gemini confirmado pelo usuário), F12 (senha padrão do Windmill recusada), F26 (`tailscale serve --https=443 off`). F9 aceito: sem acesso SSH remoto, o bind em loopback é o controle principal. Nada aberto além de F13/F18/F20/F22 (BACKLOG).
+
+## Atualização de 2026-10-20 — `evi-task-complete`
+
+Nova tool de escrita `complete_tasks` (conclui tarefas do Google Tasks). Classificada em
+`write_guard.WRITE_TOOLS` + `@guarded_write`: bloqueada em turnos de job, agendados e de conteúdo
+externo (coberta por `test_write_tool_blocked_in_job_turn`). Sem rota, porta, segredo ou escopo OAuth
+novos (`gtasks` já cobre PATCH). Conclusão é reversível no Google Tasks. `./scripts/evi-security-scan`:
+sem achado novo; o único FAIL (`deps.audit`: certifi PYSEC-2026-4320, correção 2026.10.19) já existia.

@@ -29,7 +29,7 @@ SEED = {
     "calendar": [
         {"summary": "Reuniao", "start": "2099-01-01T10:00:00", "end": "2099-01-01T11:00:00"}
     ],
-    "tasks": [{"title": "Comprar pao"}],
+    "tasks": [{"title": "Comprar pao", "id": "t1"}],
     "gmail": [
         {"id": "m1", "from": "a@x.com", "subject": "Oi", "snippet": "ola", "labels": ["INBOX", "UNREAD"]},
         {"id": "m2", "from": "b@x.com", "subject": "Promo", "snippet": "off", "labels": ["INBOX", "CATEGORY_PROMOTIONS"]},
@@ -47,6 +47,7 @@ OPS = {
     "list_events": {"gcal": "$res:gcal", "days_ahead": 3650},
     "create_task": {"title": "Pagar conta", "due_date": "2099-03-01", "gtasks": "$res:gtasks"},
     "list_tasks": {"gtasks": "$res:gtasks"},
+    "complete_task": {"task_id": "t1", "gtasks": "$res:gtasks"},
     "summarize_inbox": {"gmail": "$res:gmail"},
     "delete_emails": {"message_ids": ["m1"], "gmail": "$res:gmail"},
     "delete_emails_by_query": {"q": "category:promotions", "gmail": "$res:gmail"},
@@ -58,6 +59,7 @@ RESOURCE_ENV = {
     "list_calendars": "WINDMILL_GCAL_RESOURCE",
     "create_task": "WINDMILL_GTASKS_RESOURCE",
     "list_tasks": "WINDMILL_GTASKS_RESOURCE",
+    "complete_task": "WINDMILL_GTASKS_RESOURCE",
     "summarize_inbox": "WINDMILL_GMAIL_RESOURCE",
     "delete_emails": "WINDMILL_GMAIL_RESOURCE",
     "delete_emails_by_query": "WINDMILL_GMAIL_RESOURCE",
@@ -102,8 +104,8 @@ def run(wm, op, payload):
     return status, body.decode()
 
 
-def test_eight_agent_ops_have_scripts():
-    assert len(OPS) == 8
+def test_agent_ops_have_scripts():
+    assert len(OPS) == 9
     for op in OPS:
         assert (SCRIPTS / f"{op}.py").is_file()
 
@@ -114,7 +116,7 @@ def test_real_script_succeeds_and_parses_ok(wm, op):
     assert status == 200, raw
     out = parse_windmill_result(raw, action=op, resource_env=RESOURCE_ENV[op])
     assert out.ok, (out.reason, raw)
-    assert wm.calls[-1]["op"] == op and wm.calls[-1]["result"]["status"] in ("ok", "created")
+    assert wm.calls[-1]["op"] == op and wm.calls[-1]["result"]["status"] in ("ok", "created", "completed")
 
 
 def test_state_changes_reach_fake_google(wm, google):

@@ -36,6 +36,7 @@ Changes já propostos por completo aguardam em [`queued/`](queued/README.md).
 | 56 | `evi-awaiting-their-reply` | 34 | **Done** (2026-10-18) | Quem não respondeu você (follow-up) no briefing de segunda |
 | 57 | `evi-scheduled-tasks` | 35 | **Done** (2026-10-18) | Tarefas agendadas em linguagem natural, só leitura |
 | 58 | `evi-extraction-precision` | 36 | **Done** (2026-10-20) | Dívida de resposta mais precisa (vocabulário v3, aceno, juiz LLM só no ambíguo, contexto "você: …"), juiz de tarefa sem data, reações 👍/👎 do Telegram como feedback |
+| 59 | `evi-task-complete` | 37 | **Done** (2026-10-20) | Concluir tarefas do Google Tasks por conversa (`complete_tasks`, "todas menos X"), IDs curtos no `list_tasks` |
 
 ## Itens da revisão de segurança (2026-10-13)
 

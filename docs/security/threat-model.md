@@ -43,7 +43,7 @@ instrução); **TB5** processo ↔ disco.
 |---|---|---|
 | Tokens OAuth Google (Gmail `modify`, Calendar, Tasks) | Windmill (Postgres `windmill`) | Ler/apagar e-mail, criar/alterar eventos e tarefas; tomada de contas via reset de senha por e-mail |
 | Sessão do WhatsApp | Evolution (Postgres + volume) | Ler e enviar mensagens como o usuário |
-| Capacidade de agir do agente | `agent/tools/` (`delete_emails*`, `schedule_event`, `create_task`, envio Telegram/WhatsApp) | Ação em nome do usuário sem pedido dele |
+| Capacidade de agir do agente | `agent/tools/` (`delete_emails*`, `schedule_event`, `create_task`, `complete_tasks`, envio Telegram/WhatsApp) | Ação em nome do usuário sem pedido dele |
 | Conversas de terceiros | `data/contact_memory/`, Postgres (incl. `wa_conversation_state.last_out_preview/judge_*`, `turn_log.tg_message_id`), `logs/evolution_webhook.jsonl` | Vazamento de dados pessoais de terceiros (LGPD) |
 | Memória do usuário | `EVI_WORKSPACE/` (`USER.md`, `MEMORY.md`), Postgres | Perfil íntimo do usuário; envenenamento de memória |
 | Chaves e segredos | `.env` (600) | `EVI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `WINDMILL_TOKEN`, senhas de banco → pivô para todos os ativos acima; custo de LLM |

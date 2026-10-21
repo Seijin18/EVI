@@ -27,6 +27,7 @@ WRITE_TOOLS = frozenset(
     {
         "schedule_event",
         "create_task",
+        "complete_tasks",
         "delete_emails",
         "delete_emails_by_query",
         "confirm_commitments",

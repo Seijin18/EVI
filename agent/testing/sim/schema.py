@@ -69,7 +69,7 @@ TAP_KEYS = {"item", "action", "from_chat", "briefing"}
 TAP_ACTIONS = ("ok", "no", "up", "dn", "rm")
 HTML_TAGS = ("b", "i", "code")  # the only tags a valid_html message may use
 CALENDAR_KEYS = {"created", "count"}
-TASKS_KEYS = {"created", "count"}
+TASKS_KEYS = {"created", "count", "completed", "still_open"}
 GMAIL_KEYS = {"deleted_count", "deleted_ids_include", "not_deleted"}
 SEED_KEYS = {"calendar", "tasks", "gmail", "calendars", "evolution", "contacts"}
 
@@ -456,6 +456,12 @@ def eval_tasks(exp: dict, google: dict, base: date, tz: str | ZoneInfo = DEFAULT
             got = [str(t.get("due", ""))[:10] for t in cands]
             if exp_day not in got:
                 fails.append(f"tasks.created {sub!r}: due expected {exp_day} got {got}")
+    all_tasks = google.get("tasks") or []
+    for key, status_ok in (("completed", True), ("still_open", False)):
+        for sub in exp.get(key) or []:
+            hit = [t for t in all_tasks if str(sub).lower() in str(t.get("title", "")).lower()]
+            if not hit or any((t.get("status") == "completed") != status_ok for t in hit):
+                fails.append(f"tasks.{key}: {sub!r} not {'completed' if status_ok else 'open'} (tasks: {[(t.get('title'), t.get('status')) for t in all_tasks]})")
     if "count" in exp:
         n = len(google.get("tasks") or [])
         if n != exp["count"]:

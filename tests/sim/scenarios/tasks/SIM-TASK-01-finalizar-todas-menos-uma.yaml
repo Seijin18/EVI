@@ -1,0 +1,21 @@
+id: SIM-TASK-01
+title: Finalizar todas as tarefas abertas exceto a do mestrado (SCN-TASK-06)
+tags: [tasks, critical]
+source: real-usage
+clock: D0 09:00
+seed:
+  tasks:
+    - {title: "Avaliar alterações no PowerPoint do mestrado"}
+    - {title: "Implementar análise de tempo"}
+    - {title: "Implementar lembretes contextuais"}
+steps:
+  - telegram: "Pode finalizar todas as tarefas em aberto com exceção da do mestrado"
+    expect:
+      reply_within_s: 90
+      reply_not_matches: "(?i)não consigo"
+      tools_called_any: [complete_tasks]
+      tasks:
+        completed: ["análise de tempo", "lembretes contextuais"]
+        still_open: ["mestrado"]
+      outbound_to_third_parties: 0
+      tools_not_called: [delete_emails, delete_emails_by_query]

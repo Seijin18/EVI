@@ -21,6 +21,7 @@ Create workspace `evi` in Windmill UI (http://localhost:8001) or via CLI.
 | `f/integrations/schedule_event` | Google Calendar | `WINDMILL_WEBHOOK_CALENDAR` |
 | `f/integrations/create_task` | Google Tasks | `WINDMILL_WEBHOOK_TASKS` |
 | `f/integrations/list_tasks` | List Google Tasks | `WINDMILL_WEBHOOK_LIST_TASKS` |
+| `f/integrations/complete_task` | Complete a Google Task | `WINDMILL_WEBHOOK_COMPLETE_TASK` |
 | `f/integrations/list_contacts` | Google Contacts (name + phones only) | `WINDMILL_GCONTACTS_RESOURCE` |
 | `f/integrations/summarize_inbox` | Gmail summary | `WINDMILL_WEBHOOK_EMAIL` |
 | `f/integrations/delete_emails` | Gmail trash by id | `WINDMILL_WEBHOOK_EMAIL_DELETE` |

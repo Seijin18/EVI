@@ -34,6 +34,7 @@ READ_ONLY_TOOLS = {
 ARGS = {
     "schedule_event": {"title": "x", "start_time": "2030-01-01T10:00:00"},
     "create_task": {"title": "x"},
+    "complete_tasks": {"all_open": True},
     "delete_emails": {"message_ids": ["m1"]},
     "delete_emails_by_query": {"q": "promo"},
     "confirm_commitments": {"commitment_ids": [1]},

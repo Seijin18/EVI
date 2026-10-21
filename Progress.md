@@ -77,7 +77,7 @@ porquês em [`openspec/specs/roadmap.md`](openspec/specs/roadmap.md).
 | File organizer | `./scripts/evi-test file-organizer` · SCN-FO-01 |
 | RAG universidade | `./scripts/evi-test rag` · `data-rag` |
 | Calendar create/list | `./scripts/evi-test calendar-list` · `on_date` / dias calendário |
-| Tasks create/list | `./scripts/evi-test tasks` · `list_tasks` tool |
+| Tasks create/list/complete | `./scripts/evi-test tasks` · `list_tasks` / `complete_tasks` · `SIM-TASK-01` |
 | Gmail summarize/delete | `./scripts/evi-test email` · `inbox-ux` |
 | Commitment queue + review | `./scripts/evi-test commitments` |
 | WhatsApp Evolution pipeline | `./scripts/evi-test whatsapp` · `evolution` |
@@ -150,6 +150,7 @@ Legenda: **Done** · **—** (não iniciado / deferido)
 | **21** | **Voz** | **Done** | `evi-voice-input` — Telegram + controle WhatsApp via Gemini |
 | **22** | **Confiabilidade percebida** | **Done** | `evi-perceived-reliability` — watchdog, `/ajuda`, ack, OAuth no turno |
 | **23** | **Injeção (restante)** | **Done** | `evi-prompt-injection-model` — confirmação de exclusão, allowlist por origem, chat do Telegram restrito |
+| **37** | **Concluir tarefas** | **Done** | `evi-task-complete` — `complete_tasks` (lote com exceções), IDs curtos em `list_tasks` |
 | **35** | **Tarefas agendadas** | **Done** | `evi-scheduled-tasks` — pergunta agendada em linguagem natural, só leitura |
 | **36** | **Precisão da extração** | **Done** | `evi-extraction-precision` — juiz LLM só no ambíguo para dívidas, juiz de tarefa sem data, reações do Telegram como feedback |
 | **34** | **Esperando resposta deles** | **Done** | `evi-awaiting-their-reply` — follow-up semanal de quem não respondeu você, sem envio a terceiros |

@@ -58,6 +58,7 @@ ENDPOINTS = [
     ("POST", "/calendar/v3/calendars/{calId}/events"),
     ("GET", "/tasks/v1/lists/{listId}/tasks"),
     ("POST", "/tasks/v1/lists/{listId}/tasks"),
+    ("PATCH", "/tasks/v1/lists/{listId}/tasks/{id}"),
     ("GET", "/gmail/v1/users/me/messages"),
     ("GET", "/gmail/v1/users/me/messages/{id}"),
     ("POST", "/gmail/v1/users/me/messages/{id}/trash"),
@@ -269,6 +270,9 @@ class FakeGoogle:
             if method == "POST":
                 return self._tasks_insert(body)
             return None
+        m = re.fullmatch(r"/tasks/v1/lists/([^/]+)/tasks/([^/]+)", p)
+        if m and method == "PATCH":
+            return self._tasks_patch(unquote(m.group(2)), body)
         if p == "/v1/people/me/connections" and method == "GET":
             return self._connections_list(q)
         if p == "/gmail/v1/users/me/messages" and method == "GET":
@@ -350,6 +354,14 @@ class FakeGoogle:
         limit = int(q["maxResults"][0]) if q.get("maxResults") else 20
         rows = [t for t in self._tasks if show_completed or t["status"] != "completed"]
         return _json(200, {"kind": "tasks#tasks", "items": copy.deepcopy(rows[:limit])})
+
+    def _tasks_patch(self, task_id: str, body: dict) -> Response:
+        task = next((t for t in self._tasks if t["id"] == task_id), None)
+        if task is None:
+            return _gerr(404, "Not Found")
+        if body.get("status") in ("completed", "needsAction"):
+            task["status"] = body["status"]
+        return _json(200, copy.deepcopy(task))
 
     def _tasks_insert(self, body: dict) -> Response:
         if not body.get("title"):

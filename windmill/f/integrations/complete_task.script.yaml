@@ -1,0 +1,25 @@
+summary: Mark a Google Task as completed
+description: ''
+lock: ''
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    task_id:
+      type: string
+      description: Google Tasks task id
+      default: null
+      originalType: string
+    gtasks:
+      type: string
+      description: Windmill resource path for Google Tasks OAuth
+      default: gtasks
+      originalType: string
+    tasklist_id:
+      type: string
+      description: Google Tasks list id
+      default: '@default'
+      originalType: string
+  required:
+    - task_id

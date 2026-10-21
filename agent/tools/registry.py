@@ -30,7 +30,7 @@ from tools.scheduled_task_tools import (
     pause_scheduled_task,
     resume_scheduled_task,
 )
-from tools.task_tool import create_task, list_tasks
+from tools.task_tool import complete_tasks, create_task, list_tasks
 from tools.graph_tool import query_conversation_graph
 from tools.contact_tool import (
     get_whatsapp_contact_info,
@@ -54,6 +54,7 @@ def get_all_tools():
         save_note_manual,
         create_task,
         list_tasks,
+        complete_tasks,
         summarize_inbox,
         delete_emails,
         delete_emails_by_query,

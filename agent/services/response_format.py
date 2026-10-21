@@ -91,7 +91,9 @@ def format_list_tasks_result(raw: str) -> str:
         for t in tasks:
             title = wrap_external(t.get("title") or "(sem título)", "tarefa", max_chars=200)
             due = t.get("due") or "sem prazo"
-            lines.append(f"• {title} — {due}")
+            tid = (t.get("id") or "")[:8]
+            tag = f"[{tid}] " if tid else ""
+            lines.append(f"• {tag}{title} — {due}")
         return "\n".join(lines)
 
     return "Resposta inesperada do Google Tasks; nada a listar."

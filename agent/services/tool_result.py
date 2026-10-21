@@ -28,7 +28,7 @@ UNPARSEABLE = "unparseable"
 
 # Success discriminators actually emitted by the Windmill scripts. They are not
 # consistent: schedule_event and create_task say "created", the rest say "ok".
-_SUCCESS_STATUS = frozenset({"ok", "created"})
+_SUCCESS_STATUS = frozenset({"ok", "created", "completed"})
 
 # Sentinels our own client returns as plain strings. None contains "failed", so
 # every `if "failed" in raw.lower()` missed them and they reached the model
@@ -114,6 +114,7 @@ _TOOL_CHECK = {
     "list_calendars": "calendar",
     "create_task": "tasks",
     "list_tasks": "tasks",
+    "complete_tasks": "tasks",
     "summarize_inbox": "gmail",
 }
 
