@@ -1,5 +1,35 @@
 # Operações
 
+## Subir o EVI (`scripts/evi-start`)
+
+```bash
+./scripts/evi-start              # confere o host, sobe a stack, espera a saúde, liga o watchdog, mostra o resumo
+./scripts/evi-start --check      # só verifica (não sobe nem altera nada)
+./scripts/evi-start --graph      # inclui o Neo4j (profile `graph`)
+make up                          # o mesmo, seguido de `make status`
+```
+
+O que ele confere, em ordem: Docker ativo; `.env` presente (modo 600) com as variáveis obrigatórias
+(só presença, nunca imprime valores; Telegram e Gemini só se estiverem em uso); Ollama, se algum
+provedor for `ollama`; espaço em disco e portas 8001/8002/8082 livres. Depois `docker compose up -d`,
+espera cada serviço ficar `running`/`healthy`, liga o `evi-watchdog.timer` e lê `/health`, o estado do
+WhatsApp (Evolution), o poller do Telegram e o Windmill. Se o WhatsApp estiver desconectado, o resumo
+diz como gerar o QR. Saída: `0` tudo certo, `2` subiu com avisos, `1` falha (pré-requisito faltando
+ou `compose up` falhou). É idempotente.
+
+**Depois de um reboot:** os serviços têm `restart: unless-stopped`, então voltam sozinhos, **exceto**
+se a stack foi parada com `make down` antes (parada manual fica parada). Nesse caso, rode
+`./scripts/evi-start`. Para subir a stack sempre no boot (opcional; precisa de
+`loginctl enable-linger $USER`, já ativo neste PC):
+
+```bash
+cp scripts/systemd/evi-stack.service ~/.config/systemd/user/ \
+  && systemctl --user daemon-reload && systemctl --user enable evi-stack.service
+```
+
+Desinstalar: `systemctl --user disable evi-stack.service`. O `make down` continua desligando a stack e o
+watchdog; o próximo boot só a sobe de novo se esse serviço estiver habilitado.
+
 ## Watchdog (`scripts/evi-watchdog`)
 
 Roda **fora** do EVI (timer de usuário do systemd, a cada minuto). Faz `GET /health`

@@ -1,6 +1,6 @@
 # EVI — operação local.  make up | make status | make down
 #
-#   make up      sobe a stack (Docker), espera o agent-api e liga o watchdog
+#   make up      = ./scripts/evi-start: confere o host, sobe a stack, espera a saúde e liga o watchdog
 #   make status  containers, saúde do agent-api, WhatsApp, Telegram, schedules, watchdog
 #   make down    desliga a stack e o watchdog (senão ele alertaria "fora do ar" a cada minuto)
 #
@@ -22,16 +22,8 @@ envval = $$(grep -m1 '^$(1)=' .env 2>/dev/null | cut -d= -f2-)
 .PHONY: up status down logs
 
 up:
-	@echo "==> Subindo a stack (docker compose up -d)..."
-	@$(COMPOSE) up -d
-	@./scripts/evi-wait-agent-api.sh
-	@if systemctl --user cat $(WATCHDOG) >/dev/null 2>&1; then \
-	  systemctl --user start $(WATCHDOG) && echo "==> Watchdog ligado"; \
-	else \
-	  echo "==> Watchdog não instalado (ver docs/operations.md)"; \
-	fi
-	@echo
-	@$(MAKE) --no-print-directory status
+	@./scripts/evi-start $(if $(GRAPH),--graph,); rc=$$?; echo; $(MAKE) --no-print-directory status; \
+	  [ $$rc -eq 2 ] && rc=0; exit $$rc
 
 down:
 	@if systemctl --user cat $(WATCHDOG) >/dev/null 2>&1; then \

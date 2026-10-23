@@ -1,0 +1,16 @@
+[Unit]
+Description=EVI stack (docker compose + watchdog) — opcional, início automático no boot
+# Unit de USUÁRIO (precisa de `loginctl enable-linger $USER`). Ver docs/operations.md.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=300
+# O Docker é um serviço do sistema: espera o daemon responder antes de subir a stack.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 60); do docker info >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1'
+# Assume o repositório em ~/Projects/EVI. Código 2 = subiu com avisos (não é falha).
+ExecStart=%h/Projects/EVI/scripts/evi-start
+SuccessExitStatus=2
+
+[Install]
+WantedBy=default.target
