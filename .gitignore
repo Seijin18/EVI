@@ -40,3 +40,4 @@ data/postgres.broken-*
 
 # Agenda exportada (contatos reais) — nunca versionar
 EVI_WORKSPACE/*.vcf
+.aider*
